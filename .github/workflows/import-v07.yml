@@ -70,7 +70,7 @@ jobs:
               parsed = urlsplit(value)
               if parsed.scheme or value.startswith("//") or value.startswith("data:"):
                   return None
-              relative = unquote(parsed.path).strip().strip(""'")
+              relative = unquote(parsed.path).strip().strip(chr(34) + chr(39))
               if not relative:
                   return None
               if relative.startswith("/"):
