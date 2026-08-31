@@ -74,7 +74,12 @@ jobs:
 
           def local_target(base, value):
               parsed = urlsplit(value)
-              if parsed.scheme or value.startswith("//") or value.startswith("data:"):
+              if (
+                  parsed.scheme
+                  or value.startswith("//")
+                  or value.startswith("data:")
+                  or value.startswith("/cdn-cgi/")
+              ):
                   return None
               relative = unquote(parsed.path).strip().strip(chr(34) + chr(39))
               if not relative:
