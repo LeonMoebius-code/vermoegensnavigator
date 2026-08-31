@@ -47,6 +47,12 @@ jobs:
                   text,
                   flags=re.I,
               )
+              text = re.sub(
+                  r'''<script[^>]*cdn-cgi/challenge-platform.*?</script>''',
+                  "",
+                  text,
+                  flags=re.I | re.S,
+              )
               text = text.replace("/assets/", "./assets/")
               text = text.replace("/favicon.svg", "./favicon.svg")
               html_file.write_text(text, encoding="utf-8")
