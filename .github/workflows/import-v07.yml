@@ -25,7 +25,7 @@ jobs:
 
           mirror_dir="$(mktemp -d)"
 
-          wget             --recursive             --level=1             --page-requisites             --convert-links             --adjust-extension             --no-parent             --no-host-directories             --directory-prefix="$mirror_dir"             --domains=vermoegensnavigator.leonm4.chatgpt.site             https://vermoegensnavigator.leonm4.chatgpt.site/
+          wget --recursive --level=1 --page-requisites --convert-links --adjust-extension --no-parent --no-host-directories --directory-prefix="$mirror_dir" --domains=vermoegensnavigator.leonm4.chatgpt.site https://vermoegensnavigator.leonm4.chatgpt.site/
 
           test -s "$mirror_dir/index.html"
           test -n "$(find "$mirror_dir" -type f -name '*.js' -print -quit)"
@@ -38,25 +38,62 @@ jobs:
           from urllib.parse import unquote, urlsplit
 
           root = pathlib.Path(sys.argv[1])
+
+          for html_file in root.rglob("*.html"):
+              text = html_file.read_text(encoding="utf-8")
+              text = re.sub(
+                  r'''<script\b[^>]*\bsrc=["']/cdn-cgi/[^"']+["'][^>]*>\s*</script>''',
+                  "",
+                  text,
+                  flags=re.I,
+              )
+              text = text.replace("/assets/", "./assets/")
+              text = text.replace("/favicon.svg", "./favicon.svg")
+              html_file.write_text(text, encoding="utf-8")
+
+          for css_file in root.rglob("*.css"):
+              text = css_file.read_text(encoding="utf-8")
+              text = text.replace("url(/assets/", "url(")
+              text = text.replace('url("/assets/', 'url("')
+              text = text.replace("url('/assets/", "url('")
+              css_file.write_text(text, encoding="utf-8")
+
           html_files = list(root.rglob("*.html"))
           if not html_files:
               raise SystemExit("Keine HTML-Datei gefunden")
 
           missing = []
-          pattern = re.compile(r'''(?:src|href)=["']([^"'#]+)["']''', re.I)
+          html_pattern = re.compile(r'''(?:src|href)=["']([^"'#]+)["']''', re.I)
+          css_pattern = re.compile(r'''url\(([^)]+)\)''', re.I)
+
+          def local_target(base, value):
+              parsed = urlsplit(value)
+              if parsed.scheme or value.startswith("//") or value.startswith("data:"):
+                  return None
+              relative = unquote(parsed.path).strip().strip(""'")
+              if not relative:
+                  return None
+              if relative.startswith("/"):
+                  return root / relative.lstrip("/")
+              return base / relative
 
           for html_file in html_files:
               text = html_file.read_text(encoding="utf-8")
-              for value in pattern.findall(text):
-                  parsed = urlsplit(value)
-                  if parsed.scheme or value.startswith("//") or value.startswith("data:"):
+              for value in html_pattern.findall(text):
+                  target = local_target(html_file.parent, value)
+                  if target is None:
                       continue
-                  relative = unquote(parsed.path)
-                  target = (html_file.parent / relative).resolve()
-                  if relative.endswith("/"):
+                  if value.endswith("/"):
                       target = target / "index.html"
-                  if not target.exists():
+                  if not target.resolve().exists():
                       missing.append(f"{html_file.relative_to(root)} -> {value}")
+
+          for css_file in root.rglob("*.css"):
+              text = css_file.read_text(encoding="utf-8")
+              for value in css_pattern.findall(text):
+                  target = local_target(css_file.parent, value)
+                  if target is not None and not target.resolve().exists():
+                      missing.append(f"{css_file.relative_to(root)} -> {value}")
 
           if missing:
               raise SystemExit("Fehlende Referenzen:\n" + "\n".join(missing))
