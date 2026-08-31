@@ -3,150 +3,189 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>VermögensNavigator</title>
-  <style>
-    :root {
-      --brand: #003f8f;
-      --brand-dark: #002d67;
-      --accent: #f26622;
-      --bg: #f3f6f9;
-      --surface: #ffffff;
-      --text: #17283b;
-      --muted: #64778a;
-      --border: #d7e0e7;
-    }
-
-    * { box-sizing: border-box; }
-    html, body { margin: 0; min-height: 100%; }
-    body {
-      font-family: Inter, "Segoe UI", Arial, sans-serif;
-      color: var(--text);
-      background:
-        radial-gradient(circle at top right, rgba(0, 63, 143, 0.12), transparent 32rem),
-        var(--bg);
-      display: grid;
-      place-items: center;
-      padding: 24px;
-    }
-
-    main {
-      width: min(920px, 100%);
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 22px;
-      overflow: hidden;
-      box-shadow: 0 18px 50px rgba(26, 53, 78, 0.12);
-    }
-
-    .hero {
-      padding: 46px 48px;
-      color: #fff;
-      background: linear-gradient(125deg, var(--brand-dark), var(--brand));
-    }
-
-    .eyebrow {
-      display: inline-block;
-      margin-bottom: 14px;
-      padding: 6px 10px;
-      border: 1px solid rgba(255,255,255,.35);
-      border-radius: 999px;
-      background: rgba(255,255,255,.10);
-      font-size: .78rem;
-      font-weight: 800;
-      letter-spacing: .04em;
-      text-transform: uppercase;
-    }
-
-    h1 {
-      margin: 0;
-      font-size: clamp(2rem, 6vw, 3.6rem);
-      letter-spacing: -0.045em;
-    }
-
-    .hero p {
-      max-width: 680px;
-      margin: 16px 0 0;
-      color: rgba(255,255,255,.84);
-      font-size: 1.05rem;
-      line-height: 1.6;
-    }
-
-    .content {
-      display: grid;
-      grid-template-columns: 1.3fr .7fr;
-      gap: 28px;
-      padding: 34px 48px 40px;
-    }
-
-    h2 {
-      margin: 0 0 10px;
-      font-size: 1.15rem;
-    }
-
-    p {
-      margin: 0;
-      line-height: 1.6;
-    }
-
-    .muted { color: var(--muted); }
-
-    .status {
-      align-self: start;
-      padding: 18px;
-      border-radius: 14px;
-      background: #eef4fa;
-      border: 1px solid #ccdae8;
-    }
-
-    .status strong {
-      display: block;
-      color: var(--brand-dark);
-      margin-bottom: 6px;
-    }
-
-    .dot {
-      display: inline-block;
-      width: 9px;
-      height: 9px;
-      margin-right: 7px;
-      border-radius: 50%;
-      background: var(--accent);
-    }
-
-    footer {
-      padding: 17px 48px;
-      border-top: 1px solid var(--border);
-      color: var(--muted);
-      font-size: .78rem;
-    }
-
-    @media (max-width: 700px) {
-      .hero, .content, footer { padding-left: 24px; padding-right: 24px; }
-      .hero { padding-top: 34px; padding-bottom: 34px; }
-      .content { grid-template-columns: 1fr; }
-    }
-  </style>
+  <title>Depotrechner · Risikotypisierung, Zielprodukte und Hausmeinung</title>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <main>
-    <section class="hero">
-      <span class="eyebrow">Entwicklungsumgebung</span>
-      <h1>VermögensNavigator</h1>
-      <p>Die technische Basis steht. Diese neutrale Testseite dient ausschließlich zur Prüfung von Repository, Deployment und externer Erreichbarkeit.</p>
-    </section>
+<main class="app">
+  <section class="hero">
+    <div>
+      <h1>Depotoptimierer Individualkunden</h1>
+      <p>Anlegerprofil erfassen, IST-Depot analysieren, Musterportfolio oder KI-SOLL ableiten und die konkreten Zielprodukte aus dem gesamten Hausmeinungsuniversum individuell zusammenstellen.</p>
+    </div>
+    <div class="hero-badge">RB 2 bis RB 4 · 70 Hausmeinungsprodukte</div>
+  </section>
 
-    <section class="content">
-      <div>
-        <h2>Bereit für den nächsten Schritt</h2>
-        <p class="muted">Der eigentliche Prototyp mit internen Produkt- und Hausmeinungsdaten wird bewusst noch nicht öffentlich bereitgestellt. Zuerst prüfen wir die technische Veröffentlichungsstrecke.</p>
+  <section class="card section-gap" id="riskSection">
+    <header class="card-header"><h2><span class="step">1</span>Risikotypisierung und Optimierungsverfahren</h2></header>
+    <div class="card-body">
+      <div class="risk-layout">
+        <div>
+          <div class="question-grid">
+            <div class="field"><label for="horizon">Anlagehorizont</label><select id="horizon" class="risk-question">
+              <option value="short">Unter 5 Jahre</option><option value="medium" selected>5 bis 10 Jahre</option>
+              <option value="long">Über 10 Jahre</option><option value="veryLong">Über 15 Jahre</option></select></div>
+            <div class="field"><label for="lossTolerance">Akzeptierte zwischenzeitliche Verluste</label><select id="lossTolerance" class="risk-question">
+              <option value="low">Höchstens etwa 5 %</option><option value="medium" selected>Etwa 10 bis 15 %</option><option value="high">20 % oder mehr</option></select></div>
+            <div class="field"><label for="investmentGoal">Vorrangiges Anlageziel</label><select id="investmentGoal" class="risk-question">
+              <option value="preservation">Kapitalerhalt / stabile Erträge</option><option value="balanced" selected>Ausgewogenes Verhältnis</option><option value="growth">Langfristiger Vermögensaufbau</option></select></div>
+            <div class="field"><label for="marketReaction">Reaktion bei 15 % Kursrückgang</label><select id="marketReaction" class="risk-question">
+              <option value="sell">Positionen deutlich reduzieren</option><option value="hold" selected>Investiert bleiben</option><option value="buy">Gezielt nachinvestieren</option></select></div>
+            <div class="field"><label for="experience">Kapitalmarkterfahrung</label><select id="experience" class="risk-question">
+              <option value="low">Gering</option><option value="medium" selected>Mehrjährig / durchschnittlich</option><option value="high">Umfangreich und aktiv</option></select></div>
+            <div class="field"><label for="liquidityNeed">Kurzfristiger Liquiditätsbedarf</label><select id="liquidityNeed" class="risk-question">
+              <option value="high">Hoch</option><option value="medium" selected>Mittel</option><option value="low">Gering</option></select></div>
+            <div class="field"><label for="realAssetPreference">Sachwert- / Inflationsschutz-Präferenz</label><select id="realAssetPreference">
+              <option value="low">Keine besondere Gewichtung</option><option value="medium" selected>Moderate Beimischung</option><option value="high">Deutliche Beimischung</option></select></div>
+            <div class="field"><label for="sustainabilityPreference">Nachhaltigkeitspräferenz für KI-Produkte</label><select id="sustainabilityPreference">
+              <option value="none" selected>Keine Präferenz</option><option value="yes">Nachhaltige Produkte bevorzugen</option></select></div>
+            <div class="field"><label for="portfolioStyle">Gewünschter Produktstil</label><select id="portfolioStyle">
+              <option value="core">Kompakt / Core-orientiert</option><option value="coreSatellite" selected>Core-Satellite</option><option value="broad">Breiter diversifiziert</option></select></div>
+            <div class="field"><label for="manualRisk">Risikotyp manuell vorgeben</label><select id="manualRisk">
+              <option value="auto" selected>Automatisch aus den Angaben</option><option value="rb2">RB 2 – sicherheitsorientiert</option>
+              <option value="rb3">RB 3 – ausgewogen</option><option value="rb4">RB 4 – chancenorientiert</option></select></div>
+          </div>
+
+          <div class="method-section">
+            <h3>Art der strategischen Optimierung</h3>
+            <div class="method-grid">
+              <label class="method-card active" id="methodModelCard"><input type="radio" name="method" value="model" checked>
+                <strong>Musterportfolio mit Zielprodukten</strong><span>Übernimmt die exakten Produktbausteine und Gewichtungen des passenden Modellportfolios RB 2, RB 3 oder RB 4.</span></label>
+              <label class="method-card" id="methodAiCard"><input type="radio" name="method" value="ai">
+                <span class="ai-label">KI-Option</span><strong>KI-basierte Asset- und Produktauswahl</strong>
+                <span>Passt die Assetquoten an Anlegermerkmale an und erstellt daraus einen erklärbaren Produktvorschlag aus der aktuellen Hausmeinung.</span></label>
+            </div>
+          </div>
+          <p class="source-note">Musterportfolios: Stand 11.03.2026. Hausmeinungsuniversum: Fonds-Matrix, Stand 01.07.2026. Die Typisierung ersetzt keine regulatorische Geeignetheits- oder Angemessenheitsprüfung.</p>
+        </div>
+
+        <aside class="risk-result">
+          <div>
+            <div class="risk-result-top"><div><small>Ermittelter Risikotyp</small><div class="score"><span id="riskScore">6</span> / 12 Punkte</div></div>
+              <div id="riskBadge" class="risk-badge">RB 3</div></div>
+            <p id="riskDescription" class="risk-description"></p>
+            <div class="field"><label for="calculatedProfile">Vorgeschlagenes Musterportfolio</label><input id="calculatedProfile" type="text" readonly></div>
+          </div>
+          <button id="calculateTargetButton" class="btn btn-primary btn-wide" type="button">Risikotyp und Musterportfolio übernehmen</button>
+        </aside>
       </div>
-      <aside class="status">
-        <strong><span class="dot"></span>Teststand</strong>
-        <p class="muted">GitHub-Repository verbunden<br />index.html vorhanden</p>
-      </aside>
-    </section>
+    </div>
+  </section>
 
-    <footer>VermögensNavigator · technischer Teststand</footer>
-  </main>
+  <section class="grid">
+    <article class="card">
+      <header class="card-header">
+        <h2><span class="step">2</span>IST-Depot und strategische Asset-Allokation</h2>
+        <div class="mode-toggle"><button id="modeAmount" type="button" class="active">Betrag</button><button id="modePercent" type="button">Prozent</button></div>
+      </header>
+      <div class="card-body">
+        <div class="controls">
+          <div class="field"><label for="investmentAmount">Anlagesumme</label><div class="input-wrap"><input id="investmentAmount" type="number" min="0" step="1000" value="250000"><span class="unit">EUR</span></div></div>
+          <div class="field"><label for="tolerance">Toleranz für Abweichungen</label><div class="input-wrap"><input id="tolerance" type="number" min="0" max="25" step=".5" value="3"><span class="unit">%-Pkt.</span></div></div>
+          <div class="field"><label>Quelle des aktuellen SOLL</label><div id="targetOrigin" class="target-origin">Musterportfolio RB 3</div></div>
+        </div>
+        <div class="table-wrap">
+          <table style="min-width:780px"><thead><tr><th>Assetklasse</th><th id="inputColumnTitle">IST-Betrag</th><th>IST-Anteil</th><th>SOLL-Anteil</th><th>SOLL-Betrag</th><th>Differenz</th></tr></thead>
+            <tbody id="allocationRows"></tbody></table>
+        </div>
+        <div class="status-line"><span>Zugeordnet</span><strong id="assignedSummary">0,00 EUR · 0,00 %</strong></div>
+        <div id="statusMessage" class="status-message"></div>
+        <div class="actions"><button id="optimizeButton" type="button" class="btn btn-primary">Depot optimieren</button>
+          <button id="applyButton" type="button" class="btn btn-accent" disabled>SOLL als neues IST übernehmen</button>
+          <button id="resetButton" type="button" class="btn btn-secondary">Eingaben zurücksetzen</button></div>
+      </div>
+    </article>
+
+    <aside class="card">
+      <header class="card-header"><h2>Dashboard</h2></header>
+      <div class="card-body">
+        <div class="kpis">
+          <div class="kpi"><span>Anlagesumme</span><strong id="kpiInvestment">0 EUR</strong></div>
+          <div class="kpi"><span>Zugeordnet</span><strong id="kpiAssigned">0 %</strong></div>
+          <div class="kpi"><span>Nicht zugeordnet</span><strong id="kpiUnassigned">0 EUR</strong></div>
+          <div class="kpi"><span>Größte Abweichung</span><strong id="kpiDeviation">0 %-Pkt.</strong></div>
+        </div>
+        <div class="chart-area"><div class="donut-wrap"><div id="donut" class="donut"></div><div class="donut-hole"><div><strong id="donutValue">0 %</strong><span>zugeordnet</span></div></div></div>
+          <div id="legend" class="legend"></div></div>
+        <div id="comparison" class="comparison"></div>
+      </div>
+    </aside>
+  </section>
+
+  <section class="card section-gap" id="productEditor">
+    <header class="card-header">
+      <h2><span class="step">3</span>Zielproduktportfolio</h2>
+      <div class="toolbar">
+        <label class="switch"><input id="autoSyncProducts" type="checkbox" checked> Produktmix automatisch ins Asset-SOLL übernehmen</label>
+      </div>
+    </header>
+    <div class="card-body">
+      <div class="product-kpis">
+        <div class="kpi"><span>Ausgewählte Zielprodukte</span><strong id="productCount">0</strong></div>
+        <div class="kpi"><span>Summe Produktgewichte</span><strong id="productWeightTotal">0 %</strong></div>
+        <div class="kpi"><span>Noch nicht verteilt</span><strong id="productUnallocated">100 %</strong></div>
+        <div class="kpi"><span>Produkt-/Asset-Abweichung</span><strong id="productAssetDeviation">0 %-Pkt.</strong></div>
+      </div>
+      <div class="toolbar" style="margin-bottom:14px">
+        <button id="loadModelProductsButton" type="button" class="btn btn-primary">Musterportfolio neu laden</button>
+        <button id="loadAiProductsButton" type="button" class="btn btn-accent">KI-Produktvorschlag erstellen</button>
+        <button id="addProductRowButton" type="button" class="btn btn-secondary">Zielprodukt hinzufügen</button>
+        <button id="normalizeProductsButton" type="button" class="btn btn-secondary">Gewichte auf 100 % normieren</button>
+        <button id="syncProductsButton" type="button" class="btn btn-secondary">Produktmix ins Asset-SOLL übernehmen</button>
+      </div>
+
+      <div class="table-wrap">
+        <table class="product-editor-table">
+          <thead><tr><th>Zielprodukt</th><th>Gewichtung</th><th>Betrag</th><th>Kategorie / Daten</th><th>Asset-Zuordnung</th><th>Quelle</th><th></th></tr></thead>
+          <tbody id="targetProductRows"></tbody>
+        </table>
+      </div>
+      <div id="productStatus" class="status-message"></div>
+      <div class="product-status-panel">
+        <div id="productNotice" class="notice hidden"></div>
+        <div id="productInfo" class="info-box">Änderungen an Produktauswahl oder Gewichtung werden bei aktivierter Synchronisierung unmittelbar in das strategische Asset-SOLL übernommen.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card section-gap">
+    <header class="card-header"><h2><span class="step">4</span>Optimierung und Begründung</h2></header>
+    <div class="card-body">
+      <div id="optimizationEmpty" class="empty-state">Vervollständigen Sie das Zielproduktportfolio und klicken Sie anschließend auf „Depot optimieren“.</div>
+      <div id="optimizationResult" class="optimization-grid hidden">
+        <div><h3>Vorgeschlagene Umschichtungen nach Assetklasse</h3><div id="rebalancingList" class="rebalancing-list"></div></div>
+        <div id="reasoning" class="reasoning"></div>
+      </div>
+      <p class="footnote">Der Rechner ist ein vereinfachtes Informations- und Simulationsmodell. Die KI-Funktion arbeitet lokal und regelbasiert, ohne Live-Marktdaten. Ergebnisse sind keine Anlageberatung oder regulatorische Geeignetheitsprüfung. Kosten, Steuern, Mindestanlagen, Produktmerkmale und individuelle Vermögensverhältnisse sind gesondert zu prüfen.</p>
+    </div>
+  </section>
+
+  <section class="card section-gap" id="universeSection">
+    <header class="card-header">
+      <h2><span class="step">5</span>Gesamtes Hausmeinungsuniversum</h2>
+      <div id="universeCount" class="universe-count"></div>
+    </header>
+    <div class="card-body">
+      <div class="universe-filters">
+        <div class="field"><label for="universeSearch">Suche nach Fonds, WKN, Thema oder Region</label><input id="universeSearch" type="search" placeholder="z. B. Marktführer, A0M8WY, Wasser …"></div>
+        <div class="field"><label for="universeCategory">Produktkategorie</label><select id="universeCategory"><option value="">Alle Kategorien</option></select></div>
+        <div class="field"><label for="universeAsset">Asset-Zuordnung</label><select id="universeAsset"><option value="">Alle Assets</option><option value="liquiditaet">Liquidität</option><option value="geldwerte">Geldwerte</option><option value="substanzwerte">Substanzwerte</option><option value="alternativ">Alternative Anlagen</option><option value="sachwerte">Sachwerte</option></select></div>
+        <div class="field"><label for="universeRisk">Risikoklasse</label><select id="universeRisk"><option value="">Alle RK</option><option value="1">RK 1</option><option value="2">RK 2</option><option value="3">RK 3</option><option value="4">RK 4</option></select></div>
+        <div class="field"><label for="universeSustainable">Nachhaltigkeit</label><select id="universeSustainable"><option value="">Alle</option><option value="Ja">Ja</option><option value="Nein">Nein</option></select></div>
+      </div>
+      <div class="universe-scroll">
+        <table class="universe-table">
+          <thead><tr><th>Produkt</th><th>WKN</th><th>Kategorie</th><th>RK</th><th>Horizont</th><th>Asset-Zuordnung</th><th>Region</th><th>Branche</th><th>Thema</th><th>Factor</th><th>Nachhaltig</th><th>Core/Satellite</th><th></th></tr></thead>
+          <tbody id="universeRows"></tbody>
+        </table>
+      </div>
+      <p class="source-note">Datenbasis: „2.3_Hausmeinung_Fonds_Matrix.xlsx“, Tabellenblatt „Übersicht HM Fonds“, Stand 01.07.2026. Leere Ergänzungszeilen wurden nicht übernommen.</p>
+    </div>
+  </section>
+</main>
+  <script src="house-universe.js"></script>
+  <script src="config.js"></script>
+  <script src="app-core.js"></script>
+  <script src="app-ui.js"></script>
 </body>
 </html>
