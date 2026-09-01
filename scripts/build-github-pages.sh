@@ -12,6 +12,7 @@ mkdir -p "${output_dir}"
   --minify \
   --platform=browser \
   --format=iife \
+  --jsx=automatic \
   --outfile="${output_dir}/app.js"
 
 cp "${project_root}/app/globals.css" "${output_dir}/styles.css"
