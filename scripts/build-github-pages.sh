@@ -16,8 +16,11 @@ mkdir -p "${output_dir}"
   --outfile="${output_dir}/app.js"
 
 cp "${project_root}/app/globals.css" "${output_dir}/styles.css"
-cp "${project_root}/github-pages/index.html" "${output_dir}/index.html"
-cp "${project_root}/github-pages/index.html" "${output_dir}/404.html"
+build_hash="$(sha256sum "${output_dir}/app.js" "${output_dir}/styles.css" | sha256sum | cut -c1-12)"
+sed "s/__BUILD_HASH__/${build_hash}/g" \
+  "${project_root}/github-pages/index.html" \
+  > "${output_dir}/index.html"
+cp "${output_dir}/index.html" "${output_dir}/404.html"
 cp "${project_root}/public/favicon.svg" "${output_dir}/favicon.svg"
 cp "${project_root}/public/og.png" "${output_dir}/og.png"
 : > "${output_dir}/.nojekyll"
