@@ -1,0 +1,28 @@
+{
+  "name": "vermoegensnavigator",
+  "version": "0.9.0",
+  "private": true,
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "bash scripts/build-github-pages.sh",
+    "build:github": "bash scripts/build-github-pages.sh",
+    "typecheck": "tsc -p tsconfig.github.json --noEmit",
+    "test": "npm run typecheck && npm run build"
+  },
+  "dependencies": {
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.19",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "esbuild": "0.28.0",
+    "typescript": "5.9.3"
+  },
+  "type": "module",
+  "displayName": "VermögensNavigator"
+}

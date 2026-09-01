@@ -1,0 +1,64 @@
+name: Build GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - index.html
+      - 404.html
+      - app.js
+      - styles.css
+      - favicon.svg
+      - og.png
+      - .nojekyll
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: github-pages-build
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Node.js einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      - name: Typen prüfen
+        run: npm run typecheck
+
+      - name: GitHub-Pages-Dateien bauen
+        run: npm run build:github
+
+      - name: Gebauten Stand in main aktualisieren
+        run: |
+          cp .pages-dist/index.html index.html
+          cp .pages-dist/404.html 404.html
+          cp .pages-dist/app.js app.js
+          cp .pages-dist/styles.css styles.css
+          cp .pages-dist/favicon.svg favicon.svg
+          cp .pages-dist/og.png og.png
+          cp .pages-dist/.nojekyll .nojekyll
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html 404.html app.js styles.css favicon.svg og.png .nojekyll
+          if git diff --cached --quiet; then
+            echo "Der veröffentlichte Stand ist bereits aktuell."
+          else
+            git commit -m "build: GitHub Pages aktualisieren"
+            git push
+          fi

@@ -1,0 +1,4891 @@
+"use client";
+
+import {
+  ChangeEvent,
+  Dispatch,
+  ReactNode,
+  SetStateAction,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import * as XLSX from "xlsx";
+import {
+  AdvisoryData,
+  emptyAdvisory,
+  euro,
+  modules,
+  percent,
+  priorityOptions,
+  RiskLevel,
+  scenarios,
+  Scope,
+} from "./navigator-config";
+import {
+  assetClasses,
+  AssetClass,
+  dataSources,
+  houseProducts,
+  managedPortfolios,
+  modelPortfolios,
+  solutionTypes,
+} from "./investment-data";
+import {
+  AdvisoryCase,
+  AdvisorId,
+  allocationAmountInBucket,
+  allocationBucketAmounts,
+  allocationCoverageTotal,
+  bucketForMonths,
+  bucketTargets,
+  caseSnapshot,
+  customerChecklistCategories,
+  CustomerChecklistCategory,
+  createCase,
+  createPlan,
+  DepotHolding,
+  defaultAdvisorId,
+  maturityBuckets,
+  monthsUntilNeed,
+  ModuleState,
+  normalizeImportedCase,
+  planAssetAmounts,
+  PlannerAllocation,
+  strategicAmount,
+  StructurePlan,
+  VvFilters,
+  advisors,
+} from "./case-model";
+
+type View = "home" | "cases" | "wizard" | "planner" | "depot" | "export";
+
+const steps = [
+  ["Vermögensart", "Privat, betrieblich oder beides"],
+  ["Ausgangslage", "Vermögen und Liquidität"],
+  ["Kapitalbedarfe", "Beträge und konkrete Termine"],
+  ["Ziele & Risiko", "Horizont und Schwankungen"],
+  ["Fachmodule", "Gezielte Vertiefungen"],
+  ["Ergebnis", "Struktur und nächste Schritte"],
+] as const;
+
+const riskText: Record<RiskLevel, { title: string; text: string }> = {
+  1: {
+    title: "Sehr defensiv",
+    text: "Kapitalerhalt hat Vorrang; Schwankungen sollen sehr gering bleiben.",
+  },
+  2: {
+    title: "Defensiv",
+    text: "Begrenzte Schwankungen werden für einen moderaten Ertrag akzeptiert.",
+  },
+  3: {
+    title: "Ausgewogen",
+    text: "Ertrag und Stabilität werden gleichgewichtet.",
+  },
+  4: {
+    title: "Wachstumsorientiert",
+    text: "Deutliche zwischenzeitliche Verluste werden für höhere Chancen akzeptiert.",
+  },
+  5: {
+    title: "Offensiv",
+    text: "Langfristiges Wachstum steht trotz hoher Schwankungen im Vordergrund.",
+  },
+};
+
+const goalOptions = [
+  "Liquidität rentierlich strukturieren",
+  "Vermögensaufbau",
+  "Vermögen erhalten",
+  "Laufende Erträge erzielen",
+  "Struktur optimieren",
+  "Vermögen ganzheitlich ordnen",
+];
+const moduleDetails: Record<string, string[]> = {
+  maturity: [
+    "Konkrete Bedarfe werden automatisch einem einheitlichen Laufzeitband zugeordnet.",
+    "Produkte müssen zum tatsächlichen Bedarfstermin passen.",
+    "Nur dauerhaft verfügbares Kapital wird strategisch strukturiert.",
+  ],
+  market: [
+    "Zinsen, Inflation und Risikoprämien werden getrennt eingeordnet.",
+    "Laufende Verzinsung, Rendite bis Fälligkeit und Gesamtrendite sind nicht gleichzusetzen.",
+    "Aktienchancen erfordern ausreichende Zeit und Verlusttragfähigkeit.",
+  ],
+  tax: [
+    "Rechtsform, Ertragsart und bilanzielle Zuordnung sind vor Produktauswahl zu klären.",
+    "Teilfreistellung, § 8b KStG, Streubesitz und Gewerbesteuer sind fachlich zu würdigen.",
+    "Die Anwendung dokumentiert Prüfpunkte, ersetzt aber keine Steuerberatung.",
+  ],
+  depot: [
+    "Bestand wird auf die fünf Anlageklassen durchgeschaut.",
+    "Einstandskurse, Altbestände, Kosten und Kundenwünsche können Abweichungen begründen.",
+    "Transaktionen werden nur simuliert und nicht automatisch empfohlen.",
+  ],
+  pension: [
+    "Rürup, fondsgebundene Rentenversicherung und freie Anlage werden hinsichtlich Steuern, Kosten und Verfügbarkeit verglichen.",
+    "Eine Steuererstattung ist kein garantierter Finanzierungsbeitrag.",
+    "Verrentung und Kapitaloption müssen getrennt betrachtet werden.",
+  ],
+  succession: [
+    "Zeitpunkt, Empfänger und eigene Verfügbarkeit werden dokumentiert.",
+    "Depot-, Versicherungs- und gesellschaftsrechtliche Lösungen sind fachübergreifend zu prüfen.",
+    "Steuerliche und rechtliche Beurteilung bleibt qualifizierten Beratern vorbehalten.",
+  ],
+};
+
+type ModuleSlide = {
+  eyebrow: string;
+  title: string;
+  text: string;
+  points: string[];
+  checks: Array<{ id: string; label: string }>;
+};
+
+const moduleSlides: Record<string, ModuleSlide[]> = {
+  maturity: [
+    { eyebrow: "ANLASS", title: "Welche Mittel werden wann benötigt?", text: "Die zeitliche Verfügbarkeit ist die erste Planungsgrenze.", points: ["Reserve und konkrete Bedarfe getrennt erfassen", "Bedarfstermine vor Produktauswahl festlegen"], checks: [{ id: "all-needs", label: "Alle bekannten Kapitalbedarfe sind erfasst" }] },
+    { eyebrow: "DATEN", title: "Laufzeiten belastbar erfassen", text: "Betrag, Zweck und Termin bestimmen den Kapitaltopf.", points: ["Unklare Termine als offenen Prüfpunkt kennzeichnen", "Puffer für vorgezogene Bedarfe berücksichtigen"], checks: [{ id: "dates", label: "Termine und Beträge wurden mit dem Kunden plausibilisiert" }] },
+    { eyebrow: "EINORDNUNG", title: "Kapitaltöpfe bilden", text: "Jeder Bedarf wird genau einem einheitlichen Laufzeitband zugeordnet.", points: ["Reserve", "Bis 1 Jahr", "1 bis 3, 3 bis 5, 5 bis 10 und strategisch"], checks: [{ id: "buckets", label: "Die Laufzeitbänder sind widerspruchsfrei" }] },
+    { eyebrow: "LÖSUNGSWEGE", title: "Produkte passend zuordnen", text: "Mindesthorizont und Verfügbarkeit müssen zum Topf passen.", points: ["Überschüsse dürfen mehrere kurzfristige Töpfe abdecken", "Konflikte werden gewarnt, nicht verdeckt"], checks: [{ id: "products", label: "Produktlaufzeiten wurden gegen Bedarfe geprüft" }] },
+    { eyebrow: "ERGEBNIS", title: "Laufzeitenstruktur abschließen", text: "Offene Beträge, Überplanungen und Konflikte bleiben sichtbar.", points: ["Strukturplanung öffnen und Kapitaltöpfe befüllen", "Offene Prüfpunkte dokumentieren"], checks: [{ id: "result", label: "Die Laufzeitenstruktur kann in die Planung übernommen werden" }] },
+  ],
+  market: [
+    { eyebrow: "ANLASS", title: "Kapitalmarktumfeld einordnen", text: "Zins, Inflation und Risikoprämien werden getrennt betrachtet.", points: ["Nominale Rendite ist nicht reale Rendite", "Markterwartungen sind keine Garantie"], checks: [{ id: "purpose", label: "Der Einordnungszweck ist geklärt" }] },
+    { eyebrow: "DATEN", title: "Aktuelle Annahmen dokumentieren", text: "Renditebandbreiten benötigen immer einen Datenstand.", points: ["Geldmarkt etwa 2,10 bis 2,80 Prozent", "Bandbreiten aus der Orientierung vom 07.05.2026"], checks: [{ id: "date", label: "Der Datenstand wurde geprüft" }] },
+    { eyebrow: "EINORDNUNG", title: "Renditequellen unterscheiden", text: "Laufende Verzinsung, Rendite bis Fälligkeit und Gesamtrendite sind nicht identisch.", points: ["Bonitäts- und Durationsrisiko berücksichtigen", "Aktienprämie benötigt ausreichende Zeit"], checks: [{ id: "risks", label: "Die wesentlichen Rendite- und Risikotreiber sind besprochen" }] },
+    { eyebrow: "LÖSUNGSWEGE", title: "Horizont und Lösung verbinden", text: "Die Orientierung ordnet Lösungsarten nach Mindestanlagehorizonten.", points: ["Geldmarkt ab etwa 12 Monaten", "Weltweite Aktienfonds ab etwa 72 Monaten"], checks: [{ id: "horizon", label: "Der Anlagehorizont passt zu den betrachteten Lösungsarten" }] },
+    { eyebrow: "ERGEBNIS", title: "Markteinordnung festhalten", text: "Die Einordnung unterstützt das Gespräch, ersetzt keine Produktempfehlung.", points: ["Annahmen und Abweichungen dokumentieren", "Vor Umsetzung Aktualität erneut prüfen"], checks: [{ id: "result", label: "Die Einordnung ist nachvollziehbar dokumentiert" }] },
+  ],
+  tax: [
+    { eyebrow: "ANLASS", title: "Steuerlichen Prüfbedarf abgrenzen", text: "Die Anwendung dokumentiert Prüfbedarf und rechnet keine Steuerwirkung vor.", points: ["Privat- und Betriebsvermögen trennen", "Rechtsform und Bilanzposition beachten"], checks: [{ id: "scope", label: "Vermögenssphäre und Rechtsform sind geklärt" }] },
+    { eyebrow: "DATEN", title: "Ertragsarten erfassen", text: "Zinsen, Dividenden, Veräußerungsgewinne und Ausschüttungen können unterschiedlich wirken.", points: ["Teilfreistellungen prüfen", "Beteiligungsquoten nicht pauschal behandeln"], checks: [{ id: "income", label: "Relevante Ertragsarten sind identifiziert" }] },
+    { eyebrow: "EINORDNUNG", title: "Bilanzielle Behandlung prüfen", text: "Produktbezeichnung und wirtschaftliche Einordnung reichen für die Bilanzierung nicht aus.", points: ["Bewertung und Ausweis separat prüfen", "Steuerberater bei offenen Punkten einbinden"], checks: [{ id: "accounting", label: "Bilanzielle Prüfpunkte sind dokumentiert" }] },
+    { eyebrow: "LÖSUNGSWEGE", title: "Prüfpfad festlegen", text: "Offene Fragen werden konkret formuliert und für das weitere Kundengespräch festgehalten.", points: ["Steuerberatung bei steuerlichen Fragen", "Rechtsberatung bei rechtlichen Fragen"], checks: [{ id: "owner", label: "Offene Fragen sind konkret und verständlich formuliert" }] },
+    { eyebrow: "ERGEBNIS", title: "Keine Scheingenauigkeit", text: "Ohne fachliche Freigabe bleibt die Darstellung bei dokumentierten Prüfpunkten.", points: ["Keine Nettoertragsprognose", "Keine pauschale Steuerempfehlung"], checks: [{ id: "result", label: "Grenzen und offene Prüfungen sind festgehalten" }] },
+  ],
+  depot: [
+    { eyebrow: "ANLASS", title: "Bestandsdepot einbeziehen", text: "Der Bestand wird als eigene Ebene und nicht als neuer Kauf behandelt.", points: ["Ist-Struktur erfassen", "Neue Liquidität getrennt planen"], checks: [{ id: "captured", label: "Der relevante Depotbestand ist vollständig erfasst" }] },
+    { eyebrow: "DATEN", title: "Positionen klassifizieren", text: "Jede Position benötigt mindestens Wert und Anlageklasse.", points: ["Produktzuordnung und Durchschau ergänzen", "Ungeklärte Positionen sichtbar lassen"], checks: [{ id: "classified", label: "Alle Positionen sind klassifiziert oder als ungeklärt markiert" }] },
+    { eyebrow: "EINORDNUNG", title: "Ist und Soll vergleichen", text: "Abweichungen sind Hinweise und keine automatischen Verkaufssignale.", points: ["Klumpenrisiken", "Laufzeiten, Kosten und steuerliche Altbestände"], checks: [{ id: "reviewed", label: "Wesentliche Abweichungen wurden fachlich gewürdigt" }] },
+    { eyebrow: "LÖSUNGSWEGE", title: "Bestand in der Planung berücksichtigen", text: "Der Plan kann den Bestand nur vergleichend, vollständig oder nach Verkäufen einbeziehen.", points: ["Positionen selektiv auswählen", "Simulierte Verkäufe separat ausweisen"], checks: [{ id: "mode", label: "Der passende Berücksichtigungsmodus ist gewählt" }] },
+    { eyebrow: "ERGEBNIS", title: "Gesamtvermögen konsistent darstellen", text: "Bestand, neue Anlage und kombinierte Zielstruktur müssen rechnerisch übereinstimmen.", points: ["Depotcheck öffnen", "Vermögensstruktur gegenprüfen"], checks: [{ id: "result", label: "Depot und Strukturplanung sind konsistent verbunden" }] },
+  ],
+  pension: [
+    { eyebrow: "ANLASS", title: "Vorsorgeziel konkretisieren", text: "Versorgungslücke, Flexibilität und gewünschter Leistungsbeginn werden getrennt erfasst.", points: ["Laufende Rente oder Kapital", "Planbarkeit oder Flexibilität"], checks: [{ id: "goal", label: "Das Vorsorgeziel ist konkret beschrieben" }] },
+    { eyebrow: "DATEN", title: "Rahmendaten erfassen", text: "Laufzeit, Beitrag, Steuerstatus und vorhandene Verträge bestimmen den Vergleich.", points: ["Bestehende Ansprüche", "Liquiditätsbedarf bis zum Ruhestand"], checks: [{ id: "data", label: "Vorhandene Vorsorge und Laufzeit sind erfasst" }] },
+    { eyebrow: "EINORDNUNG", title: "Verfügbarkeit und Bindung vergleichen", text: "Steuervorteile dürfen nicht isoliert von Kosten und Verfügbarkeit betrachtet werden.", points: ["Rürup", "Fondsgebundene Rentenversicherung", "Freie Anlage"], checks: [{ id: "tradeoffs", label: "Bindung, Kosten und Verfügbarkeit wurden gegenübergestellt" }] },
+    { eyebrow: "LÖSUNGSWEGE", title: "Leistungsphase mitdenken", text: "Verrentung und Kapitaloption sind eigenständige Entscheidungen.", points: ["Auszahlungsform", "Hinterbliebenenschutz"], checks: [{ id: "benefits", label: "Die gewünschte Leistungsphase ist geklärt" }] },
+    { eyebrow: "ERGEBNIS", title: "Vergleich dokumentieren", text: "Die Vertiefung hält Entscheidungsfaktoren fest und ersetzt keine individuelle Vorsorgeberatung.", points: ["Offene Angebote", "Benötigte Unterlagen und nächste Schritte"], checks: [{ id: "result", label: "Die nächsten Schritte sind dokumentiert" }] },
+  ],
+  succession: [
+    { eyebrow: "ANLASS", title: "Übertragungsziel klären", text: "Zeitpunkt, Empfänger und eigene Absicherung stehen am Anfang.", points: ["Schenkung zu Lebzeiten", "Nachfolge von Todes wegen"], checks: [{ id: "goal", label: "Ziel und gewünschter Zeitpunkt sind geklärt" }] },
+    { eyebrow: "DATEN", title: "Vermögensbestandteile erfassen", text: "Liquidität, Depot, Versicherungen und Gesellschaftsanteile können unterschiedliche Wege erfordern.", points: ["Begünstigte Personen", "Verfügungs- und Rückforderungsrechte"], checks: [{ id: "assets", label: "Relevante Vermögensbestandteile und Empfänger sind erfasst" }] },
+    { eyebrow: "EINORDNUNG", title: "Eigene Verfügbarkeit sichern", text: "Eine Übertragung darf den künftigen Liquiditätsbedarf nicht ausblenden.", points: ["Reserve", "Pflege- und Versorgungsszenarien"], checks: [{ id: "liquidity", label: "Die eigene langfristige Liquidität ist berücksichtigt" }] },
+    { eyebrow: "LÖSUNGSWEGE", title: "Instrumente fachübergreifend prüfen", text: "Depot-, Versicherungs- und gesellschaftsrechtliche Lösungen benötigen getrennte Würdigung.", points: ["Nießbrauch und Vollmachten", "Begünstigungen und Vertragsgestaltung"], checks: [{ id: "experts", label: "Erforderliche Fachstellen sind identifiziert" }] },
+    { eyebrow: "ERGEBNIS", title: "Offene Schritte festhalten", text: "Der Navigator strukturiert den Anlass und ersetzt keine Rechts- oder Steuerberatung.", points: ["Benötigte Dokumente", "Offene Fragen und Folgetermin"], checks: [{ id: "result", label: "Offene Schritte sind für den Kunden dokumentiert" }] },
+  ],
+};
+
+const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+const nowLabel = () =>
+  new Intl.DateTimeFormat("de-DE", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date());
+const dateLabel = (value?: string) =>
+  value
+    ? new Intl.DateTimeFormat("de-DE", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(new Date(value))
+    : "–";
+const parseAmount = (value: string) =>
+  Number(value.replace(/[^0-9]/g, "")) || 0;
+const safeFileName = (value: string) =>
+  (value || "vermoegensnavigator")
+    .trim()
+    .replace(/[^a-zA-Z0-9äöüÄÖÜß_-]+/g, "-")
+    .replace(/-+/g, "-");
+const uid = (prefix: string) =>
+  `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+const blankModuleState = (): ModuleState => ({
+  status: "not_started",
+  currentSlide: 0,
+  checklist: {},
+  notes: "",
+  updatedAt: new Date().toISOString(),
+});
+const advisorFor = (advisorId: AdvisorId) =>
+  advisors.find((advisor) => advisor.id === advisorId) ?? advisors[0];
+const moduleStatusLabel = (status: ModuleState["status"]) =>
+  status === "complete"
+    ? "Vollständig"
+    : status === "in_progress"
+      ? "In Bearbeitung"
+      : "Nicht begonnen";
+
+function scopeLabel(scope: Scope | null) {
+  return scope === "private"
+    ? "Privatvermögen"
+    : scope === "business"
+      ? "Betriebsvermögen"
+      : scope === "combined"
+        ? "Betriebs- und Privatvermögen"
+        : "Noch nicht gewählt";
+}
+
+function download(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function AmountField({
+  label,
+  value,
+  onChange,
+  hint,
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+  hint?: string;
+}) {
+  return (
+    <label className="field amount-field">
+      <span>{label}</span>
+      <div>
+        <input
+          inputMode="numeric"
+          value={value ? value.toLocaleString("de-DE") : ""}
+          placeholder="0"
+          onChange={(event) => onChange(parseAmount(event.target.value))}
+        />
+        <b>€</b>
+      </div>
+      {hint && <small>{hint}</small>}
+    </label>
+  );
+}
+
+function SectionIntro({
+  number,
+  title,
+  children,
+}: {
+  number: string;
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="section-intro">
+      <span>{number}</span>
+      <div>
+        <h2>{title}</h2>
+        <p>{children}</p>
+      </div>
+    </div>
+  );
+}
+
+function CustomerChecklistEditor({
+  item,
+  setItem,
+  title = "Kunden-Checkliste",
+}: {
+  item: AdvisoryCase;
+  setItem: Dispatch<SetStateAction<AdvisoryCase>>;
+  title?: string;
+}) {
+  const [text, setText] = useState("");
+  const [category, setCategory] = useState<CustomerChecklistCategory>(
+    customerChecklistCategories[0],
+  );
+  const addItem = () => {
+    const nextText = text.trim();
+    if (!nextText) return;
+    setItem((current) => ({
+      ...current,
+      customerChecklist: [
+        ...current.customerChecklist,
+        {
+          id: uid("kundenpunkt"),
+          text: nextText,
+          category,
+          done: false,
+          source: "general",
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    }));
+    setText("");
+  };
+  const updateItem = (id: string, done: boolean) =>
+    setItem((current) => ({
+      ...current,
+      customerChecklist: current.customerChecklist.map((entry) =>
+        entry.id === id ? { ...entry, done } : entry,
+      ),
+    }));
+  const removeItem = (id: string) =>
+    setItem((current) => ({
+      ...current,
+      customerChecklist: current.customerChecklist.filter(
+        (entry) => entry.id !== id,
+      ),
+    }));
+  return (
+    <section className="customer-checklist no-print">
+      <div className="customer-checklist-head">
+        <div>
+          <p className="eyebrow">FÜR DEN KUNDEN</p>
+          <h3>{title}</h3>
+          <p>
+            Unterlagen, Unterschriften und externe Klärungen dieses Falls. Alle
+            Einträge erscheinen im Kundenexport.
+          </p>
+        </div>
+        <span>
+          {item.customerChecklist.filter((entry) => !entry.done).length} offen
+        </span>
+      </div>
+      <div className="customer-checklist-add">
+        <select
+          aria-label="Art des nächsten Schritts"
+          value={category}
+          onChange={(event) =>
+            setCategory(event.target.value as CustomerChecklistCategory)
+          }
+        >
+          {customerChecklistCategories.map((entry) => (
+            <option key={entry}>{entry}</option>
+          ))}
+        </select>
+        <input
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") addItem();
+          }}
+          placeholder="z. B. Versicherungsordner zum Folgetermin mitbringen"
+        />
+        <button className="primary" onClick={addItem} disabled={!text.trim()}>
+          Hinzufügen
+        </button>
+      </div>
+      {item.customerChecklist.length === 0 ? (
+        <p className="customer-checklist-empty">
+          Noch keine nächsten Schritte für den Kunden erfasst.
+        </p>
+      ) : (
+        <div className="customer-checklist-list">
+          {item.customerChecklist.map((entry) => {
+            const sourceModule = entry.moduleId
+              ? modules.find((module) => module.id === entry.moduleId)
+              : null;
+            return (
+              <label key={entry.id} className={entry.done ? "done" : ""}>
+                <input
+                  type="checkbox"
+                  checked={entry.done}
+                  onChange={(event) =>
+                    updateItem(entry.id, event.target.checked)
+                  }
+                />
+                <span>
+                  <strong>{entry.text}</strong>
+                  <small>
+                    {entry.category}
+                    {sourceModule ? ` · aus ${sourceModule.title}` : ""}
+                  </small>
+                </span>
+                <button
+                  type="button"
+                  aria-label="Eintrag löschen"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    removeItem(entry.id);
+                  }}
+                >
+                  ×
+                </button>
+              </label>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+export default function Home() {
+  const [view, setView] = useState<View>("home");
+  const [activeCase, setActiveCase] = useState<AdvisoryCase>(() =>
+    createCase(),
+  );
+  const [newCaseAdvisorId, setNewCaseAdvisorId] =
+    useState<AdvisorId>(defaultAdvisorId);
+  const [savedCases, setSavedCases] = useState<AdvisoryCase[]>([]);
+  const [hydrated, setHydrated] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const importRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try {
+        const storedAdvisor = window.localStorage.getItem(
+          "vermoegensnavigator-advisor",
+        ) as AdvisorId | null;
+        if (storedAdvisor && advisors.some((entry) => entry.id === storedAdvisor)) {
+          setNewCaseAdvisorId(storedAdvisor);
+          setActiveCase((current) => ({
+            ...current,
+            advisorId: storedAdvisor,
+          }));
+        }
+        const stored = window.localStorage.getItem(
+          "vermoegensnavigator-cases-v2",
+        );
+        if (stored) {
+          const parsed = JSON.parse(stored) as AdvisoryCase[];
+          if (Array.isArray(parsed))
+            setSavedCases(
+              parsed
+                .map((entry) => normalizeImportedCase(entry, false))
+                .filter((entry): entry is AdvisoryCase => Boolean(entry)),
+            );
+        } else {
+          const old = window.localStorage.getItem("vermoegensnavigator-draft");
+          if (old) {
+            const legacy = JSON.parse(old) as { data?: AdvisoryData };
+            if (legacy.data) {
+              const migrated = createCase(legacy.data);
+              setActiveCase(migrated);
+              setSavedCases([migrated]);
+            }
+          }
+        }
+      } catch {
+        window.localStorage.removeItem("vermoegensnavigator-cases-v2");
+      }
+      setHydrated(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  const persist = (items: AdvisoryCase[]) => {
+    setSavedCases(items);
+    window.localStorage.setItem(
+      "vermoegensnavigator-cases-v2",
+      JSON.stringify(items),
+    );
+  };
+
+  const saveCase = (withVersion = false) => {
+    const updated: AdvisoryCase = {
+      ...clone(activeCase),
+      updatedAt: new Date().toISOString(),
+    };
+    if (withVersion) {
+      updated.versions = [
+        ...updated.versions,
+        {
+          id: uid("version"),
+          label: `Version ${updated.versions.length + 1} – ${nowLabel()}`,
+          createdAt: new Date().toISOString(),
+          snapshot: caseSnapshot(updated),
+        },
+      ];
+    }
+    const exists = savedCases.some((item) => item.id === updated.id);
+    persist(
+      exists
+        ? savedCases.map((item) => (item.id === updated.id ? updated : item))
+        : [updated, ...savedCases],
+    );
+    setActiveCase(updated);
+  };
+
+  const start = (scope?: Scope, scenarioId?: string) => {
+    const scenario = scenarios.find((item) => item.id === scenarioId);
+    const next = createCase(
+      scenario
+        ? scenario.data
+        : { ...clone(emptyAdvisory), scope: scope ?? null },
+      newCaseAdvisorId,
+    );
+    setActiveCase(next);
+    setView("wizard");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const openSavedCase = (item: AdvisoryCase) => {
+    setActiveCase(clone(item));
+    setNewCaseAdvisorId(item.advisorId);
+    window.localStorage.setItem("vermoegensnavigator-advisor", item.advisorId);
+    setView("wizard");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  const removeSavedCase = (id: string) => {
+    if (window.confirm("Diesen lokal gespeicherten Testfall wirklich löschen?"))
+      persist(savedCases.filter((item) => item.id !== id));
+  };
+
+  const exportJson = () =>
+    download(
+      new Blob(
+        [
+          JSON.stringify(
+            {
+              exportedAt: new Date().toISOString(),
+              case: activeCase,
+              dataSources,
+            },
+            null,
+            2,
+          ),
+        ],
+        { type: "application/json" },
+      ),
+      `${safeFileName(activeCase.advisory.caseName)}.json`,
+    );
+  const importJson = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const imported = normalizeImportedCase(JSON.parse(await file.text()));
+      if (!imported) throw new Error("invalid");
+      setActiveCase(imported);
+      setNewCaseAdvisorId(imported.advisorId);
+      window.localStorage.setItem(
+        "vermoegensnavigator-advisor",
+        imported.advisorId,
+      );
+      persist([imported, ...savedCases]);
+      setView("wizard");
+    } catch {
+      window.alert(
+        "Die Datei enthält keinen vollständigen VermögensNavigator-Fall.",
+      );
+    }
+    event.target.value = "";
+  };
+
+  const activePlan =
+    activeCase.plans.find((plan) => plan.id === activeCase.activePlanId) ??
+    activeCase.plans[0];
+  const preferredPlan =
+    activeCase.plans.find((plan) => plan.preferred) ?? activePlan;
+  const activeAdvisor = advisorFor(activeCase.advisorId);
+  const selectAdvisor = (advisorId: AdvisorId) => {
+    setNewCaseAdvisorId(advisorId);
+    setActiveCase((current) => ({ ...current, advisorId }));
+    window.localStorage.setItem("vermoegensnavigator-advisor", advisorId);
+    setProfileOpen(false);
+  };
+
+  return (
+    <main className="app-shell">
+      <header className="topbar">
+        <button className="brand" onClick={() => setView("home")}>
+          <span className="brand-placeholder" aria-label="Logoplatzhalter">
+            Logo
+          </span>
+          <span>
+            <strong>VermögensNavigator</strong>
+            <small>Durchgängiger Beratungsfall</small>
+          </span>
+        </button>
+        <div className="topbar-actions">
+          <span className="prototype-pill">
+            Testumgebung · nur erfundene Daten
+          </span>
+          <button className="icon-button" onClick={() => setShowHelp(true)}>
+            ?
+          </button>
+          <div className="profile-selector">
+            <button
+              className="profile-button"
+              onClick={() => setProfileOpen((open) => !open)}
+              aria-expanded={profileOpen}
+              aria-haspopup="listbox"
+            >
+              <span>{activeAdvisor.initials}</span>
+              <span>
+                {activeAdvisor.name}<small>{activeAdvisor.title}</small>
+              </span>
+              <i aria-hidden="true">⌄</i>
+            </button>
+            {profileOpen && (
+              <div className="profile-menu" role="listbox" aria-label="Verantwortliche Person">
+                <p>Verantwortlich für diesen Fall</p>
+                {advisors.map((advisor) => (
+                  <button
+                    key={advisor.id}
+                    role="option"
+                    aria-selected={advisor.id === activeCase.advisorId}
+                    className={advisor.id === activeCase.advisorId ? "active" : ""}
+                    onClick={() => selectAdvisor(advisor.id)}
+                  >
+                    <span>{advisor.initials}</span>
+                    <span>
+                      <strong>{advisor.name}</strong>
+                      <small>{advisor.title}</small>
+                    </span>
+                    <i>{advisor.id === activeCase.advisorId ? "✓" : ""}</i>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </header>
+      <aside className="sidebar">
+        <nav>
+          <button
+            className={view === "home" ? "active" : ""}
+            onClick={() => setView("home")}
+          >
+            <span>⌂</span>Übersicht
+          </button>
+          <button
+            className={view === "cases" ? "active" : ""}
+            onClick={() => setView("cases")}
+          >
+            <span>▤</span>Beratungsfälle{" "}
+            <em className="nav-count">{savedCases.length}</em>
+          </button>
+          <button onClick={() => start()}>
+            <span>＋</span>Neue Beratung
+          </button>
+          <button
+            className={view === "planner" ? "active" : ""}
+            onClick={() => setView("planner")}
+          >
+            <span>▦</span>Strukturplanung
+          </button>
+          <button
+            className={view === "depot" ? "active" : ""}
+            onClick={() => setView("depot")}
+          >
+            <span>◫</span>Depotcheck
+          </button>
+          <button
+            className={view === "export" ? "active" : ""}
+            onClick={() => setView("export")}
+          >
+            <span>⇩</span>Ergebnis & Export
+          </button>
+        </nav>
+        <div className="sidebar-foot">
+          <p>
+            <strong>Prototyp V0.9</strong>
+            <br />
+            Browser-lokal, keine revisionssichere Speicherung.
+          </p>
+        </div>
+      </aside>
+      <section className="workspace">
+        {view === "home" && (
+          <HomeView
+            cases={savedCases}
+            start={start}
+            openCase={openSavedCase}
+            setView={setView}
+            hydrated={hydrated}
+          />
+        )}
+        {view === "cases" && (
+          <CasesView
+            cases={savedCases}
+            openCase={openSavedCase}
+            removeCase={removeSavedCase}
+            start={() => start()}
+            importCase={() => importRef.current?.click()}
+          />
+        )}
+        {view === "wizard" && (
+          <WizardView
+            item={activeCase}
+            setItem={setActiveCase}
+            saveCase={saveCase}
+            setView={setView}
+            exportJson={exportJson}
+          />
+        )}
+        {view === "planner" && (
+          <PlannerView
+            item={activeCase}
+            setItem={setActiveCase}
+            saveCase={saveCase}
+            setView={setView}
+          />
+        )}
+        {view === "depot" && (
+          <DepotOptimizer
+            item={activeCase}
+            setItem={setActiveCase}
+            plan={preferredPlan}
+            saveCase={saveCase}
+            setView={setView}
+          />
+        )}
+        {view === "export" && (
+          <ExportCenter
+            item={activeCase}
+            setItem={setActiveCase}
+            preferredPlan={preferredPlan}
+            saveCase={saveCase}
+            exportJson={exportJson}
+            importJson={() => importRef.current?.click()}
+          />
+        )}
+      </section>
+      <input
+        ref={importRef}
+        className="visually-hidden"
+        type="file"
+        accept="application/json,.json"
+        onChange={importJson}
+      />
+      {showHelp && (
+        <div className="modal-backdrop" onClick={() => setShowHelp(false)}>
+          <section
+            className="help-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button className="modal-close" onClick={() => setShowHelp(false)}>
+              ×
+            </button>
+            <p className="eyebrow">TESTHINWEISE</p>
+            <h2>Was V0.9 jetzt zusammenführt</h2>
+            <ol>
+              <li>
+                Ein Fall enthält Beratung, alle Planvarianten, VV-Auswahl und
+                Depot.
+              </li>
+              <li>
+                „Fall speichern“ schreibt den vollständigen Stand browser-lokal.
+              </li>
+              <li>
+                Modellportfolios werden standardmäßig nur auf strategisches
+                Kapital angewendet.
+              </li>
+              <li>
+                JSON kann exportiert und wieder importiert werden; Excel enthält
+                mehrere Tabellenblätter.
+              </li>
+              <li>
+                Verantwortliche Person und Kunden-Checkliste werden im Fall und
+                in den Exporten gespeichert.
+              </li>
+            </ol>
+            <p className="notice">
+              Für den produktiven Einsatz fehlen weiterhin zentrale Datenbank,
+              Berechtigungen, revisionssichere Historie, bankfachliche Freigabe
+              und Systemintegration.
+            </p>
+          </section>
+        </div>
+      )}
+    </main>
+  );
+}
+
+function HomeView({
+  cases,
+  start,
+  openCase,
+  setView,
+  hydrated,
+}: {
+  cases: AdvisoryCase[];
+  start: (scope?: Scope, scenarioId?: string) => void;
+  openCase: (item: AdvisoryCase) => void;
+  setView: (view: View) => void;
+  hydrated: boolean;
+}) {
+  return (
+    <div className="home-view">
+      <div className="welcome-row">
+        <div>
+          <p className="eyebrow">MODULARER BERATUNGSNAVIGATOR</p>
+          <h1>Ein Fall. Mehrere Planungen. Eine konsistente Struktur.</h1>
+          <p>
+            Kapitalbedarfe, Laufzeiten, fünf Anlageklassen, Modellportfolios,
+            Vermögensverwaltungen und Bestandsdepot greifen nun auf dieselbe
+            Fallakte zu.
+          </p>
+        </div>
+        <button className="primary" onClick={() => start()}>
+          <span>＋</span> Neue Beratung starten
+        </button>
+      </div>
+      <div className="metric-grid">
+        <article className="metric-card accent">
+          <div className="metric-icon">01</div>
+          <div>
+            <small>GESPEICHERT</small>
+            <strong>{hydrated ? cases.length : "–"}</strong>
+            <p>vollständige Testfälle im Browser</p>
+          </div>
+        </article>
+        <article className="metric-card">
+          <div className="metric-icon blue">02</div>
+          <div>
+            <small>PLANVARIANTEN</small>
+            <strong>
+              {cases.reduce((sum, item) => sum + item.plans.length, 0)}
+            </strong>
+            <p>separat speicher- und vergleichbar</p>
+          </div>
+        </article>
+        <article className="metric-card">
+          <div className="metric-icon gold">03</div>
+          <div>
+            <small>DATENBASIS</small>
+            <strong>5</strong>
+            <p>eingebundene Projektunterlagen</p>
+          </div>
+        </article>
+      </div>
+      {cases.length > 0 && (
+        <section className="panel recent-cases">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">ZULETZT BEARBEITET</p>
+              <h2>Beratungsfälle fortsetzen</h2>
+            </div>
+            <button className="secondary" onClick={() => setView("cases")}>
+              Alle Fälle
+            </button>
+          </div>
+          <div className="case-card-grid">
+            {cases.slice(0, 3).map((item) => (
+              <button key={item.id} onClick={() => openCase(item)}>
+                <span>{item.status}</span>
+                <strong>
+                  {item.advisory.caseName || "Unbenannter Testfall"}
+                </strong>
+                <small>
+                  {scopeLabel(item.advisory.scope)} · {item.plans.length}{" "}
+                  Planungen · {advisorFor(item.advisorId).name}
+                </small>
+                <em>Zuletzt {dateLabel(item.updatedAt)} →</em>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+      <section className="panel quick-start">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">SCHNELLSTART</p>
+            <h2>Welcher Vermögensbereich steht im Fokus?</h2>
+          </div>
+          <span className="step-chip">Schritt 1 von 6</span>
+        </div>
+        <div className="scope-grid">
+          <button onClick={() => start("private")}>
+            <span className="scope-symbol">P</span>
+            <strong>Privatvermögen</strong>
+            <small>Liquidität, Depot, Vorsorge und Nachfolge</small>
+            <i>→</i>
+          </button>
+          <button onClick={() => start("business")}>
+            <span className="scope-symbol business">F</span>
+            <strong>Betriebsvermögen</strong>
+            <small>Firmenliquidität, Bilanzierung und Steuern</small>
+            <i>→</i>
+          </button>
+          <button onClick={() => start("combined")}>
+            <span className="scope-symbol combined">K</span>
+            <strong>Beides verbinden</strong>
+            <small>Unternehmerisches und privates Vermögen</small>
+            <i>→</i>
+          </button>
+        </div>
+        <div className="process-strip">
+          {steps.map(([title], index) => (
+            <span key={title} className={index === 0 ? "done" : ""}>
+              <b>{index + 1}</b>
+              {title}
+            </span>
+          ))}
+        </div>
+      </section>
+      <section className="panel scenarios-panel" id="musterfaelle">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">FESTE TESTSZENARIEN</p>
+            <h2>Komplette Falllogik prüfen</h2>
+          </div>
+          <p>Jeder Musterfall wird als unabhängiger neuer Fall geöffnet.</p>
+        </div>
+        <div className="scenario-grid">
+          {scenarios.map((item) => (
+            <button key={item.id} onClick={() => start(item.scope, item.id)}>
+              <span className={`tag ${item.scope}`}>{item.tag}</span>
+              <strong>{item.title}</strong>
+              <small>{item.subtitle}</small>
+              <span className="scenario-foot">
+                Musterfall öffnen <b>→</b>
+              </span>
+            </button>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function CasesView({
+  cases,
+  openCase,
+  removeCase,
+  start,
+  importCase,
+}: {
+  cases: AdvisoryCase[];
+  openCase: (item: AdvisoryCase) => void;
+  removeCase: (id: string) => void;
+  start: () => void;
+  importCase: () => void;
+}) {
+  return (
+    <div className="tool-view">
+      <div className="tool-head">
+        <div>
+          <p className="eyebrow">FALLVERWALTUNG</p>
+          <h1>Beratungsfälle</h1>
+          <p>
+            Jeder Eintrag enthält Beratungsdaten, Strukturvarianten,
+            VV-Selektion, Depot, Versionen und Datenstände.
+          </p>
+        </div>
+        <div className="tool-head-actions">
+          <button className="secondary" onClick={importCase}>
+            JSON importieren
+          </button>
+          <button className="primary" onClick={start}>
+            ＋ Neuer Fall
+          </button>
+        </div>
+      </div>
+      {cases.length === 0 ? (
+        <button className="empty-state" onClick={start}>
+          <span>＋</span>
+          <strong>Ersten Beratungsfall anlegen</strong>
+          <small>oder einen vollständigen JSON-Fall importieren</small>
+        </button>
+      ) : (
+        <div className="case-table">
+          <div className="case-table-head">
+            <span>Fall</span>
+            <span>Bereich</span>
+            <span>Planungen</span>
+            <span>Versionen</span>
+            <span>Stand</span>
+            <span></span>
+          </div>
+          {cases.map((item) => (
+            <div key={item.id}>
+              <button className="case-main" onClick={() => openCase(item)}>
+                <strong>
+                  {item.advisory.caseName || "Unbenannter Testfall"}
+                  <small>
+                    {item.status} · {advisorFor(item.advisorId).name}
+                  </small>
+                </strong>
+                <span>{scopeLabel(item.advisory.scope)}</span>
+                <span>{item.plans.length}</span>
+                <span>{item.versions.length}</span>
+                <span>{dateLabel(item.updatedAt)}</span>
+              </button>
+              <button
+                className="delete-button"
+                onClick={() => removeCase(item.id)}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WizardView({
+  item,
+  setItem,
+  saveCase,
+  setView,
+  exportJson,
+}: {
+  item: AdvisoryCase;
+  setItem: Dispatch<SetStateAction<AdvisoryCase>>;
+  saveCase: (version?: boolean) => void;
+  setView: (view: View) => void;
+  exportJson: () => void;
+}) {
+  const [openModuleId, setOpenModuleId] = useState<string | null>(null);
+  const data = item.advisory;
+  const step = item.currentStep;
+  const updateData = <K extends keyof AdvisoryData>(
+    key: K,
+    value: AdvisoryData[K],
+  ) =>
+    setItem((current) => {
+      const nextAdvisory = { ...current.advisory, [key]: value };
+      if (key !== "liquidAssets")
+        return { ...current, advisory: nextAdvisory };
+      const liquidAssets = Number(value) || 0;
+      return {
+        ...current,
+        advisory: nextAdvisory,
+        plans: current.plans.map((plan) =>
+          plan.capitalMode === "linked"
+            ? { ...plan, total: liquidAssets, updatedAt: new Date().toISOString() }
+            : plan,
+        ),
+        vvFilters: {
+          ...current.vvFilters,
+          amount:
+            current.vvFilters.amount === current.advisory.liquidAssets
+              ? liquidAssets
+              : current.vvFilters.amount,
+        },
+      };
+    });
+  const go = (next: number) => {
+    setItem({ ...item, currentStep: Math.max(1, Math.min(6, next)) });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  const addNeed = () =>
+    updateData("needs", [
+      ...data.needs,
+      { id: Date.now(), purpose: "", amount: 0, years: 1, dueDate: "" },
+    ]);
+  const updateNeed = (
+    id: number,
+    changes: Partial<AdvisoryData["needs"][number]>,
+  ) =>
+    updateData(
+      "needs",
+      data.needs.map((need) =>
+        need.id === id ? { ...need, ...changes } : need,
+      ),
+    );
+  const togglePriority = (value: string) =>
+    updateData(
+      "priorities",
+      data.priorities.includes(value)
+        ? data.priorities.filter((entry) => entry !== value)
+        : [...data.priorities, value],
+    );
+  const toggleModule = (value: string) =>
+    updateData(
+      "modules",
+      data.modules.includes(value)
+        ? data.modules.filter((entry) => entry !== value)
+        : [...data.modules, value],
+    );
+
+  return (
+    <div className="wizard-view">
+      <div className="wizard-head">
+        <button className="back-link" onClick={() => setView("home")}>
+          ← Übersicht
+        </button>
+        <div>
+          <p className="eyebrow">{data.caseName || "NEUE BERATUNG"}</p>
+          <h1>{steps[step - 1][0]}</h1>
+          <p>{steps[step - 1][1]}</p>
+        </div>
+        <div className="wizard-head-actions">
+          <span>Schritt {step} von 6</span>
+          <button onClick={() => saveCase(false)}>Fall speichern</button>
+        </div>
+      </div>
+      <div className="wizard-layout">
+        <ol className="wizard-steps">
+          {steps.map(([title, subtitle], index) => (
+            <li
+              key={title}
+              className={
+                step === index + 1
+                  ? "current"
+                  : step > index + 1
+                    ? "complete-step"
+                    : ""
+              }
+            >
+              <button onClick={() => data.scope && go(index + 1)}>
+                <span>{step > index + 1 ? "✓" : index + 1}</span>
+                <div>
+                  <strong>{title}</strong>
+                  <small>{subtitle}</small>
+                </div>
+              </button>
+            </li>
+          ))}
+        </ol>
+        <section className="wizard-card">
+          {step === 1 && <ScopeStep data={data} update={updateData} />}
+          {step === 2 && (
+            <SituationStep
+              data={data}
+              update={updateData}
+              depot={item.depot}
+              setDepot={(depot) =>
+                setItem({
+                  ...item,
+                  advisory: {
+                    ...data,
+                    depotValue: depot.reduce(
+                      (sum, entry) => sum + entry.value,
+                      0,
+                    ),
+                    hasDepot: depot.length > 0 || data.hasDepot,
+                  },
+                  depot,
+                })
+              }
+              setView={setView}
+            />
+          )}
+          {step === 3 && (
+            <NeedsStep
+              data={data}
+              update={updateData}
+              addNeed={addNeed}
+              updateNeed={updateNeed}
+            />
+          )}
+          {step === 4 && (
+            <GoalsStep
+              data={data}
+              update={updateData}
+              togglePriority={togglePriority}
+            />
+          )}
+          {step === 5 && (
+            <ModulesStep
+              data={data}
+              moduleStates={item.moduleStates}
+              toggleModule={toggleModule}
+              openModule={setOpenModuleId}
+            />
+          )}
+          {step === 6 && (
+            <ResultStep
+              item={item}
+              setItem={setItem}
+              setView={setView}
+              exportJson={exportJson}
+              openModule={setOpenModuleId}
+            />
+          )}
+          <div className="wizard-actions no-print">
+            <button
+              className="secondary"
+              onClick={() => (step === 1 ? setView("home") : go(step - 1))}
+            >
+              {step === 1 ? "Abbrechen" : "← Zurück"}
+            </button>
+            <div>
+              <button className="text-button" onClick={() => saveCase(false)}>
+                Fall speichern
+              </button>
+              {step < 6 ? (
+                <button
+                  className="primary"
+                  disabled={step === 1 && !data.scope}
+                  onClick={() => go(step + 1)}
+                >
+                  Weiter →
+                </button>
+              ) : (
+                <button className="primary" onClick={() => setView("planner")}>
+                  Struktur planen →
+                </button>
+              )}
+            </div>
+          </div>
+        </section>
+      </div>
+      {openModuleId && (
+        <ModuleWorkspace
+          moduleId={openModuleId}
+          item={item}
+          setItem={setItem}
+          close={() => setOpenModuleId(null)}
+          setView={setView}
+        />
+      )}
+    </div>
+  );
+}
+
+function ScopeStep({
+  data,
+  update,
+}: {
+  data: AdvisoryData;
+  update: <K extends keyof AdvisoryData>(
+    key: K,
+    value: AdvisoryData[K],
+  ) => void;
+}) {
+  const options: Array<[Scope, string, string]> = [
+    [
+      "private",
+      "Privatvermögen",
+      "Liquidität, Wertpapiere, Vorsorge, Versicherungen und Nachfolge.",
+    ],
+    [
+      "business",
+      "Betriebsvermögen",
+      "Überschüssige Firmenliquidität, Rechtsform, Bilanzierung und Steuern.",
+    ],
+    [
+      "combined",
+      "Betriebs- und Privatvermögen",
+      "Beide Sphären mit getrennten Bedarfen und Zielen.",
+    ],
+  ];
+  return (
+    <>
+      <SectionIntro
+        number="01"
+        title="Welche Vermögensbereiche sollen betrachtet werden?"
+      >
+        Die Auswahl steuert Fragen, Prüfpunkte und Fachmodule.
+      </SectionIntro>
+      <div className="large-options">
+        {options.map(([value, title, text]) => (
+          <button
+            key={value}
+            className={data.scope === value ? "selected" : ""}
+            onClick={() => update("scope", value)}
+          >
+            <span>
+              {value === "private" ? "P" : value === "business" ? "F" : "K"}
+            </span>
+            <div>
+              <strong>{title}</strong>
+              <small>{text}</small>
+            </div>
+            <i>{data.scope === value ? "✓" : ""}</i>
+          </button>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function SituationStep({
+  data,
+  update,
+  depot,
+  setDepot,
+  setView,
+}: {
+  data: AdvisoryData;
+  update: <K extends keyof AdvisoryData>(
+    key: K,
+    value: AdvisoryData[K],
+  ) => void;
+  depot: DepotHolding[];
+  setDepot: (depot: DepotHolding[]) => void;
+  setView: (view: View) => void;
+}) {
+  const business = data.scope === "business" || data.scope === "combined";
+  const addHolding = () =>
+    setDepot([
+      ...depot,
+      {
+        id: uid("holding"),
+        name: "",
+        value: 0,
+        assetClass: "Geldwerte",
+        region: "Weltweit",
+        risk: 2,
+        plannedSale: 0,
+        note: "",
+      },
+    ]);
+  const updateHolding = (id: string, changes: Partial<DepotHolding>) =>
+    setDepot(
+      depot.map((entry) =>
+        entry.id === id ? { ...entry, ...changes } : entry,
+      ),
+    );
+  return (
+    <>
+      <SectionIntro number="02" title="Wie sieht die heutige Ausgangslage aus?">
+        Erfasst wird nur, was für die Strukturentscheidung benötigt wird.
+      </SectionIntro>
+      <div className="form-grid">
+        <label className="field full">
+          <span>Bezeichnung des Testfalls</span>
+          <input
+            value={data.caseName}
+            onChange={(event) => update("caseName", event.target.value)}
+            placeholder="z. B. Muster GmbH – Liquiditätsanlage"
+          />
+          <small>Keine echten Namen oder Kundendaten verwenden.</small>
+        </label>
+        <label className="field">
+          <span>Vermögensperspektive</span>
+          <input value={scopeLabel(data.scope)} disabled />
+        </label>
+        {business && (
+          <label className="field">
+            <span>Rechtsform</span>
+            <select
+              value={data.legalForm}
+              onChange={(event) => update("legalForm", event.target.value)}
+            >
+              <option>GmbH</option>
+              <option>GmbH &amp; Co. KG</option>
+              <option>AG</option>
+              <option>Personengesellschaft</option>
+              <option>Einzelunternehmen</option>
+              <option>Stiftung</option>
+              <option>Sonstige</option>
+            </select>
+          </label>
+        )}
+        <AmountField
+          label={
+            business ? "Verfügbare Liquidität gesamt" : "Liquide Mittel gesamt"
+          }
+          value={data.liquidAssets}
+          onChange={(value) => update("liquidAssets", value)}
+        />
+        <AmountField
+          label={
+            business ? "Betriebs- / Sicherheitsreserve" : "Sicherheitsreserve"
+          }
+          value={data.reserve}
+          onChange={(value) => update("reserve", value)}
+        />
+        <AmountField
+          label="Wertpapierdepot"
+          value={data.depotValue}
+          onChange={(value) => {
+            update("depotValue", value);
+            update("hasDepot", value > 0);
+          }}
+          hint={
+            depot.length
+              ? "Wird aus den unten erfassten Positionen berechnet."
+              : "Gesamtwert kann direkt oder über einzelne Positionen erfasst werden."
+          }
+        />
+        <AmountField
+          label="Weitere Vermögenswerte"
+          value={data.otherAssets}
+          onChange={(value) => update("otherAssets", value)}
+        />
+        <label className="check-row full">
+          <input
+            type="checkbox"
+            checked={data.hasDepot}
+            onChange={(event) => update("hasDepot", event.target.checked)}
+          />
+          <span>
+            <strong>Vorhandenes Depot einbeziehen</strong>
+            <small>
+              Aktuelle Struktur, Risiken, Kosten und steuerliche Aspekte werden
+              im Depotmodul geprüft.
+            </small>
+          </span>
+        </label>
+        {(data.hasDepot || data.depotValue > 0 || depot.length > 0) && (
+          <section className="situation-depot full">
+            <div className="situation-depot-head">
+              <div>
+                <strong>Depotpositionen</strong>
+                <small>
+                  Optional bereits hier erfassen; dieselben Positionen
+                  erscheinen im Depotcheck.
+                </small>
+              </div>
+              <div>
+                <button className="secondary" onClick={() => setView("depot")}>
+                  Depotcheck öffnen
+                </button>
+                <button className="secondary" onClick={addHolding}>
+                  ＋ Position
+                </button>
+              </div>
+            </div>
+            {depot.length === 0 ? (
+              <button className="mini-empty" onClick={addHolding}>
+                Erste Depotposition erfassen
+              </button>
+            ) : (
+              <div className="situation-holdings">
+                {depot.map((holding) => (
+                  <div key={holding.id}>
+                    <input
+                      aria-label="Produktbezeichnung"
+                      value={holding.name}
+                      onChange={(event) =>
+                        updateHolding(holding.id, { name: event.target.value })
+                      }
+                      placeholder="Produktbezeichnung"
+                    />
+                    <div className="inline-amount">
+                      <input
+                        aria-label="Aktueller Wert"
+                        inputMode="numeric"
+                        value={
+                          holding.value
+                            ? holding.value.toLocaleString("de-DE")
+                            : ""
+                        }
+                        onChange={(event) =>
+                          updateHolding(holding.id, {
+                            value: parseAmount(event.target.value),
+                          })
+                        }
+                        placeholder="0"
+                      />
+                      <b>€</b>
+                    </div>
+                    <select
+                      aria-label="Anlageklasse"
+                      value={holding.assetClass}
+                      onChange={(event) =>
+                        updateHolding(holding.id, {
+                          assetClass: event.target.value as AssetClass,
+                        })
+                      }
+                    >
+                      {assetClasses.map((name) => (
+                        <option key={name}>{name}</option>
+                      ))}
+                    </select>
+                    <button
+                      aria-label="Position löschen"
+                      onClick={() =>
+                        setDepot(
+                          depot.filter((entry) => entry.id !== holding.id),
+                        )
+                      }
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+        {business && (
+          <div className="info-box full">
+            <strong>Firmenkunden-Prüfpunkte</strong>
+            <p>
+              Ausschüttungen, Steuerzahlungen, Covenants, Bilanzierungsziel und
+              organisatorische Anlagegrenzen dokumentieren.
+            </p>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+function NeedsStep({
+  data,
+  update,
+  addNeed,
+  updateNeed,
+}: {
+  data: AdvisoryData;
+  update: <K extends keyof AdvisoryData>(
+    key: K,
+    value: AdvisoryData[K],
+  ) => void;
+  addNeed: () => void;
+  updateNeed: (
+    id: number,
+    changes: Partial<AdvisoryData["needs"][number]>,
+  ) => void;
+}) {
+  const targets = bucketTargets(data, data.liquidAssets);
+  const total = data.needs.reduce((sum, need) => sum + need.amount, 0);
+  return (
+    <>
+      <SectionIntro number="03" title="Welche Beträge werden wann benötigt?">
+        Das konkrete Datum ist führend. Die Laufzeitansicht wird daraus
+        automatisch abgeleitet.
+      </SectionIntro>
+      <div className="needs-head">
+        <div>
+          <span>Erfasste Bedarfe</span>
+          <strong>{euro.format(total)}</strong>
+        </div>
+        <button className="secondary" onClick={addNeed}>
+          ＋ Bedarf ergänzen
+        </button>
+      </div>
+      {data.needs.length === 0 ? (
+        <button className="empty-state" onClick={addNeed}>
+          <span>＋</span>
+          <strong>Ersten Kapitalbedarf erfassen</strong>
+          <small>
+            z. B. Investition, Immobilie, Steuerzahlung oder Ruhestand
+          </small>
+        </button>
+      ) : (
+        <div className="needs-list">
+          {data.needs.map((need, index) => (
+            <div className="need-row need-row-v2" key={need.id}>
+              <span className="need-index">{index + 1}</span>
+              <label>
+                <span>Verwendungszweck</span>
+                <input
+                  value={need.purpose}
+                  onChange={(event) =>
+                    updateNeed(need.id, { purpose: event.target.value })
+                  }
+                  placeholder="z. B. Maschine"
+                />
+              </label>
+              <label>
+                <span>Betrag</span>
+                <div className="inline-amount">
+                  <input
+                    inputMode="numeric"
+                    value={
+                      need.amount ? need.amount.toLocaleString("de-DE") : ""
+                    }
+                    onChange={(event) =>
+                      updateNeed(need.id, {
+                        amount: parseAmount(event.target.value),
+                      })
+                    }
+                  />
+                  <b>€</b>
+                </div>
+              </label>
+              <label>
+                <span>Konkreter Termin</span>
+                <input
+                  type="date"
+                  value={need.dueDate || ""}
+                  onChange={(event) =>
+                    updateNeed(need.id, { dueDate: event.target.value })
+                  }
+                />
+              </label>
+              <label>
+                <span>Alternativ in Jahren</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="50"
+                  value={need.years}
+                  onChange={(event) =>
+                    updateNeed(need.id, {
+                      years: Math.max(0, Number(event.target.value)),
+                      dueDate: "",
+                    })
+                  }
+                />
+              </label>
+              <span className="derived-bucket">
+                {
+                  maturityBuckets.find(
+                    (bucket) =>
+                      bucket.id === bucketForMonths(monthsUntilNeed(need)),
+                  )?.label
+                }
+              </span>
+              <button
+                className="delete-button"
+                onClick={() =>
+                  update(
+                    "needs",
+                    data.needs.filter((entry) => entry.id !== need.id),
+                  )
+                }
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="bucket-preview six">
+        {maturityBuckets.map((bucket) => (
+          <article key={bucket.id}>
+            <span>{bucket.label}</span>
+            <strong>{euro.format(targets[bucket.id])}</strong>
+            <small>{bucket.range}</small>
+          </article>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function GoalsStep({
+  data,
+  update,
+  togglePriority,
+}: {
+  data: AdvisoryData;
+  update: <K extends keyof AdvisoryData>(
+    key: K,
+    value: AdvisoryData[K],
+  ) => void;
+  togglePriority: (value: string) => void;
+}) {
+  return (
+    <>
+      <SectionIntro
+        number="04"
+        title="Welche Ziele, Laufzeiten und Risiken sind angemessen?"
+      >
+        Risikowunsch, Verlusttragfähigkeit, Kenntnisse und Kapitalbindung müssen
+        zusammenpassen.
+      </SectionIntro>
+      <div className="form-grid">
+        <label className="field">
+          <span>Hauptziel</span>
+          <select
+            value={data.goal}
+            onChange={(event) => update("goal", event.target.value)}
+          >
+            {goalOptions.map((goal) => (
+              <option key={goal}>{goal}</option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>Überwiegender Anlagehorizont</span>
+          <div className="range-value">
+            <input
+              type="range"
+              min="1"
+              max="25"
+              value={data.horizon}
+              onChange={(event) =>
+                update("horizon", Number(event.target.value))
+              }
+            />
+            <strong>{data.horizon} Jahre</strong>
+          </div>
+        </label>
+        <label className="field">
+          <span>Kenntnisse und Erfahrungen</span>
+          <select
+            value={data.experience}
+            onChange={(event) => update("experience", event.target.value)}
+          >
+            <option>Keine / geringe Kenntnisse</option>
+            <option>Grundkenntnisse</option>
+            <option>Erweiterte Kenntnisse</option>
+            <option>Umfangreiche Kenntnisse</option>
+          </select>
+        </label>
+        <div className="field full">
+          <span>Strategische Risikoeinordnung</span>
+          <div className="risk-scale">
+            {([1, 2, 3, 4, 5] as RiskLevel[]).map((risk) => (
+              <button
+                key={risk}
+                className={data.risk === risk ? "selected" : ""}
+                onClick={() => update("risk", risk)}
+              >
+                <b>{risk}</b>
+                <span>{riskText[risk].title}</span>
+              </button>
+            ))}
+          </div>
+          <div className="risk-explainer">
+            <strong>{riskText[data.risk].title}</strong>
+            <p>
+              {riskText[data.risk].text} Keine regulatorische
+              Geeignetheitsprüfung.
+            </p>
+          </div>
+        </div>
+        <div className="field full">
+          <span>Was ist besonders wichtig?</span>
+          <div className="chip-grid">
+            {priorityOptions.map((value) => (
+              <button
+                key={value}
+                className={data.priorities.includes(value) ? "selected" : ""}
+                onClick={() => togglePriority(value)}
+              >
+                {data.priorities.includes(value) ? "✓ " : "+ "}
+                {value}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function ModulesStep({
+  data,
+  moduleStates,
+  toggleModule,
+  openModule,
+}: {
+  data: AdvisoryData;
+  moduleStates: AdvisoryCase["moduleStates"];
+  toggleModule: (value: string) => void;
+  openModule: (value: string) => void;
+}) {
+  const available = modules.filter(
+    (module) => !data.scope || module.scopes.includes(data.scope),
+  );
+  const recommended = new Set([
+    "maturity",
+    "market",
+    ...(data.scope === "business" || data.scope === "combined" ? ["tax"] : []),
+    ...(data.hasDepot ? ["depot"] : []),
+  ]);
+  return (
+    <>
+      <SectionIntro number="05" title="Welche Vertiefungen werden benötigt?">
+        Die Kernstrecke bleibt schlank; Fachmodule werden gezielt zugeschaltet.
+      </SectionIntro>
+      <div className="module-grid">
+        {available.map((module) => {
+          const state = moduleStates[module.id] || blankModuleState();
+          const active = data.modules.includes(module.id);
+          return (
+            <article key={module.id} className={active ? "selected" : ""}>
+              <button
+                className="module-select"
+                onClick={() => toggleModule(module.id)}
+                aria-pressed={active}
+              >
+                <span>{module.title.slice(0, 1)}</span>
+                <div>
+                  <strong>{module.title}</strong>
+                  <small>{module.text}</small>
+                  {recommended.has(module.id) && (
+                    <em>für diesen Fall empfohlen</em>
+                  )}
+                </div>
+                <i>{active ? "✓" : "+"}</i>
+              </button>
+              <footer>
+                <span className={`module-status ${state.status}`}>
+                  {state.status === "complete"
+                    ? "Vollständig"
+                    : state.status === "in_progress"
+                      ? "In Bearbeitung"
+                      : "Nicht begonnen"}
+                </span>
+                <button className="module-open" onClick={() => openModule(module.id)}>
+                  Vertiefung öffnen →
+                </button>
+              </footer>
+            </article>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+function ModuleWorkspace({
+  moduleId,
+  item,
+  setItem,
+  close,
+  setView,
+}: {
+  moduleId: string;
+  item: AdvisoryCase;
+  setItem: Dispatch<SetStateAction<AdvisoryCase>>;
+  close: () => void;
+  setView: (view: View) => void;
+}) {
+  const moduleConfig = modules.find((entry) => entry.id === moduleId);
+  const slides = moduleSlides[moduleId] || [];
+  const state = item.moduleStates[moduleId] || blankModuleState();
+  const current = Math.min(state.currentSlide, Math.max(0, slides.length - 1));
+  const slide = slides[current];
+  const [customerText, setCustomerText] = useState("");
+  const [customerCategory, setCustomerCategory] =
+    useState<CustomerChecklistCategory>(customerChecklistCategories[2]);
+  if (!moduleConfig || !slide) return null;
+  const updateState = (changes: Partial<ModuleState>) =>
+    setItem((currentItem) => ({
+      ...currentItem,
+      advisory: {
+        ...currentItem.advisory,
+        modules: currentItem.advisory.modules.includes(moduleId)
+          ? currentItem.advisory.modules
+          : [...currentItem.advisory.modules, moduleId],
+      },
+      moduleStates: {
+        ...currentItem.moduleStates,
+        [moduleId]: {
+          ...(currentItem.moduleStates[moduleId] || blankModuleState()),
+          ...changes,
+          updatedAt: new Date().toISOString(),
+        },
+      },
+    }));
+  const setSlide = (index: number) =>
+    updateState({
+      currentSlide: Math.max(0, Math.min(slides.length - 1, index)),
+      status: state.status === "complete" ? "complete" : "in_progress",
+    });
+  const finish = () => {
+    updateState({ status: "complete", currentSlide: slides.length - 1 });
+    close();
+  };
+  const addCustomerItem = () => {
+    const text = customerText.trim();
+    if (!text) return;
+    setItem((currentItem) => ({
+      ...currentItem,
+      customerChecklist: [
+        ...currentItem.customerChecklist,
+        {
+          id: uid("kundenpunkt"),
+          text,
+          category: customerCategory,
+          done: false,
+          source: "module",
+          moduleId,
+          slideIndex: current,
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    }));
+    setCustomerText("");
+  };
+  const moduleCustomerItems = item.customerChecklist.filter(
+    (entry) => entry.moduleId === moduleId && entry.slideIndex === current,
+  );
+  return (
+    <div className="module-workspace-backdrop" role="presentation">
+      <section
+        className="module-workspace"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${moduleConfig.title} Vertiefung`}
+      >
+        <header>
+          <div className="brand-placeholder" aria-label="Logoplatzhalter">
+            Logo
+          </div>
+          <div>
+            <p className="eyebrow">FACHMODUL</p>
+            <h2>{moduleConfig.title}</h2>
+          </div>
+          <span>
+            {current + 1} / {slides.length}
+          </span>
+          <button className="modal-close" onClick={close} aria-label="Schließen">
+            ×
+          </button>
+        </header>
+        <div className="module-workspace-body">
+          <nav aria-label="Vertiefungsschritte">
+            {slides.map((entry, index) => (
+              <button
+                key={entry.title}
+                className={index === current ? "active" : index < current ? "done" : ""}
+                onClick={() => setSlide(index)}
+              >
+                <span>{index < current ? "✓" : index + 1}</span>
+                <div>
+                  <small>{entry.eyebrow}</small>
+                  <strong>{entry.title}</strong>
+                </div>
+              </button>
+            ))}
+          </nav>
+          <article className="module-slide">
+            <div className="module-slide-title">
+              <p>{slide.eyebrow}</p>
+              <h3>{slide.title}</h3>
+              <span>{moduleConfig.title}</span>
+            </div>
+            <p className="module-lead">{slide.text}</p>
+            <ul>
+              {slide.points.map((point) => (
+                <li key={point}>{point}</li>
+              ))}
+            </ul>
+            <div className="module-checks">
+              {slide.checks.map((check) => (
+                <label key={check.id}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(state.checklist[check.id])}
+                    onChange={(event) =>
+                      updateState({
+                        status: "in_progress",
+                        checklist: {
+                          ...state.checklist,
+                          [check.id]: event.target.checked,
+                        },
+                      })
+                    }
+                  />
+                  <span>{check.label}</span>
+                </label>
+              ))}
+            </div>
+            <label className="module-note">
+              <span>Notiz zur Vertiefung</span>
+              <textarea
+                value={state.notes}
+                onChange={(event) =>
+                  updateState({ status: "in_progress", notes: event.target.value })
+                }
+                placeholder="Gesprächsergebnis oder fachlichen Hinweis festhalten"
+              />
+            </label>
+            <section className="module-customer-item">
+              <div>
+                <span>Für den Kunden festhalten</span>
+                <small>
+                  Dieser Punkt wird in die Kunden-Checkliste und den Export
+                  übernommen.
+                </small>
+              </div>
+              <div className="module-customer-add">
+                <select
+                  aria-label="Art des nächsten Schritts"
+                  value={customerCategory}
+                  onChange={(event) =>
+                    setCustomerCategory(
+                      event.target.value as CustomerChecklistCategory,
+                    )
+                  }
+                >
+                  {customerChecklistCategories.map((entry) => (
+                    <option key={entry}>{entry}</option>
+                  ))}
+                </select>
+                <input
+                  value={customerText}
+                  onChange={(event) => setCustomerText(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") addCustomerItem();
+                  }}
+                  placeholder="z. B. Steuerberater zur Bilanzierung des Produkts fragen"
+                />
+                <button
+                  className="secondary"
+                  onClick={addCustomerItem}
+                  disabled={!customerText.trim()}
+                >
+                  Übernehmen
+                </button>
+              </div>
+              {moduleCustomerItems.length > 0 && (
+                <ul>
+                  {moduleCustomerItems.map((entry) => (
+                    <li key={entry.id}>
+                      <span>✓</span>
+                      <div>
+                        <strong>{entry.text}</strong>
+                        <small>{entry.category}</small>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+            {current === slides.length - 1 && (
+              <div className="module-deep-links">
+                {moduleId === "maturity" && (
+                  <button onClick={() => { close(); setView("planner"); }}>
+                    Strukturplanung öffnen
+                  </button>
+                )}
+                {moduleId === "depot" && (
+                  <button onClick={() => { close(); setView("depot"); }}>
+                    Depotcheck öffnen
+                  </button>
+                )}
+              </div>
+            )}
+          </article>
+        </div>
+        <footer>
+          <button className="secondary" onClick={() => setSlide(current - 1)} disabled={current === 0}>
+            ← Zurück
+          </button>
+          <span className={`module-status ${state.status}`}>
+            {state.status === "complete" ? "Vollständig" : "In Bearbeitung"}
+          </span>
+          {current < slides.length - 1 ? (
+            <button className="primary" onClick={() => setSlide(current + 1)}>
+              Weiter →
+            </button>
+          ) : (
+            <button className="primary" onClick={finish}>
+              Vertiefung abschließen
+            </button>
+          )}
+        </footer>
+      </section>
+    </div>
+  );
+}
+
+function ResultStep({
+  item,
+  setItem,
+  setView,
+  exportJson,
+  openModule,
+}: {
+  item: AdvisoryCase;
+  setItem: Dispatch<SetStateAction<AdvisoryCase>>;
+  setView: (view: View) => void;
+  exportJson: () => void;
+  openModule: (value: string) => void;
+}) {
+  const data = item.advisory;
+  const plan = item.plans.find((entry) => entry.preferred) ?? item.plans[0];
+  const targets = bucketTargets(data, plan?.total ?? data.liquidAssets);
+  const totalFixed =
+    data.reserve + data.needs.reduce((sum, need) => sum + need.amount, 0);
+  const warning = totalFixed > data.liquidAssets;
+  const advisor = advisorFor(item.advisorId);
+  return (
+    <div className="result-page">
+      <div className="result-title">
+        <div>
+          <p className="eyebrow">ORIENTIERUNGSERGEBNIS</p>
+          <h2>{data.caseName || "Unbenannte Musterberatung"}</h2>
+          <p>
+            {scopeLabel(data.scope)} · Risiko {data.risk}/5 ·{" "}
+            {item.plans.length} Planvarianten · {advisor.name}
+          </p>
+        </div>
+        <span className="result-status">Fall zusammengeführt</span>
+      </div>
+      <div className="result-metrics">
+        <article>
+          <span>Erfasste Liquidität</span>
+          <strong>{euro.format(data.liquidAssets)}</strong>
+        </article>
+        <article className="highlight">
+          <span>Strategisch frei</span>
+          <strong>
+            {euro.format(
+              strategicAmount(data, plan?.total ?? data.liquidAssets),
+            )}
+          </strong>
+          <small>nach Reserve und allen bekannten Bedarfen</small>
+        </article>
+        <article>
+          <span>Vorhandenes Depot</span>
+          <strong>{euro.format(data.depotValue)}</strong>
+        </article>
+      </div>
+      {warning && (
+        <div className="warning-panel">
+          <strong>Fehler</strong>
+          <p>
+            Reserve und Bedarfe übersteigen die erfasste Liquidität um{" "}
+            {euro.format(totalFixed - data.liquidAssets)}.
+          </p>
+        </div>
+      )}
+      <section className="result-section">
+        <div className="result-section-head">
+          <div>
+            <span>01</span>
+            <h3>Einheitliche Laufzeitenstruktur</h3>
+          </div>
+          <small>identisch in Planung und Export</small>
+        </div>
+        <div className="maturity-summary">
+          {maturityBuckets.map((bucket) => (
+            <article key={bucket.id}>
+              <span>{bucket.label}</span>
+              <strong>{euro.format(targets[bucket.id])}</strong>
+              <small>{bucket.range}</small>
+            </article>
+          ))}
+        </div>
+        <div className="result-cta-row">
+          <div>
+            <strong>{plan?.name || "Plan A"}</strong>
+            <p>
+              Kapitaltöpfe mit Produkten befüllen, Anlageklassen durchschauen
+              und Varianten vergleichen.
+            </p>
+          </div>
+          <button className="primary" onClick={() => setView("planner")}>
+            Strukturplanung öffnen →
+          </button>
+        </div>
+      </section>
+      <section className="result-section">
+        <div className="result-section-head">
+          <div>
+            <span>02</span>
+            <h3>Fachmodule</h3>
+          </div>
+          <small>{data.modules.length} Vertiefungen</small>
+        </div>
+        <div className="module-results">
+          {modules
+            .filter((module) => data.modules.includes(module.id))
+            .map((module) => {
+              const state = item.moduleStates[module.id] || blankModuleState();
+              return (
+              <article key={module.id} className="clickable-module">
+                <div>
+                  <span>{module.title.slice(0, 1)}</span>
+                  <h4>{module.title}</h4>
+                </div>
+                <ul>
+                  {moduleDetails[module.id].map((detail) => (
+                    <li key={detail}>{detail}</li>
+                  ))}
+                </ul>
+                <footer>
+                  <span className={`module-status ${state.status}`}>
+                    {state.status === "complete"
+                      ? "Vollständig"
+                      : state.status === "in_progress"
+                        ? "In Bearbeitung"
+                        : "Nicht begonnen"}
+                  </span>
+                  <button onClick={() => openModule(module.id)}>
+                    Vertiefung öffnen →
+                  </button>
+                </footer>
+              </article>
+              );
+            })}
+        </div>
+      </section>
+      <CustomerChecklistEditor item={item} setItem={setItem} />
+      <div className="result-actions no-print">
+        <button className="secondary" onClick={exportJson}>
+          Vollständigen Fall als JSON
+        </button>
+        <button className="secondary" onClick={() => setView("export")}>
+          PDF- und Excel-Export
+        </button>
+      </div>
+      <div className="legal-note">
+        <strong>Wichtiger Hinweis</strong>
+        <p>
+          Der Prototyp strukturiert ein Gespräch und erzeugt keine
+          Anlageempfehlung. Für einen produktiven Einsatz sind bankfachliche
+          Freigabe, Datenschutz, Informationssicherheit, Berechtigungen und
+          revisionssichere Dokumentation zwingend.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function PlannerView({
+  item,
+  setItem,
+  saveCase,
+  setView,
+}: {
+  item: AdvisoryCase;
+  setItem: Dispatch<SetStateAction<AdvisoryCase>>;
+  saveCase: (version?: boolean) => void;
+  setView: (view: View) => void;
+}) {
+  const [mode, setMode] = useState<
+    "structure" | "house" | "models" | "vv" | "compare"
+  >("structure");
+  const [search, setSearch] = useState("");
+  const [category, setCategory] = useState("Alle");
+  const [catalogSource, setCatalogSource] = useState<
+    "all" | "products" | "vv" | "models"
+  >("all");
+  const [maxRisk, setMaxRisk] = useState(Math.max(2, item.advisory.risk));
+  const [quickBucket, setQuickBucket] = useState("year10plus");
+  const [showDepotPanel, setShowDepotPanel] = useState(false);
+  const [modelDialog, setModelDialog] = useState<{
+    id: "rb2" | "rb3" | "rb4";
+    amount: number;
+  } | null>(null);
+  const plan =
+    item.plans.find((entry) => entry.id === item.activePlanId) ?? item.plans[0];
+  const targets = bucketTargets(item.advisory, plan.total);
+  const assigned = plan.allocations.reduce(
+    (sum, allocation) => sum + allocation.amount,
+    0,
+  );
+  const covered = plan.allocations.reduce(
+    (sum, allocation) => sum + allocationCoverageTotal(allocation),
+    0,
+  );
+  const unassignedCoverage = plan.allocations.reduce(
+    (sum, allocation) =>
+      sum +
+      Math.max(0, allocation.amount - allocationCoverageTotal(allocation)),
+    0,
+  );
+  const selectedDepotIds = new Set(
+    plan.depotHoldingIds.length > 0
+      ? plan.depotHoldingIds
+      : item.depot.map((holding) => holding.id),
+  );
+  const selectedDepot = item.depot.filter((holding) =>
+    selectedDepotIds.has(holding.id),
+  );
+  const includedDepotTotal = selectedDepot.reduce(
+    (sum, holding) =>
+      sum +
+      (plan.depotMode === "afterSales"
+        ? Math.max(0, holding.value - holding.plannedSale)
+        : holding.value),
+    0,
+  );
+  const consideredTotal =
+    plan.total +
+    (plan.depotMode === "retain" || plan.depotMode === "afterSales"
+      ? includedDepotTotal
+      : 0);
+
+  const updatePlan = (changes: Partial<StructurePlan>) =>
+    setItem({
+      ...item,
+      plans: item.plans.map((entry) =>
+        entry.id === plan.id
+          ? { ...entry, ...changes, updatedAt: new Date().toISOString() }
+          : entry,
+      ),
+    });
+  const coverageWithout = (excludedId?: string) =>
+    Object.fromEntries(
+      maturityBuckets.map((bucket) => [
+        bucket.id,
+        plan.allocations
+          .filter((allocation) => allocation.id !== excludedId)
+          .reduce(
+            (sum, allocation) =>
+              sum + allocationAmountInBucket(allocation, bucket.id),
+            0,
+          ),
+      ]),
+    ) as Record<(typeof maturityBuckets)[number]["id"], number>;
+  const overflowCoverage = (
+    amount: number,
+    startBucket: (typeof maturityBuckets)[number]["id"],
+    excludedId?: string,
+  ) => {
+    const result: Partial<
+      Record<(typeof maturityBuckets)[number]["id"], number>
+    > = {};
+    const used = coverageWithout(excludedId);
+    let remaining = amount;
+    const start = maturityBuckets.findIndex(
+      (bucket) => bucket.id === startBucket,
+    );
+    for (const bucket of maturityBuckets.slice(Math.max(0, start))) {
+      const open = Math.max(0, targets[bucket.id] - used[bucket.id]);
+      const share = Math.min(remaining, open);
+      if (share > 0) result[bucket.id] = share;
+      remaining -= share;
+      if (remaining <= 0) break;
+    }
+    return result;
+  };
+  const updateAllocation = (id: string, changes: Partial<PlannerAllocation>) =>
+    updatePlan({
+      allocations: plan.allocations.map((entry) =>
+        entry.id === id ? { ...entry, ...changes } : entry,
+      ),
+    });
+  const updateAllocationAmount = (
+    allocation: PlannerAllocation,
+    amount: number,
+  ) =>
+    updateAllocation(allocation.id, {
+      amount,
+      bucketAmounts:
+        allocation.allocationMode === "overflow"
+          ? overflowCoverage(amount, allocation.bucketId, allocation.id)
+          : allocation.allocationMode === "manual"
+            ? allocation.bucketAmounts
+            : { [allocation.bucketId]: amount },
+    });
+  const updateAllocationMode = (
+    allocation: PlannerAllocation,
+    allocationMode: "single" | "overflow" | "manual",
+  ) =>
+    updateAllocation(allocation.id, {
+      allocationMode,
+      bucketAmounts:
+        allocationMode === "overflow"
+          ? overflowCoverage(
+              allocation.amount,
+              allocation.bucketId,
+              allocation.id,
+            )
+          : allocationMode === "single"
+            ? { [allocation.bucketId]: allocation.amount }
+            : allocationBucketAmounts(allocation),
+    });
+  const updateManualBucket = (
+    allocation: PlannerAllocation,
+    bucketId: (typeof maturityBuckets)[number]["id"],
+    amount: number,
+  ) =>
+    updateAllocation(allocation.id, {
+      allocationMode: "manual",
+      bucketAmounts: {
+        ...allocationBucketAmounts(allocation),
+        [bucketId]: amount,
+      },
+    });
+  const addProduct = (
+    productId: string,
+    bucketId = quickBucket,
+    source?: PlannerAllocation["source"],
+    amount = 0,
+  ) => {
+    const product = houseProducts.find((entry) => entry.id === productId);
+    const vv = managedPortfolios.find((entry) => entry.id === productId);
+    if (!product && !vv) return;
+    updatePlan({
+      allocations: [
+        ...plan.allocations,
+        {
+          id: uid("allocation"),
+          productId,
+          productName: product?.name || vv!.name,
+          bucketId: bucketId as PlannerAllocation["bucketId"],
+          amount,
+          solutionId: product?.solutionId || "mixed",
+          source: source ?? (vv ? "vv" : "product"),
+          allocationMode: "single",
+          bucketAmounts: { [bucketId]: amount },
+        },
+      ],
+    });
+  };
+  const createNewPlan = () => {
+    const next = createPlan(
+      `Plan ${String.fromCharCode(65 + item.plans.length)} – neue Variante`,
+      plan.total,
+    );
+    next.capitalMode = plan.capitalMode;
+    next.depotMode = plan.depotMode;
+    next.depotHoldingIds = [...plan.depotHoldingIds];
+    next.preferred = false;
+    setItem({ ...item, plans: [...item.plans, next], activePlanId: next.id });
+  };
+  const duplicatePlan = () => {
+    const next = clone(plan);
+    next.id = uid("plan");
+    next.name = `${plan.name} – Kopie`;
+    next.preferred = false;
+    next.createdAt = new Date().toISOString();
+    next.updatedAt = next.createdAt;
+    next.allocations = next.allocations.map((allocation) => ({
+      ...allocation,
+      id: uid("allocation"),
+    }));
+    setItem({ ...item, plans: [...item.plans, next], activePlanId: next.id });
+  };
+  const setPreferred = () =>
+    setItem({
+      ...item,
+      plans: item.plans.map((entry) => ({
+        ...entry,
+        preferred: entry.id === plan.id,
+      })),
+    });
+  const deletePlan = () => {
+    if (item.plans.length === 1) return;
+    const remaining = item.plans.filter((entry) => entry.id !== plan.id);
+    setItem({ ...item, plans: remaining, activePlanId: remaining[0].id });
+  };
+
+  const applyModel = (action: "new" | "supplement" | "replace") => {
+    if (!modelDialog) return;
+    const model = modelPortfolios.find((entry) => entry.id === modelDialog.id);
+    if (!model) return;
+    const modelAllocations: PlannerAllocation[] = model.holdings.map(
+      (holding) => {
+        const amount = Math.round((modelDialog.amount * holding.weight) / 100);
+        return {
+          id: uid("allocation"),
+          productId: holding.productId,
+          productName: holding.name,
+          bucketId: "year10plus",
+          amount,
+          solutionId:
+            houseProducts.find((entry) => entry.id === holding.productId)
+              ?.solutionId || "mixed",
+          source: "model",
+          modelId: model.id,
+          allocationMode: "single",
+          bucketAmounts: { year10plus: amount },
+        };
+      },
+    );
+    if (action === "new") {
+      const next = clone(plan);
+      next.id = uid("plan");
+      next.name = `${model.name} – strategische Variante`;
+      next.allocations = [
+        ...next.allocations.filter((entry) => entry.bucketId !== "year10plus"),
+        ...modelAllocations,
+      ];
+      next.modelId = model.id;
+      next.modelAmount = modelDialog.amount;
+      next.preferred = false;
+      next.createdAt = new Date().toISOString();
+      next.updatedAt = next.createdAt;
+      setItem({ ...item, plans: [...item.plans, next], activePlanId: next.id });
+    }
+    if (action === "supplement")
+      updatePlan({
+        allocations: [...plan.allocations, ...modelAllocations],
+        modelId: model.id,
+        modelAmount: modelDialog.amount,
+      });
+    if (action === "replace")
+      updatePlan({
+        allocations: modelAllocations,
+        modelId: model.id,
+        modelAmount: modelDialog.amount,
+      });
+    setModelDialog(null);
+    setMode("structure");
+  };
+
+  const modelProductIds = new Set(
+    modelPortfolios.flatMap((model) =>
+      model.holdings.map((holding) => holding.productId),
+    ),
+  );
+  const catalogItems = [
+    ...houseProducts.map((product) => ({
+      id: product.id,
+      name: product.name,
+      category: product.category,
+      risk: product.risk,
+      meta: `WKN ${product.wkn} · ${product.region} · ${product.role}`,
+      kind: modelProductIds.has(product.id)
+        ? ("models" as const)
+        : ("products" as const),
+      sourceLabel: modelProductIds.has(product.id)
+        ? "Hausmeinung · auch Modellportfolio-Baustein"
+        : "Hausmeinung",
+    })),
+    ...managedPortfolios.map((vv) => ({
+      id: vv.id,
+      name: vv.name,
+      category: "Vermögensverwaltung",
+      risk: vv.risk,
+      meta: `${euro.format(vv.minimum)} Mindestanlage · ${vv.horizon} · ${vv.currency}`,
+      kind: vv.sourceLabel?.includes("Modellportfolio")
+        ? ("models" as const)
+        : ("vv" as const),
+      sourceLabel: vv.sourceLabel || "VV-Selektionsmatrix",
+    })),
+  ];
+  const categories = [
+    "Alle",
+    ...Array.from(new Set(catalogItems.map((entry) => entry.category))),
+  ];
+  const products = catalogItems.filter((product) => {
+    const query = search.trim().toLowerCase();
+    const sourceMatch =
+      catalogSource === "all" ||
+      product.kind === catalogSource ||
+      (catalogSource === "products" &&
+        product.kind === "models" &&
+        houseProducts.some((entry) => entry.id === product.id));
+    return (
+      sourceMatch &&
+      (!query ||
+        `${product.name} ${product.meta} ${product.sourceLabel}`
+          .toLowerCase()
+          .includes(query)) &&
+      (category === "Alle" || product.category === category) &&
+      product.risk <= maxRisk
+    );
+  });
+  const solution = (allocation: PlannerAllocation) =>
+    solutionTypes.find((entry) => entry.id === allocation.solutionId);
+  const unresolved = plan.allocations.filter(
+    (allocation) =>
+      !houseProducts.find((product) => product.id === allocation.productId)
+        ?.assetMix &&
+      !managedPortfolios.find((vv) => vv.id === allocation.productId)?.assetMix,
+  );
+
+  return (
+    <div className="tool-view planner-view">
+      <div className="tool-head">
+        <div>
+          <button className="back-link" onClick={() => setView("wizard")}>
+            ← Zurück zur Beratung
+          </button>
+          <p className="eyebrow">DURCHGÄNGIGE PLANUNG</p>
+          <h1>Strukturplanung</h1>
+          <p>
+            Kapitaltöpfe sind die führende Laufzeitsebene. Modellportfolios und
+            Vermögensverwaltungen sind Werkzeuge, die eine konkrete Planvariante
+            befüllen.
+          </p>
+        </div>
+        <div className="tool-head-actions">
+          <button className="secondary" onClick={() => saveCase(true)}>
+            Version speichern
+          </button>
+          <button className="primary" onClick={() => saveCase(false)}>
+            Fall speichern
+          </button>
+        </div>
+      </div>
+      <div className="planning-context-strip">
+        <article>
+          <span>Erfasste Liquidität</span>
+          <strong>{euro.format(item.advisory.liquidAssets)}</strong>
+        </article>
+        <article>
+          <span>Reserve und Bedarfe</span>
+          <strong>
+            {euro.format(
+              item.advisory.reserve +
+                item.advisory.needs.reduce((sum, need) => sum + need.amount, 0),
+            )}
+          </strong>
+        </article>
+        <article>
+          <span>Bestandsdepot</span>
+          <strong>{euro.format(item.advisory.depotValue)}</strong>
+        </article>
+        <article className="primary-context">
+          <span>Planungsbetrag</span>
+          <strong>{euro.format(plan.total)}</strong>
+          <small>
+            {plan.capitalMode === "linked" ? "verknüpft" : "abweichend"}
+          </small>
+        </article>
+        <article>
+          <span>Gesamtbetrachtung</span>
+          <strong>{euro.format(consideredTotal)}</strong>
+          <small>
+            {plan.depotMode === "retain" || plan.depotMode === "afterSales"
+              ? "inklusive ausgewähltem Depot"
+              : "nur neue Planung"}
+          </small>
+        </article>
+      </div>
+      <div className="plan-toolbar">
+        <label>
+          <span>Aktive Planung</span>
+          <select
+            value={plan.id}
+            onChange={(event) =>
+              setItem({ ...item, activePlanId: event.target.value })
+            }
+          >
+            {item.plans.map((entry) => (
+              <option key={entry.id} value={entry.id}>
+                {entry.preferred ? "★ " : ""}
+                {entry.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="plan-name">
+          <span>Bezeichnung</span>
+          <input
+            value={plan.name}
+            onChange={(event) => updatePlan({ name: event.target.value })}
+          />
+        </label>
+        <button className="secondary" onClick={createNewPlan}>
+          ＋ Neu
+        </button>
+        <button className="secondary" onClick={duplicatePlan}>
+          Duplizieren
+        </button>
+        <button
+          className={
+            plan.preferred ? "preferred-button active" : "preferred-button"
+          }
+          onClick={setPreferred}
+        >
+          ★ Bevorzugt
+        </button>
+        <button
+          className={plan.depotMode !== "none" ? "depot-plan-button active" : "depot-plan-button"}
+          onClick={() => setShowDepotPanel((current) => !current)}
+        >
+          ◫ Bestandsdepot
+        </button>
+        <button
+          className="text-button danger"
+          disabled={item.plans.length === 1}
+          onClick={deletePlan}
+        >
+          Löschen
+        </button>
+      </div>
+      {showDepotPanel && (
+        <section className="depot-planning-panel">
+          <div className="depot-planning-head">
+            <div>
+              <p className="eyebrow">BESTANDSDEPOT BERÜCKSICHTIGEN</p>
+              <h2>Bestand bleibt von neuer Produktanlage getrennt</h2>
+              <p>
+                Die 500.000 Euro neue Liquidität werden nicht um bestehende
+                Positionen erhöht. Der Bestand wird als zusätzliche Ebene in
+                Vergleich und Gesamtstruktur geführt.
+              </p>
+            </div>
+            <label>
+              <span>Berücksichtigung</span>
+              <select
+                value={plan.depotMode}
+                onChange={(event) => {
+                  const depotMode = event.target.value as StructurePlan["depotMode"];
+                  updatePlan({
+                    depotMode,
+                    depotHoldingIds:
+                      plan.depotHoldingIds.length > 0
+                        ? plan.depotHoldingIds
+                        : item.depot.map((holding) => holding.id),
+                  });
+                }}
+              >
+                <option value="none">Nicht berücksichtigen</option>
+                <option value="compare">Nur vergleichend anzeigen</option>
+                <option value="retain">Ausgewählte Positionen beibehalten</option>
+                <option value="afterSales">Nach simulierten Verkäufen</option>
+              </select>
+            </label>
+          </div>
+          {item.depot.length === 0 ? (
+            <button className="empty-depot-link" onClick={() => setView("depot")}>
+              Noch keine Depotpositionen erfasst. Depotcheck öffnen →
+            </button>
+          ) : (
+            <div className="depot-planning-grid">
+              <div className="depot-position-selection">
+                {item.depot.map((holding) => (
+                  <label key={holding.id}>
+                    <input
+                      type="checkbox"
+                      checked={selectedDepotIds.has(holding.id)}
+                      disabled={plan.depotMode === "none"}
+                      onChange={(event) =>
+                        updatePlan({
+                          depotHoldingIds: event.target.checked
+                            ? [...selectedDepotIds, holding.id]
+                            : [...selectedDepotIds].filter((id) => id !== holding.id),
+                        })
+                      }
+                    />
+                    <span>
+                      <strong>{holding.name || "Unbenannte Position"}</strong>
+                      <small>
+                        {holding.assetClass}
+                        {plan.depotMode === "afterSales" && holding.plannedSale > 0
+                          ? ` · nach Verkauf ${euro.format(Math.max(0, holding.value - holding.plannedSale))}`
+                          : ""}
+                      </small>
+                    </span>
+                    <b>{euro.format(holding.value)}</b>
+                  </label>
+                ))}
+              </div>
+              <div className="depot-planning-metrics">
+                <article>
+                  <span>Neue Liquidität</span>
+                  <strong>{euro.format(plan.total)}</strong>
+                </article>
+                <article>
+                  <span>Ausgewählter Bestand</span>
+                  <strong>{euro.format(includedDepotTotal)}</strong>
+                </article>
+                <article>
+                  <span>Gesamtbetrachtung</span>
+                  <strong>{euro.format(consideredTotal)}</strong>
+                  <small>
+                    {plan.depotMode === "compare"
+                      ? "Bestand wird nur gegenübergestellt"
+                      : "Bestand plus neue Planung"}
+                  </small>
+                </article>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+      <div className="tool-tabs">
+        <button
+          className={mode === "structure" ? "active" : ""}
+          onClick={() => setMode("structure")}
+        >
+          Laufzeiten & Produkte
+        </button>
+        <button
+          className={mode === "house" ? "active" : ""}
+          onClick={() => setMode("house")}
+        >
+          Vermögensstruktur
+        </button>
+        <button
+          className={mode === "models" ? "active" : ""}
+          onClick={() => setMode("models")}
+        >
+          Modellvorlagen
+        </button>
+        <button
+          className={mode === "vv" ? "active" : ""}
+          onClick={() => setMode("vv")}
+        >
+          VV-Selektion
+        </button>
+        <button
+          className={mode === "compare" ? "active" : ""}
+          onClick={() => setMode("compare")}
+        >
+          Szenarien
+        </button>
+      </div>
+      {mode === "structure" && (
+        <>
+          <div className="planner-summary">
+            <div className="capital-basis-card">
+              <label>
+                <span>Zu strukturierendes Kapital</span>
+                <div>
+                  <input
+                    inputMode="numeric"
+                    disabled={plan.capitalMode === "linked"}
+                    value={plan.total ? plan.total.toLocaleString("de-DE") : ""}
+                    placeholder="0"
+                    onChange={(event) =>
+                      updatePlan({
+                        total: parseAmount(event.target.value),
+                        capitalMode: "manual",
+                      })
+                    }
+                  />
+                  <b>€</b>
+                </div>
+              </label>
+              <small>
+                {plan.capitalMode === "linked"
+                  ? "automatisch mit der erfassten Liquidität verknüpft"
+                  : "abweichender Planungsbetrag"}
+              </small>
+              {plan.capitalMode === "linked" ? (
+                <button onClick={() => updatePlan({ capitalMode: "manual" })}>
+                  Abweichenden Betrag verwenden
+                </button>
+              ) : (
+                <button
+                  onClick={() =>
+                    updatePlan({
+                      capitalMode: "linked",
+                      total: item.advisory.liquidAssets,
+                    })
+                  }
+                >
+                  Erfasste Liquidität übernehmen
+                </button>
+              )}
+            </div>
+            <article>
+              <span>Kapitaltöpfe</span>
+              <strong>
+                {euro.format(
+                  Object.values(targets).reduce((sum, value) => sum + value, 0),
+                )}
+              </strong>
+              <small>Reserve, Bedarfe und strategisches Kapital</small>
+            </article>
+            <article className={assigned > plan.total ? "negative" : ""}>
+              <span>Produkten zugeordnet</span>
+              <strong>{euro.format(assigned)}</strong>
+              <small>
+                {assigned > plan.total
+                  ? `Überplanung ${euro.format(assigned - plan.total)}`
+                  : `noch offen ${euro.format(plan.total - assigned)}`}
+              </small>
+            </article>
+            <article>
+              <span>Topfabdeckung</span>
+              <strong>{euro.format(covered)}</strong>
+              <small>
+                {unassignedCoverage > 0
+                  ? `${euro.format(unassignedCoverage)} Produktbetrag noch ohne Topf`
+                  : `${unresolved.length} Bausteine ohne vollständige Durchschau`}
+              </small>
+            </article>
+          </div>
+          <div className="planner-grid">
+            <aside className="catalog-panel">
+              <div className="catalog-head">
+                <div>
+                  <span>Lösungsbausteine</span>
+                  <strong>{products.length} Treffer</strong>
+                </div>
+                <small>Stand 01.07.2026</small>
+              </div>
+              <input
+                className="catalog-search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Produkt oder WKN suchen"
+              />
+              <div className="catalog-filters">
+                <select
+                  aria-label="Quelle"
+                  value={catalogSource}
+                  onChange={(event) =>
+                    setCatalogSource(event.target.value as typeof catalogSource)
+                  }
+                >
+                  <option value="all">Alle Lösungsbausteine</option>
+                  <option value="products">Hausmeinungsprodukte</option>
+                  <option value="vv">Vermögensverwaltungen</option>
+                  <option value="models">Modellportfolio-Bausteine</option>
+                </select>
+                <select
+                  value={category}
+                  onChange={(event) => setCategory(event.target.value)}
+                >
+                  {categories.map((entry) => (
+                    <option key={entry}>{entry}</option>
+                  ))}
+                </select>
+                <select
+                  value={maxRisk}
+                  onChange={(event) => setMaxRisk(Number(event.target.value))}
+                >
+                  {[1, 2, 3, 4].map((risk) => (
+                    <option key={risk} value={risk}>
+                      RK bis {risk}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <label className="quick-bucket">
+                <span>Zuordnung</span>
+                <select
+                  value={quickBucket}
+                  onChange={(event) => setQuickBucket(event.target.value)}
+                >
+                  {maturityBuckets.map((bucket) => (
+                    <option key={bucket.id} value={bucket.id}>
+                      {bucket.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="product-list">
+                {products.map((product) => (
+                  <article
+                    key={product.id}
+                    draggable
+                    onDragStart={(event) =>
+                      event.dataTransfer.setData("text/product-id", product.id)
+                    }
+                  >
+                    <div>
+                      <span>
+                        {product.category} · RK {product.risk}
+                      </span>
+                      <strong>{product.name}</strong>
+                      <small>{product.meta}</small>
+                      <em>{product.sourceLabel}</em>
+                    </div>
+                    <button onClick={() => addProduct(product.id)}>＋</button>
+                  </article>
+                ))}
+              </div>
+            </aside>
+            <section className="bucket-board">
+              {maturityBuckets.map((bucket) => {
+                const allocations = plan.allocations.filter(
+                  (entry) => entry.bucketId === bucket.id,
+                );
+                const bucketTotal = plan.allocations.reduce(
+                  (sum, entry) =>
+                    sum + allocationAmountInBucket(entry, bucket.id),
+                  0,
+                );
+                const gap = targets[bucket.id] - bucketTotal;
+                return (
+                  <article
+                    className="plan-bucket"
+                    key={bucket.id}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      const id = event.dataTransfer.getData("text/product-id");
+                      if (id) addProduct(id, bucket.id);
+                    }}
+                  >
+                    <header>
+                      <div>
+                        <span>{bucket.range}</span>
+                        <strong>{bucket.label}</strong>
+                      </div>
+                      <div>
+                        <b>{euro.format(bucketTotal)}</b>
+                        <small>Ziel {euro.format(targets[bucket.id])}</small>
+                      </div>
+                    </header>
+                    <div
+                      className={`bucket-gap ${gap < 0 ? "over" : gap === 0 ? "covered" : ""}`}
+                    >
+                      {gap === 0
+                        ? "Kapitaltopf vollständig abgedeckt"
+                        : gap > 0
+                          ? `${euro.format(gap)} noch nicht zugeordnet`
+                          : `${euro.format(Math.abs(gap))} über Zieltopf`}
+                    </div>
+                    {allocations.length === 0 ? (
+                      <div className="bucket-empty">
+                        {bucketTotal > 0
+                          ? "Durch verteilte Produktposition abgedeckt"
+                          : "Produkt hierher ziehen"}
+                        <br />
+                        <small>
+                          {bucketTotal > 0
+                            ? euro.format(bucketTotal)
+                            : "oder links über ＋ zuordnen"}
+                        </small>
+                      </div>
+                    ) : (
+                      <div className="bucket-items">
+                        {allocations.map((allocation) => {
+                          const itemSolution = solution(allocation);
+                          const months = bucket.maxMonths;
+                          const conflict =
+                            bucket.id !== "reserve" &&
+                            itemSolution &&
+                            itemSolution.minMonths > months;
+                          return (
+                            <div
+                              className={conflict ? "conflict" : ""}
+                              key={allocation.id}
+                            >
+                              <span>
+                                {allocation.productName}
+                                <small>
+                                  {allocation.source === "model"
+                                    ? "Modellportfolio"
+                                    : allocation.source === "vv"
+                                      ? "Vermögensverwaltung"
+                                      : itemSolution?.name}
+                                  {conflict ? " · Mindesthorizont prüfen" : ""}
+                                </small>
+                                <small className="coverage-summary">
+                                  {maturityBuckets
+                                    .filter(
+                                      (entry) =>
+                                        allocationAmountInBucket(
+                                          allocation,
+                                          entry.id,
+                                        ) > 0,
+                                    )
+                                    .map(
+                                      (entry) =>
+                                        `${entry.label}: ${euro.format(allocationAmountInBucket(allocation, entry.id))}`,
+                                    )
+                                    .join(" · ") ||
+                                    "noch keinem Topf zugeordnet"}
+                                </small>
+                              </span>
+                              <div>
+                                <input
+                                  inputMode="numeric"
+                                  value={
+                                    allocation.amount
+                                      ? allocation.amount.toLocaleString(
+                                          "de-DE",
+                                        )
+                                      : ""
+                                  }
+                                  onChange={(event) =>
+                                    updateAllocationAmount(
+                                      allocation,
+                                      parseAmount(event.target.value),
+                                    )
+                                  }
+                                />
+                                <b>€</b>
+                                <button
+                                  onClick={() =>
+                                    updatePlan({
+                                      allocations: plan.allocations.filter(
+                                        (entry) => entry.id !== allocation.id,
+                                      ),
+                                    })
+                                  }
+                                >
+                                  ×
+                                </button>
+                              </div>
+                              <label className="allocation-mode">
+                                <span>Topfabdeckung</span>
+                                <select
+                                  value={allocation.allocationMode || "single"}
+                                  onChange={(event) =>
+                                    updateAllocationMode(
+                                      allocation,
+                                      event.target.value as
+                                        "single" | "overflow" | "manual",
+                                    )
+                                  }
+                                >
+                                  <option value="single">
+                                    Nur dieser Kapitaltopf
+                                  </option>
+                                  <option value="overflow">
+                                    Überschuss automatisch weiterverteilen
+                                  </option>
+                                  <option value="manual">
+                                    Aufteilung manuell festlegen
+                                  </option>
+                                </select>
+                              </label>
+                              {allocation.allocationMode === "manual" && (
+                                <div className="manual-buckets">
+                                  {maturityBuckets.map((entry) => (
+                                    <label key={entry.id}>
+                                      <span>{entry.label}</span>
+                                      <div className="inline-amount">
+                                        <input
+                                          inputMode="numeric"
+                                          value={
+                                            allocationAmountInBucket(
+                                              allocation,
+                                              entry.id,
+                                            )
+                                              ? allocationAmountInBucket(
+                                                  allocation,
+                                                  entry.id,
+                                                ).toLocaleString("de-DE")
+                                              : ""
+                                          }
+                                          onChange={(event) =>
+                                            updateManualBucket(
+                                              allocation,
+                                              entry.id,
+                                              parseAmount(event.target.value),
+                                            )
+                                          }
+                                        />
+                                        <b>€</b>
+                                      </div>
+                                    </label>
+                                  ))}
+                                  <small
+                                    className={
+                                      allocationCoverageTotal(allocation) !==
+                                      allocation.amount
+                                        ? "split-warning"
+                                        : ""
+                                    }
+                                  >
+                                    Aufgeteilt:{" "}
+                                    {euro.format(
+                                      allocationCoverageTotal(allocation),
+                                    )}{" "}
+                                    von {euro.format(allocation.amount)}
+                                  </small>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
+            </section>
+          </div>
+          <p className="tool-legal">
+            Kapitaltopf und Produktzuordnung sind getrennt: Ein Zieltopf zeigt
+            den Bedarf, eine Produktposition dessen geplante Umsetzung. Dadurch
+            bleiben Lücken und Überplanungen sichtbar.
+          </p>
+        </>
+      )}
+      {mode === "house" && <WealthHouse plan={plan} depot={item.depot} />}
+      {mode === "models" && (
+        <div className="models-view">
+          <div className="section-copy">
+            <p className="eyebrow">STRATEGISCHE STARTVORLAGEN</p>
+            <h2>Modellportfolio nur auf den gewählten Kapitaltopf anwenden</h2>
+            <p>
+              Bestehende Laufzeiten werden nicht mehr ungefragt überschrieben.
+              Standardbetrag: strategisch freies Kapital{" "}
+              {euro.format(strategicAmount(item.advisory, plan.total))}.
+            </p>
+          </div>
+          <div className="model-grid">
+            {modelPortfolios.map((model) => (
+              <article key={model.id}>
+                <div className="model-title">
+                  <span>RB {model.risk}</span>
+                  <div>
+                    <strong>{model.name}</strong>
+                    <small>Stand 01.07.2026</small>
+                  </div>
+                </div>
+                <div className="mix-bars">
+                  {Object.entries(model.mix).map(([name, value]) => (
+                    <div key={name}>
+                      <span>
+                        {name}
+                        <b>{value} %</b>
+                      </span>
+                      <i>
+                        <em style={{ width: `${value}%` }} />
+                      </i>
+                    </div>
+                  ))}
+                </div>
+                <details>
+                  <summary>{model.holdings.length} Bausteine anzeigen</summary>
+                  <ul>
+                    {model.holdings.map((holding) => (
+                      <li key={holding.name}>
+                        <span>{holding.name}</span>
+                        <b>{holding.weight} %</b>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+                <button
+                  className="primary"
+                  onClick={() =>
+                    setModelDialog({
+                      id: model.id,
+                      amount: strategicAmount(item.advisory, plan.total),
+                    })
+                  }
+                >
+                  Anwendung konfigurieren
+                </button>
+              </article>
+            ))}
+          </div>
+          <div className="naming-warning">
+            <strong>Beide Bezeichnungssysteme enthalten</strong>
+            <p>
+              Die Modellportfolio-Unterlage verwendet „Private Select
+              Defensiv/Ausgewogen/Offensiv“, die VV-Matrix dagegen
+              „Sicherheit/Ertrag/Wachstum/Chance“. Alle sieben Bezeichnungen
+              stehen im Produktkatalog mit sichtbarem Quellenhinweis zur
+              Verfügung und werden nicht automatisch gleichgesetzt.
+            </p>
+          </div>
+        </div>
+      )}
+      {mode === "vv" && (
+        <VvSelection
+          item={item}
+          setItem={setItem}
+          addToPlan={(id, amount) => addProduct(id, "year10plus", "vv", amount)}
+        />
+      )}
+      {mode === "compare" && (
+        <PlanComparison
+          plans={item.plans}
+          activePlanId={item.activePlanId}
+          setActive={(id) => setItem({ ...item, activePlanId: id })}
+        />
+      )}
+      <section className="source-strip">
+        <strong>Eingebundene Datenstände</strong>
+        {dataSources.map((source) => (
+          <span key={source.title}>
+            {source.title}
+            <b>{source.date}</b>
+          </span>
+        ))}
+      </section>
+      {modelDialog && (
+        <div className="modal-backdrop">
+          <section className="model-dialog">
+            <button
+              className="modal-close"
+              onClick={() => setModelDialog(null)}
+            >
+              ×
+            </button>
+            <p className="eyebrow">MODELLPORTFOLIO ANWENDEN</p>
+            <h2>
+              {
+                modelPortfolios.find((entry) => entry.id === modelDialog.id)
+                  ?.name
+              }
+            </h2>
+            <AmountField
+              label="Betroffener Betrag"
+              value={modelDialog.amount}
+              onChange={(amount) => setModelDialog({ ...modelDialog, amount })}
+            />
+            <div className="apply-options">
+              <button className="recommended" onClick={() => applyModel("new")}>
+                <strong>Als neue Variante</strong>
+                <small>
+                  Aktuellen Plan kopieren und nur das strategische Laufzeitband
+                  ersetzen.
+                </small>
+              </button>
+              <button onClick={() => applyModel("supplement")}>
+                <strong>Aktuellen Plan ergänzen</strong>
+                <small>
+                  Positionen zusätzlich einfügen; Überplanung wird sichtbar.
+                </small>
+              </button>
+              <button onClick={() => applyModel("replace")}>
+                <strong>Aktuellen Plan ersetzen</strong>
+                <small>Alle bisherigen Produktzuordnungen entfernen.</small>
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WealthHouse({
+  plan,
+  depot,
+}: {
+  plan: StructurePlan;
+  depot: DepotHolding[];
+}) {
+  const breakdown = planAssetAmounts(plan);
+  const planKnown = Object.values(breakdown.amounts).reduce(
+    (sum, value) => sum + value,
+    0,
+  );
+  const selectedIds = new Set(
+    plan.depotHoldingIds.length > 0
+      ? plan.depotHoldingIds
+      : depot.map((entry) => entry.id),
+  );
+  const relevantDepot =
+    plan.depotMode === "none"
+      ? []
+      : depot.filter((entry) => selectedIds.has(entry.id));
+  const depotAmounts = Object.fromEntries(
+    assetClasses.map((name) => [
+      name,
+      relevantDepot
+        .filter((entry) => entry.assetClass === name)
+        .reduce(
+          (sum, entry) =>
+            sum +
+            (plan.depotMode === "afterSales"
+              ? Math.max(0, entry.value - entry.plannedSale)
+              : entry.value),
+          0,
+        ),
+    ]),
+  ) as Record<AssetClass, number>;
+  const includeInTotal =
+    plan.depotMode === "retain" || plan.depotMode === "afterSales";
+  const combinedAmounts = Object.fromEntries(
+    assetClasses.map((name) => [
+      name,
+      breakdown.amounts[name] + (includeInTotal ? depotAmounts[name] : 0),
+    ]),
+  ) as Record<AssetClass, number>;
+  const combinedKnown = Object.values(combinedAmounts).reduce(
+    (sum, value) => sum + value,
+    0,
+  );
+  const includedDepotTotal = Object.values(depotAmounts).reduce(
+    (sum, value) => sum + value,
+    0,
+  );
+  const colors: Record<AssetClass, string> = {
+    Liquidität: "#96bee6",
+    Geldwerte: "#327dc8",
+    Substanzwerte: "#0066b3",
+    "Alternative Anlagen": "#ff6600",
+    Sachwerte: "#006e73",
+  };
+  return (
+    <div className="house-view">
+      <div className="section-copy">
+        <p className="eyebrow">VERMÖGENSHAUS</p>
+        <h2>Wirtschaftliche Durchschau statt Produktetikett</h2>
+        <p>
+          Mischfonds und Vermögensverwaltungen werden anhand der Quoten aus den
+          Unterlagen aufgeteilt. Ungeklärte Produkte bleiben separat sichtbar.
+        </p>
+      </div>
+      <div className="house-layout">
+        <div className="wealth-house">
+          {[...assetClasses].reverse().map((name) => {
+            const value = breakdown.amounts[name];
+            return (
+              <div key={name} style={{ borderLeftColor: colors[name] }}>
+                <span>{name}</span>
+                <strong>{euro.format(value)}</strong>
+                <small>
+                  {percent.format(
+                    planKnown ? (value / planKnown) * 100 : 0,
+                  )}{" "}
+                  % der bekannten Durchschau
+                </small>
+              </div>
+            );
+          })}
+          <div className="house-roof">
+            <span>{includeInTotal ? "Gesamtbetrachtung" : "Planvolumen"}</span>
+            <strong>
+              {euro.format(plan.total + (includeInTotal ? includedDepotTotal : 0))}
+            </strong>
+          </div>
+        </div>
+        <section className="panel house-table">
+          <div className="comparison-table">
+            <div className="comparison-head">
+              <span>Anlageklasse</span>
+              <span>Bestandsdepot</span>
+              <span>Neue Planung</span>
+              <span>Gesamtquote</span>
+            </div>
+            {assetClasses.map((name) => (
+              <div key={name}>
+                <strong>{name}</strong>
+                <span>{euro.format(depotAmounts[name])}</span>
+                <span>{euro.format(breakdown.amounts[name])}</span>
+                <b>
+                  {percent.format(
+                    combinedKnown
+                      ? (combinedAmounts[name] / combinedKnown) * 100
+                      : 0,
+                  )}{" "}
+                  %
+                </b>
+              </div>
+            ))}
+            <div className="unresolved-row">
+              <strong>Nicht durchgeschaut</strong>
+              <span>–</span>
+              <span>{euro.format(breakdown.unresolved)}</span>
+              <b>
+                {percent.format(
+                  breakdown.total
+                    ? (breakdown.unresolved / breakdown.total) * 100
+                    : 0,
+                )}{" "}
+                %
+              </b>
+            </div>
+          </div>
+        </section>
+      </div>
+      <div className="house-context">
+        <strong>Depotmodus</strong>
+        <span>
+          {plan.depotMode === "none"
+            ? "Bestandsdepot nicht berücksichtigt"
+            : plan.depotMode === "compare"
+              ? "Bestandsdepot wird nur vergleichend angezeigt"
+              : plan.depotMode === "afterSales"
+                ? "Ausgewählte Positionen nach simulierten Verkäufen einbezogen"
+                : "Ausgewählte Positionen als fortbestehender Bestand einbezogen"}
+        </span>
+      </div>
+      {breakdown.unresolved > 0 && (
+        <div className="planner-alert">
+          <strong>Datenproblem</strong>
+          <span>
+            {euro.format(breakdown.unresolved)} entfallen auf Bausteine ohne
+            freigegebene Durchschau. Dazu zählen insbesondere
+            Modellbezeichnungen sowie ZinsFix Index und MEA Einzelwert.
+          </span>
+        </div>
+      )}
+      <section className="panel lookthrough">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">DURCHSCHAU</p>
+            <h2>Beiträge der Produkte</h2>
+          </div>
+        </div>
+        <div className="lookthrough-grid">
+          {plan.allocations.map((allocation) => {
+            const product = houseProducts.find(
+              (entry) => entry.id === allocation.productId,
+            );
+            const vv = managedPortfolios.find(
+              (entry) => entry.id === allocation.productId,
+            );
+            const mix = product?.assetMix || vv?.assetMix;
+            return (
+              <article key={allocation.id}>
+                <strong>{allocation.productName}</strong>
+                <small>{euro.format(allocation.amount)}</small>
+                {mix ? (
+                  <div>
+                    {assetClasses
+                      .filter((name) => mix[name] > 0)
+                      .map((name) => (
+                        <span key={name}>
+                          {name} <b>{mix[name]} %</b>
+                        </span>
+                      ))}
+                  </div>
+                ) : (
+                  <em>Durchschau ungeklärt</em>
+                )}
+              </article>
+            );
+          })}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function VvSelection({
+  item,
+  setItem,
+  addToPlan,
+}: {
+  item: AdvisoryCase;
+  setItem: (item: AdvisoryCase) => void;
+  addToPlan: (id: string, amount: number) => void;
+}) {
+  const filters = item.vvFilters;
+  const setFilter = <K extends keyof VvFilters>(key: K, value: VvFilters[K]) =>
+    setItem({ ...item, vvFilters: { ...filters, [key]: value } });
+  const matchBool = (filter: string, value: boolean) =>
+    filter === "Keine Präferenz" || value === (filter === "Ja");
+  const matches = managedPortfolios.filter(
+    (entry) =>
+      entry.onHouseView &&
+      entry.minimum <= filters.amount &&
+      entry.risk <= filters.maxRisk &&
+      matchBool(filters.sustainable, entry.sustainable) &&
+      (filters.currency === "Keine Präferenz" ||
+        entry.currency === filters.currency) &&
+      (filters.region === "Keine Präferenz" ||
+        entry.region === filters.region) &&
+      (filters.metals === "Keine Präferenz" ||
+        entry.metals === filters.metals) &&
+      matchBool(filters.targetFunds, entry.targetFunds) &&
+      (filters.equityBand === "Keine Präferenz" ||
+        entry.equityBand === filters.equityBand) &&
+      matchBool(filters.individual, entry.individual) &&
+      (filters.billingCountry === "Keine Präferenz" ||
+        entry.billingCountry === filters.billingCountry) &&
+      (filters.custody === "Keine Präferenz" ||
+        entry.custody === filters.custody),
+  );
+  const toggleCompare = (id: string) => {
+    const selected = item.selectedVvIds.includes(id);
+    if (!selected && item.selectedVvIds.length >= 3) return;
+    setItem({
+      ...item,
+      selectedVvIds: selected
+        ? item.selectedVvIds.filter((entry) => entry !== id)
+        : [...item.selectedVvIds, id],
+    });
+  };
+  const selected = managedPortfolios.filter((entry) =>
+    item.selectedVvIds.includes(entry.id),
+  );
+  return (
+    <div className="vv-view">
+      <div className="section-copy">
+        <p className="eyebrow">VOLLSTÄNDIGE SELEKTIONSLOGIK</p>
+        <h2>Zehn Kriterien aus der Excel plus Risikoklasse</h2>
+        <p>
+          „Keine Präferenz“ lässt das jeweilige Kriterium offen. Informative,
+          nicht auf der Hausmeinung befindliche Strategien werden nicht als
+          Treffer ausgegeben.
+        </p>
+      </div>
+      <div className="vv-filter-layout">
+        <aside className="vv-filter-panel">
+          <AmountField
+            label="Einstiegsgröße"
+            value={filters.amount}
+            onChange={(value) => setFilter("amount", value)}
+          />
+          {[
+            [
+              "Nachhaltigkeit",
+              "sustainable",
+              ["Keine Präferenz", "Ja", "Nein"],
+            ],
+            ["Währung", "currency", ["Keine Präferenz", "EUR", "CHF"]],
+            [
+              "Regionale Präferenz",
+              "region",
+              ["Keine Präferenz", "Weltweit", "Schweiz"],
+            ],
+            [
+              "Edelmetalle",
+              "metals",
+              ["Keine Präferenz", "Ja", "Nein", "Individuell"],
+            ],
+            [
+              "Möglichkeit von Zielfonds",
+              "targetFunds",
+              ["Keine Präferenz", "Ja", "Nein"],
+            ],
+            [
+              "Aktienquote",
+              "equityBand",
+              ["Keine Präferenz", "Unter 50%", "Über 50%", "Individuell"],
+            ],
+            [
+              "Individuelle Strategie",
+              "individual",
+              ["Keine Präferenz", "Ja", "Nein"],
+            ],
+            [
+              "Abrechnungsland",
+              "billingCountry",
+              ["Keine Präferenz", "Deutschland", "Schweiz"],
+            ],
+            [
+              "Depotstelle",
+              "custody",
+              [
+                "Keine Präferenz",
+                "VoBa pur",
+                "DZ Privatbank",
+                "Union Investment",
+              ],
+            ],
+          ].map(([label, key, options]) => (
+            <label className="field" key={key as string}>
+              <span>{label as string}</span>
+              <select
+                value={String(filters[key as keyof VvFilters])}
+                onChange={(event) =>
+                  setFilter(key as keyof VvFilters, event.target.value as never)
+                }
+              >
+                {(options as string[]).map((option) => (
+                  <option key={option}>{option}</option>
+                ))}
+              </select>
+            </label>
+          ))}
+          <label className="field">
+            <span>Risikoklasse bis</span>
+            <select
+              value={filters.maxRisk}
+              onChange={(event) =>
+                setFilter("maxRisk", Number(event.target.value))
+              }
+            >
+              {[2, 3, 4].map((risk) => (
+                <option key={risk}>{risk}</option>
+              ))}
+            </select>
+          </label>
+        </aside>
+        <div>
+          <div className="vv-results-head">
+            <strong>{matches.length} passende Lösungen</strong>
+            <span>
+              von{" "}
+              {managedPortfolios.filter((entry) => entry.onHouseView).length}{" "}
+              Strategien auf Hausmeinung
+            </span>
+          </div>
+          <div className="vv-result-grid">
+            {matches.map((entry) => (
+              <article key={entry.id}>
+                <header>
+                  <span>RK {entry.risk}</span>
+                  <strong>{entry.name}</strong>
+                </header>
+                <p>{entry.mix}</p>
+                <dl>
+                  <div>
+                    <dt>Mindestanlage</dt>
+                    <dd>{euro.format(entry.minimum)}</dd>
+                  </div>
+                  <div>
+                    <dt>Region / Währung</dt>
+                    <dd>
+                      {entry.region} / {entry.currency}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Abrechnung / Depot</dt>
+                    <dd>
+                      {entry.billingCountry} / {entry.custody}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Kosten laut Matrix</dt>
+                    <dd>{entry.costs}</dd>
+                  </div>
+                </dl>
+                <div className="vv-tags">
+                  <span>
+                    {entry.sustainable ? "nachhaltig" : "nicht nachhaltig"}
+                  </span>
+                  <span>Edelmetalle: {entry.metals}</span>
+                  <span>{entry.equityBand}</span>
+                  {entry.targetFunds && <span>Zielfonds</span>}
+                  {entry.individual && <span>individualisierbar</span>}
+                </div>
+                <div className="vv-card-actions">
+                  <button
+                    className={
+                      item.selectedVvIds.includes(entry.id)
+                        ? "secondary active"
+                        : "secondary"
+                    }
+                    onClick={() => toggleCompare(entry.id)}
+                  >
+                    {item.selectedVvIds.includes(entry.id)
+                      ? "✓ Vergleich"
+                      : "Vergleichen"}
+                  </button>
+                  <button
+                    className="primary"
+                    onClick={() =>
+                      addToPlan(
+                        entry.id,
+                        Math.min(filters.amount, Math.max(entry.minimum, 0)),
+                      )
+                    }
+                  >
+                    In Plan übernehmen
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </div>
+      {selected.length > 0 && (
+        <section className="panel vv-comparison">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">DIREKTVERGLEICH</p>
+              <h2>{selected.length} Vermögensverwaltungen</h2>
+            </div>
+          </div>
+          <div className="vv-compare-table">
+            <div>
+              <strong>Kriterium</strong>
+              {selected.map((entry) => (
+                <strong key={entry.id}>{entry.name}</strong>
+              ))}
+            </div>
+            {[
+              [
+                "Mindestanlage",
+                (entry: (typeof selected)[number]) =>
+                  euro.format(entry.minimum),
+              ],
+              [
+                "Risikoklasse",
+                (entry: (typeof selected)[number]) => String(entry.risk),
+              ],
+              ["Struktur", (entry: (typeof selected)[number]) => entry.mix],
+              [
+                "Zielfonds",
+                (entry: (typeof selected)[number]) =>
+                  entry.targetFunds ? "Ja" : "Nein",
+              ],
+              [
+                "Edelmetalle",
+                (entry: (typeof selected)[number]) => entry.metals,
+              ],
+              [
+                "Depotstelle",
+                (entry: (typeof selected)[number]) => entry.custody,
+              ],
+              ["Kosten", (entry: (typeof selected)[number]) => entry.costs],
+            ].map(([label, format]) => (
+              <div key={label as string}>
+                <span>{label as string}</span>
+                {selected.map((entry) => (
+                  <span key={entry.id}>
+                    {(format as (entry: (typeof selected)[number]) => string)(
+                      entry,
+                    )}
+                  </span>
+                ))}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+      <p className="tool-legal">
+        Die Filter normalisieren die in der Excel uneinheitlich verwendeten
+        Werte „Individuell“, Ja/Nein und unterschiedliche Aktienquotenformate.
+        Das Ergebnis ist eine Vorauswahl ohne Rangfolge.
+      </p>
+    </div>
+  );
+}
+
+function PlanComparison({
+  plans,
+  activePlanId,
+  setActive,
+}: {
+  plans: StructurePlan[];
+  activePlanId: string;
+  setActive: (id: string) => void;
+}) {
+  return (
+    <div className="compare-view">
+      <div className="section-copy">
+        <p className="eyebrow">SZENARIOVERGLEICH</p>
+        <h2>Plan A, B und C nebeneinander</h2>
+        <p>
+          Planvolumen, Laufzeiten, Anlageklassen, Modellbezug und offene
+          Durchschau werden aus denselben Positionen berechnet.
+        </p>
+      </div>
+      <div className="scenario-comparison">
+        {plans.map((plan) => {
+          const breakdown = planAssetAmounts(plan);
+          return (
+            <article
+              key={plan.id}
+              className={plan.id === activePlanId ? "active" : ""}
+            >
+              <header>
+                <div>
+                  <span>{plan.preferred ? "★ BEVORZUGT" : "VARIANTE"}</span>
+                  <strong>{plan.name}</strong>
+                </div>
+                <button onClick={() => setActive(plan.id)}>Öffnen</button>
+              </header>
+              <dl>
+                <div>
+                  <dt>Planvolumen</dt>
+                  <dd>{euro.format(plan.total)}</dd>
+                </div>
+                <div>
+                  <dt>Produktzuordnung</dt>
+                  <dd>{euro.format(breakdown.total)}</dd>
+                </div>
+                <div>
+                  <dt>Modellbezug</dt>
+                  <dd>
+                    {modelPortfolios.find((entry) => entry.id === plan.modelId)
+                      ?.name || "individuell"}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Ungeklärt</dt>
+                  <dd>{euro.format(breakdown.unresolved)}</dd>
+                </div>
+              </dl>
+              <div className="mix-bars">
+                {assetClasses.map((name) => (
+                  <div key={name}>
+                    <span>
+                      {name}
+                      <b>
+                        {percent.format(
+                          breakdown.total
+                            ? (breakdown.amounts[name] / breakdown.total) * 100
+                            : 0,
+                        )}{" "}
+                        %
+                      </b>
+                    </span>
+                    <i>
+                      <em
+                        style={{
+                          width: `${breakdown.total ? (breakdown.amounts[name] / breakdown.total) * 100 : 0}%`,
+                        }}
+                      />
+                    </i>
+                  </div>
+                ))}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function DepotOptimizer({
+  item,
+  setItem,
+  plan,
+  saveCase,
+  setView,
+}: {
+  item: AdvisoryCase;
+  setItem: (item: AdvisoryCase) => void;
+  plan: StructurePlan;
+  saveCase: (version?: boolean) => void;
+  setView: (view: View) => void;
+}) {
+  const csvRef = useRef<HTMLInputElement>(null);
+  const depot = item.depot;
+  const total = depot.reduce((sum, entry) => sum + entry.value, 0);
+  const afterSales = depot.reduce(
+    (sum, entry) => sum + Math.max(0, entry.value - entry.plannedSale),
+    0,
+  );
+  const buys = plan.allocations.reduce((sum, entry) => sum + entry.amount, 0);
+  const actual = Object.fromEntries(
+    assetClasses.map((name) => [
+      name,
+      depot
+        .filter((entry) => entry.assetClass === name)
+        .reduce((sum, entry) => sum + entry.value, 0),
+    ]),
+  ) as Record<AssetClass, number>;
+  const projected = { ...actual };
+  for (const holding of depot)
+    projected[holding.assetClass] -= Math.min(
+      holding.value,
+      holding.plannedSale,
+    );
+  const planMix = planAssetAmounts(plan);
+  for (const name of assetClasses) projected[name] += planMix.amounts[name];
+  const setDepotPositions = (next: DepotHolding[]) =>
+    setItem({
+      ...item,
+      advisory: {
+        ...item.advisory,
+        depotValue: next.reduce((sum, entry) => sum + entry.value, 0),
+        hasDepot: next.length > 0 || item.advisory.hasDepot,
+      },
+      depot: next,
+    });
+  const addHolding = () =>
+    setDepotPositions([
+      ...depot,
+      {
+        id: uid("holding"),
+        name: "",
+        value: 0,
+        assetClass: "Geldwerte",
+        region: "Weltweit",
+        risk: 2,
+        plannedSale: 0,
+        note: "",
+      },
+    ]);
+  const updateHolding = (id: string, changes: Partial<DepotHolding>) =>
+    setDepotPositions(
+      depot.map((entry) =>
+        entry.id === id ? { ...entry, ...changes } : entry,
+      ),
+    );
+  const loadSample = () => {
+    const value = item.advisory.depotValue || 420000;
+    setDepotPositions([
+      {
+        id: uid("holding"),
+        name: "Globaler Aktienfonds",
+        value: Math.round(value * 0.46),
+        assetClass: "Substanzwerte",
+        region: "Weltweit",
+        risk: 3,
+        plannedSale: 0,
+        note: "",
+      },
+      {
+        id: uid("holding"),
+        name: "Technologie-Aktienfonds",
+        value: Math.round(value * 0.24),
+        assetClass: "Substanzwerte",
+        region: "USA",
+        risk: 4,
+        plannedSale: 0,
+        note: "",
+      },
+      {
+        id: uid("holding"),
+        name: "Unternehmensanleihen",
+        value: Math.round(value * 0.2),
+        assetClass: "Geldwerte",
+        region: "Europa",
+        risk: 2,
+        plannedSale: 0,
+        note: "",
+      },
+      {
+        id: uid("holding"),
+        name: "Gold",
+        value: Math.round(value * 0.1),
+        assetClass: "Alternative Anlagen",
+        region: "Weltweit",
+        risk: 3,
+        plannedSale: 0,
+        note: "",
+      },
+    ]);
+  };
+  const importCsv = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const lines = (await file.text()).split(/\r?\n/).filter(Boolean);
+    const rows = lines
+      .slice(1)
+      .map((line) => line.split(";"))
+      .filter((row) => row.length >= 2)
+      .map((row) => ({
+        id: uid("holding"),
+        name: row[0],
+        value: parseAmount(row[1]),
+        assetClass: (assetClasses.includes(row[2] as AssetClass)
+          ? row[2]
+          : "Geldwerte") as AssetClass,
+        region: row[3] || "Weltweit",
+        risk: Number(row[4]) || 2,
+        plannedSale: 0,
+        note: row[5] || "",
+      }));
+    setDepotPositions(rows);
+    event.target.value = "";
+  };
+  const largest = [...depot].sort((a, b) => b.value - a.value)[0];
+  return (
+    <div className="tool-view depot-view">
+      <div className="tool-head">
+        <div>
+          <button className="back-link" onClick={() => setView("wizard")}>
+            ← Zurück zur Beratung
+          </button>
+          <p className="eyebrow">BESTANDSDEPOT IM BERATUNGSFALL</p>
+          <h1>Depotcheck und Transaktionssimulation</h1>
+          <p>
+            Das Depot wird gegen die bevorzugte Strukturplanung verglichen.
+            Steuerliche, kostenbezogene und kundenindividuelle Gründe für
+            Abweichungen bleiben dokumentierbar.
+          </p>
+        </div>
+        <div className="tool-head-actions">
+          <button className="secondary" onClick={loadSample}>
+            Musterdepot
+          </button>
+          <button className="primary" onClick={() => saveCase(false)}>
+            Fall speichern
+          </button>
+        </div>
+      </div>
+      <div className="depot-top">
+        <article>
+          <span>Ist-Depot</span>
+          <strong>{euro.format(total)}</strong>
+          <small>{depot.length} Positionen</small>
+        </article>
+        <article>
+          <span>Nach Verkäufen</span>
+          <strong>{euro.format(afterSales)}</strong>
+          <small>simulierter Restbestand</small>
+        </article>
+        <article>
+          <span>Geplante Käufe</span>
+          <strong>{euro.format(buys)}</strong>
+          <small>aus {plan.name}</small>
+        </article>
+        <article>
+          <span>Größte Position</span>
+          <strong>
+            {largest && total
+              ? `${Math.round((largest.value / total) * 100)} %`
+              : "–"}
+          </strong>
+          <small>{largest?.name || "keine Position"}</small>
+        </article>
+      </div>
+      <section className="depot-entry panel">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">IST-BESTAND</p>
+            <h2>Positionen erfassen oder importieren</h2>
+          </div>
+          <div>
+            <button
+              className="secondary"
+              onClick={() => csvRef.current?.click()}
+            >
+              CSV importieren
+            </button>
+            <button className="secondary" onClick={addHolding}>
+              ＋ Position
+            </button>
+          </div>
+        </div>
+        <input
+          ref={csvRef}
+          type="file"
+          className="visually-hidden"
+          accept=".csv,text/csv"
+          onChange={importCsv}
+        />
+        {depot.length === 0 ? (
+          <button className="empty-state" onClick={loadSample}>
+            <span>◫</span>
+            <strong>Musterdepot laden</strong>
+            <small>CSV-Spalten: Name;Wert;Anlageklasse;Region;RK;Notiz</small>
+          </button>
+        ) : (
+          <div className="holding-list">
+            <div className="holding-head holding-head-v2">
+              <span>Position</span>
+              <span>Wert</span>
+              <span>Anlageklasse</span>
+              <span>Region</span>
+              <span>RK</span>
+              <span>Verkauf</span>
+              <span></span>
+            </div>
+            {depot.map((holding) => (
+              <div className="holding-row holding-row-v2" key={holding.id}>
+                <input
+                  value={holding.name}
+                  onChange={(event) =>
+                    updateHolding(holding.id, { name: event.target.value })
+                  }
+                />
+                <div className="inline-amount">
+                  <input
+                    inputMode="numeric"
+                    value={
+                      holding.value ? holding.value.toLocaleString("de-DE") : ""
+                    }
+                    onChange={(event) =>
+                      updateHolding(holding.id, {
+                        value: parseAmount(event.target.value),
+                      })
+                    }
+                  />
+                  <b>€</b>
+                </div>
+                <select
+                  value={holding.assetClass}
+                  onChange={(event) =>
+                    updateHolding(holding.id, {
+                      assetClass: event.target.value as AssetClass,
+                    })
+                  }
+                >
+                  {assetClasses.map((name) => (
+                    <option key={name}>{name}</option>
+                  ))}
+                </select>
+                <select
+                  value={holding.region}
+                  onChange={(event) =>
+                    updateHolding(holding.id, { region: event.target.value })
+                  }
+                >
+                  <option>Weltweit</option>
+                  <option>Europa</option>
+                  <option>USA</option>
+                  <option>Deutschland</option>
+                  <option>Asien</option>
+                  <option>Schweiz</option>
+                  <option>Sonstige</option>
+                </select>
+                <select
+                  value={holding.risk}
+                  onChange={(event) =>
+                    updateHolding(holding.id, {
+                      risk: Number(event.target.value),
+                    })
+                  }
+                >
+                  {[1, 2, 3, 4].map((risk) => (
+                    <option key={risk}>{risk}</option>
+                  ))}
+                </select>
+                <div className="inline-amount sale">
+                  <input
+                    inputMode="numeric"
+                    value={
+                      holding.plannedSale
+                        ? holding.plannedSale.toLocaleString("de-DE")
+                        : ""
+                    }
+                    onChange={(event) =>
+                      updateHolding(holding.id, {
+                        plannedSale: Math.min(
+                          holding.value,
+                          parseAmount(event.target.value),
+                        ),
+                      })
+                    }
+                  />
+                  <b>€</b>
+                </div>
+                <button
+                  onClick={() =>
+                    setDepotPositions(
+                      depot.filter((entry) => entry.id !== holding.id),
+                    )
+                  }
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+      <div className="depot-analysis">
+        <section className="panel">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">IST / SIMULATION</p>
+              <h2>Fünf Anlageklassen</h2>
+            </div>
+            <span className="step-chip">{plan.name}</span>
+          </div>
+          <div className="comparison-table">
+            <div className="comparison-head">
+              <span>Anlageklasse</span>
+              <span>Ist</span>
+              <span>Nach Transaktionen</span>
+              <span>Veränderung</span>
+            </div>
+            {assetClasses.map((name) => (
+              <div key={name}>
+                <strong>{name}</strong>
+                <span>{euro.format(actual[name])}</span>
+                <span>{euro.format(projected[name])}</span>
+                <b>{euro.format(projected[name] - actual[name])}</b>
+              </div>
+            ))}
+          </div>
+        </section>
+        <section className="panel findings">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">PRÜFPUNKTE</p>
+              <h2>Keine automatische Optimierung</h2>
+            </div>
+          </div>
+          <ul>
+            {depot.length === 0 && (
+              <li className="neutral">
+                <span>!</span>
+                <div>
+                  <strong>Keine Analyse möglich</strong>
+                  <p>Erfasse zuerst Positionen.</p>
+                </div>
+              </li>
+            )}
+            {largest && total > 0 && largest.value / total > 0.25 && (
+              <li>
+                <span>!</span>
+                <div>
+                  <strong>Einzelpositionsrisiko</strong>
+                  <p>
+                    {largest.name} bindet{" "}
+                    {Math.round((largest.value / total) * 100)} % des
+                    Depotwerts.
+                  </p>
+                </div>
+              </li>
+            )}
+            {planMix.unresolved > 0 && (
+              <li>
+                <span>!</span>
+                <div>
+                  <strong>Unvollständige Durchschau</strong>
+                  <p>
+                    {euro.format(planMix.unresolved)} geplanter Käufe sind noch
+                    keiner Anlageklasse zugeordnet.
+                  </p>
+                </div>
+              </li>
+            )}
+            <li className="neutral">
+              <span>i</span>
+              <div>
+                <strong>Begründungen dokumentieren</strong>
+                <p>
+                  Einstandskurse, steuerliche Altbestände, Kosten, Kundenwünsche
+                  und Liquiditätsbedarf können Abweichungen rechtfertigen.
+                </p>
+              </div>
+            </li>
+          </ul>
+        </section>
+      </div>
+      <section className="panel transaction-plan">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">TRANSAKTIONSPLAN</p>
+            <h2>Verkäufe und geplante Käufe</h2>
+          </div>
+        </div>
+        <div className="transaction-columns">
+          <div>
+            <strong>Verkäufe</strong>
+            {depot
+              .filter((entry) => entry.plannedSale > 0)
+              .map((entry) => (
+                <span key={entry.id}>
+                  {entry.name}
+                  <b>– {euro.format(entry.plannedSale)}</b>
+                </span>
+              ))}
+            {!depot.some((entry) => entry.plannedSale > 0) && (
+              <em>keine Verkäufe erfasst</em>
+            )}
+          </div>
+          <div>
+            <strong>Käufe aus Strukturplan</strong>
+            {plan.allocations
+              .filter((entry) => entry.amount > 0)
+              .map((entry) => (
+                <span key={entry.id}>
+                  {entry.productName}
+                  <b>+ {euro.format(entry.amount)}</b>
+                </span>
+              ))}
+            {plan.allocations.length === 0 && <em>keine Käufe geplant</em>}
+          </div>
+        </div>
+      </section>
+      <p className="tool-legal">
+        Die Simulation ermittelt ausschließlich rechnerische Auswirkungen. Sie
+        berücksichtigt weder Kurse noch Steuern, Spreads, Kosten, Stückelungen,
+        Fristen oder regulatorische Eignung.
+      </p>
+    </div>
+  );
+}
+
+function ExportCenter({
+  item,
+  setItem,
+  preferredPlan,
+  saveCase,
+  exportJson,
+  importJson,
+}: {
+  item: AdvisoryCase;
+  setItem: Dispatch<SetStateAction<AdvisoryCase>>;
+  preferredPlan: StructurePlan;
+  saveCase: (version?: boolean) => void;
+  exportJson: () => void;
+  importJson: () => void;
+}) {
+  const breakdown = planAssetAmounts(preferredPlan);
+  const targets = bucketTargets(item.advisory, preferredPlan.total);
+  const advisor = advisorFor(item.advisorId);
+  const print = (mode: "customer" | "internal") => {
+    document.body.dataset.printMode = mode;
+    window.setTimeout(() => {
+      window.print();
+      window.setTimeout(() => delete document.body.dataset.printMode, 300);
+    }, 60);
+  };
+  const exportExcel = () => {
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.aoa_to_sheet([
+        ["VermögensNavigator – Beratungsfall"],
+        ["Fall", item.advisory.caseName],
+        ["Bereich", scopeLabel(item.advisory.scope)],
+        ["Status", item.status],
+        ["Verantwortlich", advisor.name],
+        ["Funktion", advisor.title],
+        ["Risiko", item.advisory.risk],
+        ["Ziel", item.advisory.goal],
+        ["Erstellt", item.createdAt],
+        ["Aktualisiert", item.updatedAt],
+        ["Bevorzugter Plan", preferredPlan.name],
+        ["Planungsbetrag", preferredPlan.total],
+        [
+          "Planungsbasis",
+          preferredPlan.capitalMode === "linked"
+            ? "Erfasste Liquidität"
+            : "Abweichender Planungsbetrag",
+        ],
+        ["Depotmodus", preferredPlan.depotMode],
+      ]),
+      "Fall",
+    );
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.json_to_sheet(
+        item.advisory.needs.map((need) => ({
+          Zweck: need.purpose,
+          Betrag: need.amount,
+          Termin: need.dueDate || "",
+          Monate: monthsUntilNeed(need),
+          Laufzeitband: maturityBuckets.find(
+            (bucket) => bucket.id === bucketForMonths(monthsUntilNeed(need)),
+          )?.label,
+        })),
+      ),
+      "Kapitalbedarfe",
+    );
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.json_to_sheet(
+        maturityBuckets.map((bucket) => ({
+          Laufzeitband: bucket.label,
+          Zeitraum: bucket.range,
+          Zielbetrag: targets[bucket.id],
+          Zugeordnet: preferredPlan.allocations.reduce(
+            (sum, entry) => sum + allocationAmountInBucket(entry, bucket.id),
+            0,
+          ),
+        })),
+      ),
+      "Laufzeiten",
+    );
+    for (const plan of item.plans)
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.json_to_sheet(
+          plan.allocations.map((entry) => ({
+            Produkt: entry.productName,
+            Produkt_ID: entry.productId,
+            Laufzeitband: maturityBuckets.find(
+              (bucket) => bucket.id === entry.bucketId,
+            )?.label,
+            Topfabdeckung: maturityBuckets
+              .filter(
+                (bucket) => allocationAmountInBucket(entry, bucket.id) > 0,
+              )
+              .map(
+                (bucket) =>
+                  `${bucket.label}: ${allocationAmountInBucket(entry, bucket.id)}`,
+              )
+              .join(" | "),
+            Betrag: entry.amount,
+            Quelle: entry.source,
+            Modell: entry.modelId || "",
+          })),
+        ),
+        safeFileName(plan.name).slice(0, 31) || "Plan",
+      );
+    const structureRows: Array<{
+      Anlageklasse: string;
+      Betrag: number;
+      Anteil: number;
+    }> = assetClasses.map((name) => ({
+      Anlageklasse: name,
+      Betrag: breakdown.amounts[name],
+      Anteil: breakdown.total ? breakdown.amounts[name] / breakdown.total : 0,
+    }));
+    structureRows.push({
+      Anlageklasse: "Nicht durchgeschaut",
+      Betrag: breakdown.unresolved,
+      Anteil: breakdown.total ? breakdown.unresolved / breakdown.total : 0,
+    });
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.json_to_sheet(structureRows),
+      "Vermögensstruktur",
+    );
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.json_to_sheet(
+        item.depot.map((entry) => ({
+          Position: entry.name,
+          Wert: entry.value,
+          Anlageklasse: entry.assetClass,
+          Region: entry.region,
+          RK: entry.risk,
+          Verkauf: entry.plannedSale,
+          Notiz: entry.note,
+        })),
+      ),
+      "Depot",
+    );
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.json_to_sheet(
+        managedPortfolios
+          .filter((entry) => item.selectedVvIds.includes(entry.id))
+          .map((entry) => ({
+            Name: entry.name,
+            Mindestanlage: entry.minimum,
+            RK: entry.risk,
+            Währung: entry.currency,
+            Region: entry.region,
+            Depotstelle: entry.custody,
+            Kosten: entry.costs,
+          })),
+      ),
+      "VV-Auswahl",
+    );
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.json_to_sheet(dataSources),
+      "Datenstände",
+    );
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.json_to_sheet(
+        item.advisory.modules.map((moduleId) => {
+          const moduleConfig = modules.find((entry) => entry.id === moduleId);
+          const state = item.moduleStates[moduleId] || blankModuleState();
+          return {
+            Fachmodul: moduleConfig?.title || moduleId,
+            Status:
+              state.status === "complete"
+                ? "Vollständig"
+                : state.status === "in_progress"
+                  ? "In Bearbeitung"
+                  : "Nicht begonnen",
+            Bearbeitete_Prüfpunkte: Object.values(state.checklist).filter(Boolean)
+              .length,
+            Prüfpunkte_gesamt: Object.keys(state.checklist).length,
+            Notizen: state.notes,
+            Aktualisiert: state.updatedAt,
+          };
+        }),
+      ),
+      "Fachmodule",
+    );
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.json_to_sheet(
+        item.customerChecklist.map((entry) => ({
+          Status: entry.done ? "Erledigt" : "Offen",
+          Kategorie: entry.category,
+          Nächster_Schritt: entry.text,
+          Quelle:
+            entry.source === "module"
+              ? modules.find((module) => module.id === entry.moduleId)?.title ||
+                "Fachmodul"
+              : "Allgemein",
+          Erfasst_am: entry.createdAt,
+        })),
+      ),
+      "Kunden-Checkliste",
+    );
+    XLSX.writeFile(workbook, `${safeFileName(item.advisory.caseName)}.xlsx`);
+  };
+  const restoreVersion = (versionId: string) => {
+    const version = item.versions.find((entry) => entry.id === versionId);
+    if (!version) return;
+    if (
+      !window.confirm(
+        `${version.label} als aktuellen Arbeitsstand wiederherstellen?`,
+      )
+    )
+      return;
+    const restored = normalizeImportedCase(version.snapshot, false);
+    if (!restored) return;
+    setItem({
+      ...restored,
+      versions: item.versions,
+      updatedAt: new Date().toISOString(),
+    });
+  };
+  return (
+    <div className="tool-view export-view">
+      <div className="tool-head no-print">
+        <div>
+          <p className="eyebrow">ERGEBNIS UND DOKUMENTATION</p>
+          <h1>Speichern, versionieren und exportieren</h1>
+          <p>
+            Alle Ausgaben werden aus demselben Beratungsfall und derselben
+            bevorzugten Strukturplanung erzeugt.
+          </p>
+        </div>
+        <div className="tool-head-actions">
+          <label className="status-field">
+            <span>Bearbeitungsstand</span>
+            <select
+              value={item.status}
+              onChange={(event) =>
+                setItem({
+                  ...item,
+                  status: event.target.value as AdvisoryCase["status"],
+                })
+              }
+            >
+              <option>Entwurf</option>
+              <option>In Prüfung</option>
+              <option>Abgeschlossen</option>
+            </select>
+          </label>
+          <button className="primary" onClick={() => saveCase(true)}>
+            Version speichern
+          </button>
+        </div>
+      </div>
+      <div className="export-actions no-print">
+        <button onClick={() => print("customer")}>
+          <span>PDF</span>
+          <strong>Kundenübersicht</strong>
+          <small>
+            Ausgangslage, Ziele, Strukturen, Lösungsbausteine und nächste Schritte
+          </small>
+        </button>
+        <button onClick={() => print("internal")}>
+          <span>PDF+</span>
+          <strong>Interne Arbeitsunterlage</strong>
+          <small>
+            zusätzlich Datenstände, Warnungen, Produkte und Prüfpunkte
+          </small>
+        </button>
+        <button onClick={exportExcel}>
+          <span>XLSX</span>
+          <strong>Excel-Arbeitsmappe</strong>
+          <small>
+            separate Blätter für Bedarfe, Pläne, Anlageklassen, Depot und VV
+          </small>
+        </button>
+        <button onClick={exportJson}>
+          <span>JSON</span>
+          <strong>Vollständige Sicherung</strong>
+          <small>kann anschließend wieder importiert werden</small>
+        </button>
+        <button onClick={importJson}>
+          <span>↥</span>
+          <strong>JSON importieren</strong>
+          <small>legt einen eigenständigen neuen Testfall an</small>
+        </button>
+      </div>
+      <CustomerChecklistEditor
+        item={item}
+        setItem={setItem}
+        title="Kunden-Checkliste für den Abschluss"
+      />
+      {item.versions.length > 0 && (
+        <section className="panel version-history no-print">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">VERSIONEN</p>
+              <h2>Unveränderliche Zwischenstände</h2>
+            </div>
+            <span>{item.versions.length} gespeichert</span>
+          </div>
+          <div>
+            {[...item.versions].reverse().map((version) => (
+              <article key={version.id}>
+                <div>
+                  <strong>{version.label}</strong>
+                  <small>
+                    {version.snapshot.plans.length} Planungen · bevorzugt:{" "}
+                    {version.snapshot.plans.find((plan) => plan.preferred)
+                      ?.name || "–"}
+                  </small>
+                </div>
+                <button
+                  className="secondary"
+                  onClick={() => restoreVersion(version.id)}
+                >
+                  Wiederherstellen
+                </button>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+      <article className="print-document">
+        <header>
+          <div>
+            <span className="brand-placeholder" aria-label="Logoplatzhalter">
+              Logo
+            </span>
+            <div>
+              <strong>VermögensNavigator</strong>
+              <small>
+                Strukturübersicht ·{" "}
+                {new Intl.DateTimeFormat("de-DE").format(new Date())}
+              </small>
+            </div>
+          </div>
+          <em>{item.status}</em>
+        </header>
+        <section className="print-title">
+          <p className="eyebrow">BERATUNGSFALL</p>
+          <h1>{item.advisory.caseName || "Unbenannter Testfall"}</h1>
+          <p>
+            {scopeLabel(item.advisory.scope)} · Ziel: {item.advisory.goal} ·
+            Risikostufe {item.advisory.risk}/5
+          </p>
+          <p className="print-advisor">
+            Verantwortlich: {advisor.name}, {advisor.title}
+          </p>
+        </section>
+        <div className="print-metrics">
+          <div>
+            <span>Liquidität</span>
+            <strong>{euro.format(item.advisory.liquidAssets)}</strong>
+          </div>
+          <div>
+            <span>Reserve</span>
+            <strong>{euro.format(item.advisory.reserve)}</strong>
+          </div>
+          <div>
+            <span>Depot</span>
+            <strong>{euro.format(item.advisory.depotValue)}</strong>
+          </div>
+          <div>
+            <span>Plan</span>
+            <strong>{preferredPlan.name}</strong>
+          </div>
+        </div>
+        <section className="print-overview">
+          <h2>Ziele und Gesprächsrahmen</h2>
+          <div>
+            <p>
+              <span>Hauptziel</span>
+              <strong>{item.advisory.goal}</strong>
+            </p>
+            <p>
+              <span>Anlagehorizont</span>
+              <strong>{item.advisory.horizon} Jahre</strong>
+            </p>
+            <p>
+              <span>Kenntnisse</span>
+              <strong>{item.advisory.experience}</strong>
+            </p>
+            <p>
+              <span>Prioritäten</span>
+              <strong>
+                {item.advisory.priorities.join(", ") || "Nicht festgehalten"}
+              </strong>
+            </p>
+          </div>
+        </section>
+        {item.advisory.needs.length > 0 && (
+          <section>
+            <h2>Konkrete Kapitalbedarfe</h2>
+            <div className="print-table print-needs">
+              <div>
+                <strong>Zweck</strong>
+                <strong>Termin</strong>
+                <strong>Betrag</strong>
+              </div>
+              {item.advisory.needs.map((need) => (
+                <div key={need.id}>
+                  <span>{need.purpose || "Nicht bezeichnet"}</span>
+                  <span>
+                    {need.dueDate
+                      ? new Intl.DateTimeFormat("de-DE").format(
+                          new Date(`${need.dueDate}T12:00:00`),
+                        )
+                      : `in ${need.years} Jahren`}
+                  </span>
+                  <b>{euro.format(need.amount)}</b>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+        <section>
+          <h2>Kapitalbedarfe und Laufzeiten</h2>
+          <div className="print-table">
+            <div>
+              <strong>Laufzeitband</strong>
+              <strong>Zeitraum</strong>
+              <strong>Betrag</strong>
+            </div>
+            {maturityBuckets.map((bucket) => (
+              <div key={bucket.id}>
+                <span>{bucket.label}</span>
+                <span>{bucket.range}</span>
+                <b>{euro.format(targets[bucket.id])}</b>
+              </div>
+            ))}
+          </div>
+        </section>
+        <section>
+          <h2>Vermögensstruktur der bevorzugten Planung</h2>
+          <div className="print-table">
+            <div>
+              <strong>Anlageklasse</strong>
+              <strong>Betrag</strong>
+              <strong>Anteil</strong>
+            </div>
+            {assetClasses.map((name) => (
+              <div key={name}>
+                <span>{name}</span>
+                <span>{euro.format(breakdown.amounts[name])}</span>
+                <b>
+                  {percent.format(
+                    breakdown.total
+                      ? (breakdown.amounts[name] / breakdown.total) * 100
+                      : 0,
+                  )}{" "}
+                  %
+                </b>
+              </div>
+            ))}
+            <div>
+              <span>Nicht durchgeschaut</span>
+              <span>{euro.format(breakdown.unresolved)}</span>
+              <b>
+                {percent.format(
+                  breakdown.total
+                    ? (breakdown.unresolved / breakdown.total) * 100
+                    : 0,
+                )}{" "}
+                %
+              </b>
+            </div>
+          </div>
+        </section>
+        <section>
+          <h2>Lösungsbausteine der bevorzugten Planung</h2>
+          <div className="print-table product-print">
+            <div>
+              <strong>Produkt</strong>
+              <strong>Laufzeitband</strong>
+              <strong>Betrag</strong>
+            </div>
+            {preferredPlan.allocations.map((entry) => (
+              <div key={entry.id}>
+                <span>{entry.productName}</span>
+                <span>
+                  {maturityBuckets
+                    .filter(
+                      (bucket) =>
+                        allocationAmountInBucket(entry, bucket.id) > 0,
+                    )
+                    .map((bucket) => bucket.label)
+                    .join(" / ") || "nicht zugeordnet"}
+                </span>
+                <b>{euro.format(entry.amount)}</b>
+              </div>
+            ))}
+          </div>
+        </section>
+        {item.advisory.modules.length > 0 && (
+          <section>
+            <h2>Besprochene Vertiefungen</h2>
+            <div className="print-module-list">
+              {item.advisory.modules.map((moduleId) => {
+                const moduleConfig = modules.find(
+                  (entry) => entry.id === moduleId,
+                );
+                const state =
+                  item.moduleStates[moduleId] || blankModuleState();
+                return (
+                  <span key={moduleId}>
+                    <strong>{moduleConfig?.title || moduleId}</strong>
+                    <small>{moduleStatusLabel(state.status)}</small>
+                  </span>
+                );
+              })}
+            </div>
+          </section>
+        )}
+        <section className="print-customer-checklist">
+          <h2>Nächste Schritte für den Kunden</h2>
+          {item.customerChecklist.length === 0 ? (
+            <p>Es wurden keine offenen nächsten Schritte festgehalten.</p>
+          ) : (
+            <div>
+              {item.customerChecklist.map((entry) => (
+                <p key={entry.id} className={entry.done ? "done" : ""}>
+                  <span aria-hidden="true">{entry.done ? "☑" : "☐"}</span>
+                  <span>
+                    <strong>{entry.text}</strong>
+                    <small>
+                      {entry.category}
+                      {entry.moduleId
+                        ? ` · ${
+                            modules.find(
+                              (module) => module.id === entry.moduleId,
+                            )?.title || "Fachmodul"
+                          }`
+                        : ""}
+                    </small>
+                  </span>
+                </p>
+              ))}
+            </div>
+          )}
+        </section>
+        <section className="internal-only">
+          <h2>Datenstände</h2>
+          <div className="data-state-list">
+            {dataSources.map((source) => (
+              <span key={source.title}>
+                {source.title}
+                <b>{source.date}</b>
+              </span>
+            ))}
+          </div>
+        </section>
+        <section className="internal-only">
+          <h2>Fachmodule</h2>
+          <div className="print-table">
+            <div>
+              <strong>Vertiefung</strong>
+              <strong>Status</strong>
+              <strong>Notiz</strong>
+            </div>
+            {item.advisory.modules.map((moduleId) => {
+              const moduleConfig = modules.find((entry) => entry.id === moduleId);
+              const state = item.moduleStates[moduleId] || blankModuleState();
+              return (
+                <div key={moduleId}>
+                  <span>{moduleConfig?.title || moduleId}</span>
+                  <span>
+                    {state.status === "complete"
+                      ? "Vollständig"
+                      : state.status === "in_progress"
+                        ? "In Bearbeitung"
+                        : "Nicht begonnen"}
+                  </span>
+                  <b>{state.notes || "–"}</b>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+        <footer>
+          <p>
+            Orientierungs- und Arbeitsunterlage. Keine Anlage-, Rechts- oder
+            Steuerberatung. Produktdetails, Eignung, Kosten, Steuern und
+            aktuelle Freigaben sind vor einer Umsetzung vollständig zu prüfen.
+          </p>
+        </footer>
+      </article>
+    </div>
+  );
+}

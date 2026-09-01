@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": ["node", "react", "react-dom"]
+  },
+  "include": [
+    "github-entry.tsx",
+    "app/page.tsx",
+    "app/case-model.ts",
+    "app/investment-data.ts",
+    "app/navigator-config.ts"
+  ]
+}
