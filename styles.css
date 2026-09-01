@@ -2700,6 +2700,528 @@ h4 {
   }
 }
 
+/* V0.9 - fallbezogene Kunden-Checkliste, Benutzerwahl und CD-Konsolidierung */
+:root {
+  --ink: #002d67;
+  --muted: #5e6f83;
+  --line: #dbe5ef;
+  --paper: #ffffff;
+  --canvas: #f5f8fb;
+  --navy: #002d67;
+  --navy-2: #0066b3;
+  --cyan: #ff6600;
+  --teal: #006e73;
+  --gold: #ff6600;
+  --green: #006e73;
+  --warn: #a20032;
+  --blue-a: #327dc8;
+  --blue-b: #649bd7;
+  --blue-c: #96bee6;
+  --blue-d: #e1ebf5;
+}
+
+body,
+button,
+input,
+select,
+textarea {
+  font-family: "GenosGFG", Arial, Helvetica, sans-serif;
+}
+
+strong,
+b,
+input[inputmode="numeric"],
+.result-metrics,
+.planner-summary,
+.print-metrics,
+.print-table,
+.comparison-table,
+.maturity-summary,
+.bucket-preview {
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.primary {
+  border-color: var(--navy-2);
+  background: var(--navy-2);
+  box-shadow: 0 6px 14px rgba(0, 45, 103, 0.16);
+}
+
+.primary:hover {
+  border-color: var(--navy);
+  background: var(--navy);
+}
+
+.secondary {
+  border-color: var(--blue-c);
+  color: var(--navy);
+}
+
+.secondary:hover {
+  border-color: var(--navy-2);
+}
+
+.metric-icon,
+.metric-icon.blue {
+  color: var(--navy-2);
+  background: var(--blue-d);
+}
+
+.metric-icon.gold {
+  color: #ffffff;
+  background: var(--cyan);
+}
+
+.profile-selector {
+  position: relative;
+}
+
+.profile-button {
+  cursor: pointer;
+}
+
+.profile-button > i {
+  color: var(--navy-2);
+  font-size: 14px;
+  font-style: normal;
+  margin-left: 3px;
+}
+
+.profile-menu {
+  position: absolute;
+  top: calc(100% + 14px);
+  right: 0;
+  z-index: 120;
+  width: min(390px, calc(100vw - 32px));
+  overflow: hidden;
+  border: 1px solid var(--blue-c);
+  border-top: 4px solid var(--cyan);
+  background: #ffffff;
+  box-shadow: 0 20px 55px rgba(0, 45, 103, 0.2);
+}
+
+.profile-menu > p {
+  margin: 0;
+  padding: 13px 15px 10px;
+  color: var(--navy);
+  background: var(--blue-d);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.profile-menu > button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 36px 1fr 22px;
+  align-items: center;
+  gap: 11px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: #ffffff;
+  padding: 11px 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.profile-menu > button:hover,
+.profile-menu > button.active {
+  background: var(--blue-d);
+}
+
+.profile-menu > button > span:first-child {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  color: #ffffff;
+  background: var(--navy-2);
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.profile-menu strong,
+.profile-menu small {
+  display: block;
+}
+
+.profile-menu strong {
+  color: var(--navy);
+  font-size: 13px;
+}
+
+.profile-menu small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.profile-menu i {
+  color: var(--teal);
+  font-style: normal;
+  font-weight: 800;
+}
+
+.customer-checklist {
+  margin-top: 20px;
+  border: 1px solid var(--blue-c);
+  border-left: 6px solid var(--cyan);
+  background: #ffffff;
+  padding: 20px;
+}
+
+.export-view > .customer-checklist {
+  max-width: 980px;
+  margin: 0 auto 16px;
+}
+
+.customer-checklist-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.customer-checklist-head h3 {
+  margin: 0 0 5px;
+  color: var(--navy);
+  font-size: 20px;
+}
+
+.customer-checklist-head p:not(.eyebrow) {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.customer-checklist-head > span {
+  flex: 0 0 auto;
+  color: var(--navy);
+  background: var(--blue-d);
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.customer-checklist-add {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr) auto;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.customer-checklist-add select,
+.customer-checklist-add input {
+  min-width: 0;
+  border: 1px solid var(--blue-c);
+  background: #ffffff;
+  color: var(--ink);
+  padding: 11px 12px;
+  font-size: 13px;
+}
+
+.customer-checklist-empty {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.customer-checklist-list {
+  display: grid;
+  gap: 7px;
+  margin-top: 14px;
+}
+
+.customer-checklist-list > label {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 11px;
+  border-top: 1px solid var(--line);
+  padding: 10px 4px;
+}
+
+.customer-checklist-list input {
+  accent-color: var(--teal);
+}
+
+.customer-checklist-list strong,
+.customer-checklist-list small {
+  display: block;
+}
+
+.customer-checklist-list strong {
+  color: var(--navy);
+  font-size: 13px;
+}
+
+.customer-checklist-list small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.customer-checklist-list label.done strong {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.customer-checklist-list button {
+  border: 0;
+  background: transparent;
+  color: var(--warn);
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.module-customer-item {
+  margin-top: 15px;
+  border: 1px solid var(--blue-c);
+  border-left: 5px solid var(--cyan);
+  background: var(--blue-d);
+  padding: 13px;
+}
+
+.module-customer-item > div:first-child > span,
+.module-customer-item > div:first-child > small {
+  display: block;
+}
+
+.module-customer-item > div:first-child > span {
+  color: var(--navy);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.module-customer-item > div:first-child > small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.module-customer-add {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr) auto;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.module-customer-add select,
+.module-customer-add input {
+  min-width: 0;
+  border: 1px solid var(--blue-c);
+  background: #ffffff;
+  color: var(--ink);
+  padding: 9px 10px;
+  font-size: 12px;
+}
+
+.module-customer-add button {
+  padding: 9px 12px;
+  font-size: 12px;
+}
+
+.module-customer-item > ul {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.module-customer-item > ul li {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  gap: 7px;
+  color: var(--teal);
+  font-size: 11px;
+}
+
+.module-customer-item > ul strong,
+.module-customer-item > ul small {
+  display: block;
+}
+
+.module-customer-item > ul strong {
+  color: var(--navy);
+  font-size: 12px;
+}
+
+.module-customer-item > ul small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.print-document {
+  position: relative;
+  overflow: hidden;
+}
+
+.print-document::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -2%;
+  width: 104%;
+  height: 8px;
+  background: var(--cyan);
+  transform: rotate(-0.5deg);
+  transform-origin: left center;
+}
+
+.print-advisor {
+  margin-top: 7px !important;
+  color: var(--navy-2) !important;
+  font-weight: 700;
+}
+
+.print-overview > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.print-overview p {
+  margin: 0;
+  border-left: 3px solid var(--blue-b);
+  background: var(--blue-d);
+  padding: 9px 11px;
+}
+
+.print-overview span,
+.print-overview strong {
+  display: block;
+}
+
+.print-overview span {
+  color: var(--muted);
+  font-size: 8px;
+  text-transform: uppercase;
+}
+
+.print-overview strong {
+  margin-top: 3px;
+  color: var(--navy);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.print-module-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.print-module-list > span {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--line);
+  padding: 8px 10px;
+}
+
+.print-module-list strong {
+  color: var(--navy);
+  font-size: 9px;
+}
+
+.print-module-list small {
+  color: var(--teal);
+  font-size: 8px;
+}
+
+.print-customer-checklist > p,
+.print-customer-checklist > div > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.print-customer-checklist > div {
+  display: grid;
+  gap: 5px;
+}
+
+.print-customer-checklist > div > p {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  gap: 7px;
+  border: 1px solid var(--line);
+  padding: 8px 10px;
+}
+
+.print-customer-checklist > div > p > span:first-child {
+  color: var(--teal);
+  font-size: 13px;
+}
+
+.print-customer-checklist strong,
+.print-customer-checklist small {
+  display: block;
+}
+
+.print-customer-checklist strong {
+  color: var(--navy);
+  font-size: 9px;
+}
+
+.print-customer-checklist small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.print-customer-checklist p.done strong {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 13mm;
+  }
+
+  body[data-print-mode] .print-document {
+    overflow: visible;
+  }
+
+  .print-document > header,
+  .print-title,
+  .print-metrics,
+  .print-document > section,
+  .print-table > div,
+  .print-customer-checklist > div > p {
+    break-inside: avoid;
+  }
+
+  .print-document section > h2 {
+    break-after: avoid;
+  }
+}
+
+@media (max-width: 760px) {
+  .profile-button > span:nth-child(2) {
+    display: none;
+  }
+
+  .customer-checklist-add,
+  .module-customer-add {
+    grid-template-columns: 1fr;
+  }
+
+  .customer-checklist-head {
+    flex-direction: column;
+  }
+
+  .print-overview > div,
+  .print-module-list {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* V0.8 - verknuepfte Planungsbasis, Fachmodule, Depotebene und Corporate Design */
 .eyebrow {
   color: var(--navy-2);
