@@ -5546,6 +5546,14 @@ body[data-print-mode="customer"] .internal-only {
   text-align: left;
   transition: transform 160ms ease, box-shadow 160ms ease;
 }
+.wealth-house > div.house-pillars {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(145px, 1fr));
+  align-items: stretch;
+  gap: 8px;
+  border-left: 0;
+  padding: 10px 12px 12px;
+}
 .wealth-house > .house-pillars > button:hover,
 .wealth-house > .house-pillars > button.active {
   transform: translateY(-3px);
