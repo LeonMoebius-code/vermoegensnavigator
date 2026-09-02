@@ -35,11 +35,12 @@ import {
 import {
   AdvisoryCase,
   AdvisorId,
-  allocationAmountInBucket,
-  allocationBucketAmounts,
-  allocationCoverageTotal,
+  allocationAmountInCapitalPot,
+  allocationCapitalCoverageTotal,
+  allocationCapitalPotAmounts,
   bucketForMonths,
-  bucketTargets,
+  CapitalPotId,
+  capitalPots,
   caseSnapshot,
   customerChecklistCategories,
   CustomerChecklistCategory,
@@ -54,6 +55,8 @@ import {
   planAssetAmounts,
   PlannerAllocation,
   InvestmentPlan,
+  legacyBucketAmountsForCapitalPots,
+  planningShortfall,
   strategicAmount,
   StructurePlan,
   VvFilters,
@@ -62,6 +65,15 @@ import {
 import { DepotCsvResult, parseDepotCsv } from "./depot-csv";
 
 type View = "home" | "cases" | "wizard" | "planner" | "depot" | "export";
+
+const germanDate = (value?: string) =>
+  value
+    ? new Intl.DateTimeFormat("de-DE", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      }).format(new Date(`${value}T12:00:00`))
+    : "";
 
 const steps = [
   ["Vermögensart", "Privat, betrieblich oder beides"],
@@ -1243,6 +1255,7 @@ function WizardView({
           {step === 3 && (
             <NeedsStep
               data={data}
+              referenceDate={item.createdAt}
               update={updateData}
               addNeed={addNeed}
               updateNeed={updateNeed}
@@ -1697,11 +1710,13 @@ function SituationStep({
 
 function NeedsStep({
   data,
+  referenceDate,
   update,
   addNeed,
   updateNeed,
 }: {
   data: AdvisoryData;
+  referenceDate: string;
   update: <K extends keyof AdvisoryData>(
     key: K,
     value: AdvisoryData[K],
@@ -1712,7 +1727,7 @@ function NeedsStep({
     changes: Partial<AdvisoryData["needs"][number]>,
   ) => void;
 }) {
-  const targets = bucketTargets(data, data.liquidAssets);
+  const pots = capitalPots(data, data.liquidAssets, referenceDate);
   const total = data.needs.reduce((sum, need) => sum + need.amount, 0);
   return (
     <>
@@ -1795,12 +1810,11 @@ function NeedsStep({
                 />
               </label>
               <span className="derived-bucket">
-                {
-                  maturityBuckets.find(
-                    (bucket) =>
-                      bucket.id === bucketForMonths(monthsUntilNeed(need)),
-                  )?.label
-                }
+                {need.dueDate
+                  ? `Bedarfsjahr ${need.dueDate.slice(0, 4)}`
+                  : `Zieljahr ${pots.find((pot) =>
+                      pot.needs.some((entry) => entry.id === need.id),
+                    )?.year}`}
               </span>
               <button
                 className="delete-button"
@@ -1817,12 +1831,12 @@ function NeedsStep({
           ))}
         </div>
       )}
-      <div className="bucket-preview six">
-        {maturityBuckets.map((bucket) => (
-          <article key={bucket.id}>
-            <span>{bucket.label}</span>
-            <strong>{euro.format(targets[bucket.id])}</strong>
-            <small>{bucket.range}</small>
+      <div className="bucket-preview dynamic-pots">
+        {pots.map((pot) => (
+          <article key={pot.id}>
+            <span>{pot.label}</span>
+            <strong>{euro.format(pot.total)}</strong>
+            <small>{pot.range}</small>
           </article>
         ))}
       </div>
@@ -2439,7 +2453,11 @@ function ResultStep({
 }) {
   const data = item.advisory;
   const plan = item.plans.find((entry) => entry.preferred) ?? item.plans[0];
-  const targets = bucketTargets(data, plan?.total ?? data.liquidAssets);
+  const resultPots = capitalPots(
+    data,
+    plan?.total ?? data.liquidAssets,
+    item.createdAt,
+  );
   const totalFixed =
     data.reserve + data.needs.reduce((sum, need) => sum + need.amount, 0);
   const warning = totalFixed > data.liquidAssets;
@@ -2508,16 +2526,16 @@ function ResultStep({
         <div className="result-section-head">
           <div>
             <span>02</span>
-            <h3>Einheitliche Laufzeitenstruktur</h3>
+            <h3>Zeitstruktur der Kapitalbedarfe</h3>
           </div>
           <small>identisch in Planung und Export</small>
         </div>
-        <div className="maturity-summary">
-          {maturityBuckets.map((bucket) => (
-            <article key={bucket.id}>
-              <span>{bucket.label}</span>
-              <strong>{euro.format(targets[bucket.id])}</strong>
-              <small>{bucket.range}</small>
+        <div className="maturity-summary dynamic-pots">
+          {resultPots.map((pot) => (
+            <article key={pot.id}>
+              <span>{pot.label}</span>
+              <strong>{euro.format(pot.total)}</strong>
+              <small>{pot.range}</small>
             </article>
           ))}
         </div>
@@ -2605,7 +2623,9 @@ function PlannerView({
     "all" | "products" | "vv" | "models"
   >("all");
   const [maxRisk, setMaxRisk] = useState(Math.max(2, item.advisory.risk));
-  const [quickBucket, setQuickBucket] = useState("year10plus");
+  const [quickBucket, setQuickBucket] = useState<CapitalPotId>("strategic");
+  const [selectedCapitalPot, setSelectedCapitalPot] =
+    useState<CapitalPotId>("strategic");
   const [showDepotPanel, setShowDepotPanel] = useState(false);
   const [modelDialog, setModelDialog] = useState<{
     id: "rb2" | "rb3" | "rb4";
@@ -2613,19 +2633,45 @@ function PlannerView({
   } | null>(null);
   const plan =
     item.plans.find((entry) => entry.id === item.activePlanId) ?? item.plans[0];
-  const targets = bucketTargets(item.advisory, plan.total);
+  const visibleCapitalPots = capitalPots(
+    item.advisory,
+    plan.total,
+    item.createdAt,
+  );
+  const capitalPotTargets = Object.fromEntries(
+    visibleCapitalPots.map((pot) => [pot.id, pot.total]),
+  ) as Partial<Record<CapitalPotId, number>>;
+  const shortfall = planningShortfall(item.advisory, plan.total);
+  const fallbackCapitalPot =
+    visibleCapitalPots.find((pot) => pot.id === "strategic") ||
+    visibleCapitalPots[0];
+  const selectedPot =
+    visibleCapitalPots.find((pot) => pot.id === selectedCapitalPot) ||
+    fallbackCapitalPot;
+  useEffect(() => {
+    if (!fallbackCapitalPot) return;
+    if (!visibleCapitalPots.some((pot) => pot.id === quickBucket))
+      setQuickBucket(fallbackCapitalPot.id);
+    if (!visibleCapitalPots.some((pot) => pot.id === selectedCapitalPot))
+      setSelectedCapitalPot(fallbackCapitalPot.id);
+  }, [
+    fallbackCapitalPot?.id,
+    quickBucket,
+    selectedCapitalPot,
+    visibleCapitalPots,
+  ]);
   const assigned = plan.allocations.reduce(
     (sum, allocation) => sum + allocation.amount,
     0,
   );
   const covered = plan.allocations.reduce(
-    (sum, allocation) => sum + allocationCoverageTotal(allocation),
+    (sum, allocation) => sum + allocationCapitalCoverageTotal(allocation),
     0,
   );
   const unassignedCoverage = plan.allocations.reduce(
     (sum, allocation) =>
       sum +
-      Math.max(0, allocation.amount - allocationCoverageTotal(allocation)),
+      Math.max(0, allocation.amount - allocationCapitalCoverageTotal(allocation)),
     0,
   );
   const selectedDepotIds = new Set(
@@ -2661,34 +2707,35 @@ function PlannerView({
     });
   const coverageWithout = (excludedId?: string) =>
     Object.fromEntries(
-      maturityBuckets.map((bucket) => [
-        bucket.id,
+      visibleCapitalPots.map((pot) => [
+        pot.id,
         plan.allocations
           .filter((allocation) => allocation.id !== excludedId)
           .reduce(
             (sum, allocation) =>
-              sum + allocationAmountInBucket(allocation, bucket.id),
+              sum + allocationAmountInCapitalPot(allocation, pot.id),
             0,
           ),
       ]),
-    ) as Record<(typeof maturityBuckets)[number]["id"], number>;
+    ) as Partial<Record<CapitalPotId, number>>;
   const overflowCoverage = (
     amount: number,
-    startBucket: (typeof maturityBuckets)[number]["id"],
+    startBucket: CapitalPotId,
     excludedId?: string,
   ) => {
-    const result: Partial<
-      Record<(typeof maturityBuckets)[number]["id"], number>
-    > = {};
+    const result: Partial<Record<CapitalPotId, number>> = {};
     const used = coverageWithout(excludedId);
     let remaining = amount;
-    const start = maturityBuckets.findIndex(
-      (bucket) => bucket.id === startBucket,
+    const start = visibleCapitalPots.findIndex(
+      (pot) => pot.id === startBucket,
     );
-    for (const bucket of maturityBuckets.slice(Math.max(0, start))) {
-      const open = Math.max(0, targets[bucket.id] - used[bucket.id]);
+    for (const pot of visibleCapitalPots.slice(Math.max(0, start))) {
+      const open = Math.max(
+        0,
+        pot.total - (Number(used[pot.id]) || 0),
+      );
       const share = Math.min(remaining, open);
-      if (share > 0) result[bucket.id] = share;
+      if (share > 0) result[pot.id] = share;
       remaining -= share;
       if (remaining <= 0) break;
     }
@@ -2700,57 +2747,88 @@ function PlannerView({
         entry.id === id ? { ...entry, ...changes } : entry,
       ),
     });
+  const allocationPotChanges = (
+    capitalPotAmounts: Partial<Record<CapitalPotId, number>>,
+  ): Partial<PlannerAllocation> => ({
+    capitalPotAmounts,
+    bucketAmounts: legacyBucketAmountsForCapitalPots(
+      visibleCapitalPots,
+      capitalPotAmounts,
+    ),
+    capitalPotReviewAmount: undefined,
+    capitalPotReviewNote: undefined,
+  });
   const updateAllocationAmount = (
     allocation: PlannerAllocation,
     amount: number,
-  ) =>
+  ) => {
+    const capitalPotAmounts =
+        allocation.allocationMode === "overflow"
+          ? overflowCoverage(
+              amount,
+              allocation.capitalPotId || fallbackCapitalPot?.id || "strategic",
+              allocation.id,
+            )
+          : allocation.allocationMode === "manual"
+            ? allocationCapitalPotAmounts(allocation)
+            : {
+                [allocation.capitalPotId || fallbackCapitalPot?.id || "strategic"]:
+                  amount,
+              };
     updateAllocation(allocation.id, {
       amount,
-      bucketAmounts:
-        allocation.allocationMode === "overflow"
-          ? overflowCoverage(amount, allocation.bucketId, allocation.id)
-          : allocation.allocationMode === "manual"
-            ? allocation.bucketAmounts
-            : { [allocation.bucketId]: amount },
+      ...allocationPotChanges(capitalPotAmounts),
     });
+  };
   const updateAllocationMode = (
     allocation: PlannerAllocation,
     allocationMode: "single" | "overflow" | "manual",
-  ) =>
-    updateAllocation(allocation.id, {
-      allocationMode,
-      bucketAmounts:
+  ) => {
+    const capitalPotAmounts =
         allocationMode === "overflow"
           ? overflowCoverage(
               allocation.amount,
-              allocation.bucketId,
+              allocation.capitalPotId || fallbackCapitalPot?.id || "strategic",
               allocation.id,
             )
           : allocationMode === "single"
-            ? { [allocation.bucketId]: allocation.amount }
-            : allocationBucketAmounts(allocation),
+            ? {
+                [allocation.capitalPotId || fallbackCapitalPot?.id || "strategic"]:
+                  allocation.amount,
+              }
+            : allocationCapitalPotAmounts(allocation);
+    updateAllocation(allocation.id, {
+      allocationMode,
+      ...allocationPotChanges(capitalPotAmounts),
     });
+  };
   const updateManualBucket = (
     allocation: PlannerAllocation,
-    bucketId: (typeof maturityBuckets)[number]["id"],
+    capitalPotId: CapitalPotId,
     amount: number,
-  ) =>
+  ) => {
+    const capitalPotAmounts = {
+      ...allocationCapitalPotAmounts(allocation),
+      [capitalPotId]: amount,
+    };
     updateAllocation(allocation.id, {
       allocationMode: "manual",
-      bucketAmounts: {
-        ...allocationBucketAmounts(allocation),
-        [bucketId]: amount,
-      },
+      ...allocationPotChanges(capitalPotAmounts),
     });
+  };
   const addProduct = (
     productId: string,
-    bucketId = quickBucket,
+    capitalPotId: CapitalPotId = quickBucket,
     source?: PlannerAllocation["source"],
     amount = 0,
   ) => {
     const product = houseProducts.find((entry) => entry.id === productId);
     const vv = managedPortfolios.find((entry) => entry.id === productId);
     if (!product && !vv) return;
+    const pot =
+      visibleCapitalPots.find((entry) => entry.id === capitalPotId) ||
+      fallbackCapitalPot;
+    if (!pot) return;
     updatePlan({
       allocations: [
         ...plan.allocations,
@@ -2758,12 +2836,14 @@ function PlannerView({
           id: uid("allocation"),
           productId,
           productName: product?.name || vv!.name,
-          bucketId: bucketId as PlannerAllocation["bucketId"],
+          bucketId: pot.legacyBucketId,
+          capitalPotId: pot.id,
           amount,
           solutionId: product?.solutionId || "mixed",
           source: source ?? (vv ? "vv" : "product"),
           allocationMode: "single",
-          bucketAmounts: { [bucketId]: amount },
+          bucketAmounts: { [pot.legacyBucketId]: amount },
+          capitalPotAmounts: { [pot.id]: amount },
         },
       ],
     });
@@ -2807,13 +2887,19 @@ function PlannerView({
   };
   const addInvestmentPlan = (type: InvestmentPlan["type"] = "phased") => {
     const allocation = plan.allocations[0];
+    const capitalPotId =
+      allocation?.capitalPotId || fallbackCapitalPot?.id || "strategic";
+    const investmentPot = visibleCapitalPots.find(
+      (pot) => pot.id === capitalPotId,
+    );
     const next: InvestmentPlan = {
       id: uid("investment"),
       name: type === "savings" ? "Neuer Sparplan" : "Gestaffelte Investition",
       type,
       productId: allocation?.productId || "",
       productName: allocation?.productName || "",
-      bucketId: allocation?.bucketId || "year10plus",
+      bucketId: investmentPot?.legacyBucketId || allocation?.bucketId || "year10plus",
+      capitalPotId,
       installmentAmount: 0,
       installments: type === "savings" ? 12 : 3,
       frequency: "monthly",
@@ -2842,6 +2928,10 @@ function PlannerView({
     if (!modelDialog) return;
     const model = modelPortfolios.find((entry) => entry.id === modelDialog.id);
     if (!model) return;
+    const modelPot =
+      visibleCapitalPots.find((pot) => pot.id === "strategic") ||
+      fallbackCapitalPot;
+    if (!modelPot) return;
     const modelAllocations: PlannerAllocation[] = model.holdings.map(
       (holding) => {
         const amount = Math.round((modelDialog.amount * holding.weight) / 100);
@@ -2849,7 +2939,8 @@ function PlannerView({
           id: uid("allocation"),
           productId: holding.productId,
           productName: holding.name,
-          bucketId: "year10plus",
+          bucketId: modelPot.legacyBucketId,
+          capitalPotId: modelPot.id,
           amount,
           solutionId:
             houseProducts.find((entry) => entry.id === holding.productId)
@@ -2857,7 +2948,8 @@ function PlannerView({
           source: "model",
           modelId: model.id,
           allocationMode: "single",
-          bucketAmounts: { year10plus: amount },
+          bucketAmounts: { [modelPot.legacyBucketId]: amount },
+          capitalPotAmounts: { [modelPot.id]: amount },
         };
       },
     );
@@ -2866,7 +2958,7 @@ function PlannerView({
       next.id = uid("plan");
       next.name = `${model.name} – strategische Variante`;
       next.allocations = [
-        ...next.allocations.filter((entry) => entry.bucketId !== "year10plus"),
+        ...next.allocations.filter((entry) => entry.capitalPotId !== modelPot.id),
         ...modelAllocations,
       ];
       next.modelId = model.id;
@@ -2953,6 +3045,46 @@ function PlannerView({
         ?.assetMix &&
       !managedPortfolios.find((vv) => vv.id === allocation.productId)?.assetMix,
   );
+  const coverageByCapitalPot = Object.fromEntries(
+    visibleCapitalPots.map((pot) => [
+      pot.id,
+      plan.allocations.reduce(
+        (sum, allocation) =>
+          sum + allocationAmountInCapitalPot(allocation, pot.id),
+        0,
+      ),
+    ]),
+  ) as Partial<Record<CapitalPotId, number>>;
+  const allocationsForSelectedPot = selectedPot
+    ? plan.allocations.filter(
+        (allocation) =>
+          allocation.capitalPotId === selectedPot.id ||
+          allocationAmountInCapitalPot(allocation, selectedPot.id) > 0,
+      )
+    : [];
+  const selectedPotCoverage = selectedPot
+    ? Number(coverageByCapitalPot[selectedPot.id]) || 0
+    : 0;
+  const selectedPotPlan: StructurePlan | null = selectedPot
+    ? {
+        ...plan,
+        id: `${plan.id}-${selectedPot.id}`,
+        name: `${plan.name} · ${selectedPot.label}`,
+        total: selectedPotCoverage,
+        depotMode: "none",
+        depotHoldingIds: [],
+        allocations: allocationsForSelectedPot
+          .map((allocation) => ({
+            ...allocation,
+            amount: allocationAmountInCapitalPot(allocation, selectedPot.id),
+          }))
+          .filter((allocation) => allocation.amount > 0),
+      }
+    : null;
+  const migrationReviewAmount = plan.allocations.reduce(
+    (sum, allocation) => sum + (Number(allocation.capitalPotReviewAmount) || 0),
+    0,
+  );
 
   return (
     <div className="tool-view planner-view">
@@ -2964,9 +3096,9 @@ function PlannerView({
           <p className="eyebrow">DURCHGÄNGIGE PLANUNG</p>
           <h1>Strukturplanung</h1>
           <p>
-            Kapitaltöpfe sind die führende Laufzeitsebene. Modellportfolios und
-            Vermögensverwaltungen sind Werkzeuge, die eine konkrete Planvariante
-            befüllen.
+            Reserve, konkrete Bedarfsjahre und strategisch verfügbares Kapital
+            bilden die Zeitstruktur. Modellportfolios und Vermögensverwaltungen
+            befüllen die gewählte Planvariante.
           </p>
         </div>
         <div className="tool-head-actions">
@@ -3236,10 +3368,13 @@ function PlannerView({
               <span>Kapitaltöpfe</span>
               <strong>
                 {euro.format(
-                  Object.values(targets).reduce((sum, value) => sum + value, 0),
+                  Object.values(capitalPotTargets).reduce<number>(
+                    (sum, value) => sum + (Number(value) || 0),
+                    0,
+                  ),
                 )}
               </strong>
-              <small>Reserve, Bedarfe und strategisches Kapital</small>
+              <small>Reserve, Bedarfsjahre und strategisches Kapital</small>
             </article>
             <article className={assigned > plan.total ? "negative" : ""}>
               <span>Produkten zugeordnet</span>
@@ -3311,11 +3446,13 @@ function PlannerView({
                 <span>Zuordnung</span>
                 <select
                   value={quickBucket}
-                  onChange={(event) => setQuickBucket(event.target.value)}
+                  onChange={(event) =>
+                    setQuickBucket(event.target.value as CapitalPotId)
+                  }
                 >
-                  {maturityBuckets.map((bucket) => (
-                    <option key={bucket.id} value={bucket.id}>
-                      {bucket.label}
+                  {visibleCapitalPots.map((pot) => (
+                    <option key={pot.id} value={pot.id}>
+                      {pot.label}
                     </option>
                   ))}
                 </select>
@@ -3342,208 +3479,210 @@ function PlannerView({
                 ))}
               </div>
             </aside>
-            <section className="bucket-board">
-              {maturityBuckets.map((bucket) => {
-                const allocations = plan.allocations.filter(
-                  (entry) => entry.bucketId === bucket.id,
-                );
-                const bucketTotal = plan.allocations.reduce(
-                  (sum, entry) =>
-                    sum + allocationAmountInBucket(entry, bucket.id),
-                  0,
-                );
-                const gap = targets[bucket.id] - bucketTotal;
-                return (
-                  <article
-                    className="plan-bucket"
-                    key={bucket.id}
-                    onDragOver={(event) => event.preventDefault()}
-                    onDrop={(event) => {
-                      event.preventDefault();
-                      const id = event.dataTransfer.getData("text/product-id");
-                      if (id) addProduct(id, bucket.id);
-                    }}
-                  >
-                    <header>
-                      <div>
-                        <span>{bucket.range}</span>
-                        <strong>{bucket.label}</strong>
-                      </div>
-                      <div>
-                        <b>{euro.format(bucketTotal)}</b>
-                        <small>Ziel {euro.format(targets[bucket.id])}</small>
-                      </div>
-                    </header>
-                    <div
-                      className={`bucket-gap ${gap < 0 ? "over" : gap === 0 ? "covered" : ""}`}
+            <section className="capital-pot-workspace">
+              <div className="capital-timeline" aria-label="Zeitstruktur der Kapitaltöpfe">
+                {visibleCapitalPots.map((pot, index) => {
+                  const potCoverage = Number(coverageByCapitalPot[pot.id]) || 0;
+                  const gap = pot.total - potCoverage;
+                  return (
+                    <button
+                      key={pot.id}
+                      className={selectedPot?.id === pot.id ? "active" : ""}
+                      onClick={() => {
+                        setSelectedCapitalPot(pot.id);
+                        setQuickBucket(pot.id);
+                      }}
                     >
-                      {gap === 0
-                        ? "Kapitaltopf vollständig abgedeckt"
-                        : gap > 0
-                          ? `${euro.format(gap)} noch nicht zugeordnet`
-                          : `${euro.format(Math.abs(gap))} über Zieltopf`}
+                      <span>{pot.kind === "year" ? pot.label : pot.kind === "reserve" ? "RESERVE" : "STRATEGISCH"}</span>
+                      <strong>{euro.format(pot.total)}</strong>
+                      <small>
+                        {gap > 0
+                          ? `${euro.format(gap)} offen`
+                          : gap < 0
+                            ? `${euro.format(Math.abs(gap))} überdeckt`
+                            : "vollständig abgedeckt"}
+                      </small>
+                      {index < visibleCapitalPots.length - 1 && <i aria-hidden="true">→</i>}
+                    </button>
+                  );
+                })}
+              </div>
+              {shortfall > 0 && (
+                <div className="planner-alert capital-shortfall">
+                  <strong>Planungskonflikt</strong>
+                  <span>
+                    Reserve und konkrete Kapitalbedarfe übersteigen den Planungsbetrag um {euro.format(shortfall)}. Es wird kein negativer strategischer Topf erzeugt.
+                  </span>
+                </div>
+              )}
+              {migrationReviewAmount > 0 && (
+                <div className="planner-alert capital-review-alert">
+                  <strong>Zuordnung prüfen</strong>
+                  <span>
+                    {euro.format(migrationReviewAmount)} aus früheren Laufzeitband-Zuordnungen konnten keinem Jahres-Kapitaltopf eindeutig zugeordnet werden. Die Produktbeträge bleiben erhalten.
+                  </span>
+                </div>
+              )}
+              {selectedPot && (
+                <article
+                  className="capital-pot-detail"
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const id = event.dataTransfer.getData("text/product-id");
+                    if (id) addProduct(id, selectedPot.id);
+                  }}
+                >
+                  <header>
+                    <div>
+                      <span>{selectedPot.range}</span>
+                      <h2>{selectedPot.label}</h2>
+                      {selectedPot.earliestDueDate && (
+                        <small>Frühester konkreter Bedarf {germanDate(selectedPot.earliestDueDate)}</small>
+                      )}
                     </div>
-                    {allocations.length === 0 ? (
-                      <div className="bucket-empty">
-                        {bucketTotal > 0
-                          ? "Durch verteilte Produktposition abgedeckt"
-                          : "Produkt hierher ziehen"}
-                        <br />
-                        <small>
-                          {bucketTotal > 0
-                            ? euro.format(bucketTotal)
-                            : "oder links über ＋ zuordnen"}
-                        </small>
-                      </div>
-                    ) : (
-                      <div className="bucket-items">
-                        {allocations.map((allocation) => {
-                          const itemSolution = solution(allocation);
-                          const months = bucket.maxMonths;
-                          const conflict =
-                            bucket.id !== "reserve" &&
-                            itemSolution &&
-                            itemSolution.minMonths > months;
-                          return (
-                            <div
-                              className={conflict ? "conflict" : ""}
-                              key={allocation.id}
-                            >
-                              <span>
-                                {allocation.productName}
-                                <small>
-                                  {allocation.source === "model"
-                                    ? "Modellportfolio"
-                                    : allocation.source === "vv"
-                                      ? "Vermögensverwaltung"
-                                      : itemSolution?.name}
-                                  {conflict ? " · Mindesthorizont prüfen" : ""}
-                                </small>
-                                <small className="coverage-summary">
-                                  {maturityBuckets
-                                    .filter(
-                                      (entry) =>
-                                        allocationAmountInBucket(
-                                          allocation,
-                                          entry.id,
-                                        ) > 0,
-                                    )
-                                    .map(
-                                      (entry) =>
-                                        `${entry.label}: ${euro.format(allocationAmountInBucket(allocation, entry.id))}`,
-                                    )
-                                    .join(" · ") ||
-                                    "noch keinem Topf zugeordnet"}
-                                </small>
-                              </span>
-                              <div>
-                                <input
-                                  inputMode="numeric"
-                                  value={
-                                    allocation.amount
-                                      ? allocation.amount.toLocaleString(
-                                          "de-DE",
-                                        )
-                                      : ""
-                                  }
-                                  onChange={(event) =>
-                                    updateAllocationAmount(
-                                      allocation,
-                                      parseAmount(event.target.value),
-                                    )
-                                  }
-                                />
-                                <b>€</b>
-                                <button
-                                  onClick={() =>
-                                    updatePlan({
-                                      allocations: plan.allocations.filter(
-                                        (entry) => entry.id !== allocation.id,
-                                      ),
-                                    })
-                                  }
-                                >
-                                  ×
-                                </button>
-                              </div>
-                              <label className="allocation-mode">
-                                <span>Topfabdeckung</span>
-                                <select
-                                  value={allocation.allocationMode || "single"}
-                                  onChange={(event) =>
-                                    updateAllocationMode(
-                                      allocation,
-                                      event.target.value as
-                                        "single" | "overflow" | "manual",
-                                    )
-                                  }
-                                >
-                                  <option value="single">
-                                    Nur dieser Kapitaltopf
-                                  </option>
-                                  <option value="overflow">
-                                    Überschuss automatisch weiterverteilen
-                                  </option>
-                                  <option value="manual">
-                                    Aufteilung manuell festlegen
-                                  </option>
-                                </select>
-                              </label>
-                              {allocation.allocationMode === "manual" && (
-                                <div className="manual-buckets">
-                                  {maturityBuckets.map((entry) => (
-                                    <label key={entry.id}>
-                                      <span>{entry.label}</span>
-                                      <div className="inline-amount">
-                                        <input
-                                          inputMode="numeric"
-                                          value={
-                                            allocationAmountInBucket(
-                                              allocation,
-                                              entry.id,
-                                            )
-                                              ? allocationAmountInBucket(
-                                                  allocation,
-                                                  entry.id,
-                                                ).toLocaleString("de-DE")
-                                              : ""
-                                          }
-                                          onChange={(event) =>
-                                            updateManualBucket(
-                                              allocation,
-                                              entry.id,
-                                              parseAmount(event.target.value),
-                                            )
-                                          }
-                                        />
-                                        <b>€</b>
-                                      </div>
-                                    </label>
-                                  ))}
-                                  <small
-                                    className={
-                                      allocationCoverageTotal(allocation) !==
-                                      allocation.amount
-                                        ? "split-warning"
-                                        : ""
-                                    }
-                                  >
-                                    Aufgeteilt:{" "}
-                                    {euro.format(
-                                      allocationCoverageTotal(allocation),
-                                    )}{" "}
-                                    von {euro.format(allocation.amount)}
-                                  </small>
-                                </div>
+                    <div>
+                      <strong>{euro.format(selectedPot.total)}</strong>
+                      <small>{euro.format(selectedPotCoverage)} abgedeckt</small>
+                    </div>
+                  </header>
+                  <div className={`bucket-gap ${selectedPotCoverage > selectedPot.total ? "over" : selectedPotCoverage === selectedPot.total ? "covered" : ""}`}>
+                    {selectedPotCoverage === selectedPot.total
+                      ? "Kapitaltopf vollständig abgedeckt"
+                      : selectedPotCoverage < selectedPot.total
+                        ? `${euro.format(selectedPot.total - selectedPotCoverage)} noch nicht zugeordnet`
+                        : `${euro.format(selectedPotCoverage - selectedPot.total)} über Zieltopf`}
+                  </div>
+                  {selectedPot.needs.length > 0 && (
+                    <div className="capital-need-list">
+                      {selectedPot.needs.map((need) => (
+                        <div key={need.id}>
+                          <span>
+                            <strong>{need.purpose || "Kapitalbedarf"}</strong>
+                            <small>
+                              {need.dueDate
+                                ? germanDate(need.dueDate)
+                                : `in ca. ${need.years} ${need.years === 1 ? "Jahr" : "Jahren"}`}
+                            </small>
+                          </span>
+                          <b>{euro.format(need.amount)}</b>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {allocationsForSelectedPot.length === 0 ? (
+                    <div className="bucket-empty">
+                      Produkt hierher ziehen
+                      <br />
+                      <small>oder links über ＋ zuordnen</small>
+                    </div>
+                  ) : (
+                    <div className="bucket-items">
+                      {allocationsForSelectedPot.map((allocation) => {
+                        const itemSolution = solution(allocation);
+                        const conflict =
+                          selectedPot.kind !== "reserve" &&
+                          itemSolution &&
+                          itemSolution.minMonths > selectedPot.minMonths;
+                        return (
+                          <div className={conflict ? "conflict" : ""} key={allocation.id}>
+                            <span>
+                              {allocation.productName}
+                              <small>
+                                {allocation.source === "model"
+                                  ? "Modellportfolio"
+                                  : allocation.source === "vv"
+                                    ? "Vermögensverwaltung"
+                                    : itemSolution?.name}
+                                {conflict ? " · Mindesthorizont bis zum frühesten Bedarf prüfen" : ""}
+                              </small>
+                              <small className="coverage-summary">
+                                {visibleCapitalPots
+                                  .filter((pot) => allocationAmountInCapitalPot(allocation, pot.id) > 0)
+                                  .map((pot) => `${pot.label}: ${euro.format(allocationAmountInCapitalPot(allocation, pot.id))}`)
+                                  .join(" · ") || "noch keinem Topf zugeordnet"}
+                              </small>
+                              {allocation.capitalPotReviewNote && (
+                                <small className="migration-review">{allocation.capitalPotReviewNote}</small>
                               )}
+                            </span>
+                            <div>
+                              <input
+                                inputMode="numeric"
+                                value={allocation.amount ? allocation.amount.toLocaleString("de-DE") : ""}
+                                onChange={(event) => updateAllocationAmount(allocation, parseAmount(event.target.value))}
+                              />
+                              <b>€</b>
+                              <button
+                                onClick={() => updatePlan({
+                                  allocations: plan.allocations.filter((entry) => entry.id !== allocation.id),
+                                })}
+                              >
+                                ×
+                              </button>
                             </div>
-                          );
-                        })}
+                            <label className="allocation-mode">
+                              <span>Topfabdeckung</span>
+                              <select
+                                value={allocation.allocationMode || "single"}
+                                onChange={(event) => updateAllocationMode(
+                                  allocation,
+                                  event.target.value as "single" | "overflow" | "manual",
+                                )}
+                              >
+                                <option value="single">Nur dieser Kapitaltopf</option>
+                                <option value="overflow">Überschuss automatisch weiterverteilen</option>
+                                <option value="manual">Aufteilung manuell festlegen</option>
+                              </select>
+                            </label>
+                            {allocation.allocationMode === "manual" && (
+                              <div className="manual-buckets">
+                                {visibleCapitalPots.map((pot) => (
+                                  <label key={pot.id}>
+                                    <span>{pot.label}</span>
+                                    <div className="inline-amount">
+                                      <input
+                                        inputMode="numeric"
+                                        value={allocationAmountInCapitalPot(allocation, pot.id)
+                                          ? allocationAmountInCapitalPot(allocation, pot.id).toLocaleString("de-DE")
+                                          : ""}
+                                        onChange={(event) => updateManualBucket(
+                                          allocation,
+                                          pot.id,
+                                          parseAmount(event.target.value),
+                                        )}
+                                      />
+                                      <b>€</b>
+                                    </div>
+                                  </label>
+                                ))}
+                                <small className={allocationCapitalCoverageTotal(allocation) !== allocation.amount ? "split-warning" : ""}>
+                                  Aufgeteilt: {euro.format(allocationCapitalCoverageTotal(allocation))} von {euro.format(allocation.amount)}
+                                </small>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {selectedPotPlan && (
+                    <div className="capital-pot-house">
+                      <div>
+                        <p className="eyebrow">VERMÖGENSSTRUKTUR DIESES KAPITALTOPFS</p>
+                        <h3>Fünf-Säulen-Durchschau</h3>
                       </div>
-                    )}
-                  </article>
-                );
-              })}
+                      <WealthHouse
+                        plan={selectedPotPlan}
+                        plans={[selectedPotPlan]}
+                        depot={[]}
+                        currentLiquidity={0}
+                        compact
+                      />
+                    </div>
+                  )}
+                </article>
+              )}
             </section>
           </div>
           <section className="investment-plan-panel panel">
@@ -3605,6 +3744,8 @@ function PlannerView({
                               productId: event.target.value,
                               productName: allocation?.productName || "",
                               bucketId: allocation?.bucketId || entry.bucketId,
+                              capitalPotId:
+                                allocation?.capitalPotId || entry.capitalPotId,
                             });
                           }}
                         >
@@ -3683,16 +3824,21 @@ function PlannerView({
                       <label>
                         <span>Kapitaltopf</span>
                         <select
-                          value={entry.bucketId}
-                          onChange={(event) =>
+                          value={entry.capitalPotId || fallbackCapitalPot?.id || ""}
+                          onChange={(event) => {
+                            const capitalPotId = event.target.value as CapitalPotId;
+                            const pot = visibleCapitalPots.find(
+                              (item) => item.id === capitalPotId,
+                            );
                             updateInvestmentPlan(entry.id, {
-                              bucketId: event.target.value as InvestmentPlan["bucketId"],
-                            })
-                          }
+                              capitalPotId,
+                              bucketId: pot?.legacyBucketId || entry.bucketId,
+                            });
+                          }}
                         >
-                          {maturityBuckets.map((bucket) => (
-                            <option key={bucket.id} value={bucket.id}>
-                              {bucket.label}
+                          {visibleCapitalPots.map((pot) => (
+                            <option key={pot.id} value={pot.id}>
+                              {pot.label}
                             </option>
                           ))}
                         </select>
@@ -3796,7 +3942,16 @@ function PlannerView({
         <VvSelection
           item={item}
           setItem={setItem}
-          addToPlan={(id, amount) => addProduct(id, "year10plus", "vv", amount)}
+          addToPlan={(id, amount) =>
+            addProduct(
+              id,
+              visibleCapitalPots.find((pot) => pot.id === "strategic")?.id ||
+                fallbackCapitalPot?.id ||
+                "strategic",
+              "vv",
+              amount,
+            )
+          }
         />
       )}
       {mode === "compare" && (
@@ -5183,7 +5338,11 @@ function ExportCenter({
   importJson: () => void;
 }) {
   const breakdown = planAssetAmounts(preferredPlan);
-  const targets = bucketTargets(item.advisory, preferredPlan.total);
+  const exportPots = capitalPots(
+    item.advisory,
+    preferredPlan.total,
+    item.createdAt,
+  );
   const advisor = advisorFor(item.advisorId);
   const print = (mode: "customer" | "internal") => {
     document.body.dataset.printMode = mode;
@@ -5229,9 +5388,15 @@ function ExportCenter({
           Zweck: need.purpose,
           Betrag: need.amount,
           Termin: need.dueDate || "",
-          Monate: monthsUntilNeed(need),
+          Relative_Angabe: need.dueDate ? "" : `in ca. ${need.years} Jahren`,
+          Monate: monthsUntilNeed(need, item.createdAt),
+          Zieljahr: exportPots.find((pot) =>
+            pot.needs.some((entry) => entry.id === need.id),
+          )?.year,
           Laufzeitband: maturityBuckets.find(
-            (bucket) => bucket.id === bucketForMonths(monthsUntilNeed(need)),
+            (bucket) =>
+              bucket.id ===
+              bucketForMonths(monthsUntilNeed(need, item.createdAt)),
           )?.label,
         })),
       ),
@@ -5240,19 +5405,25 @@ function ExportCenter({
     XLSX.utils.book_append_sheet(
       workbook,
       XLSX.utils.json_to_sheet(
-        maturityBuckets.map((bucket) => ({
-          Laufzeitband: bucket.label,
-          Zeitraum: bucket.range,
-          Zielbetrag: targets[bucket.id],
+        exportPots.map((pot) => ({
+          Kapitaltopf: pot.label,
+          Zeitraum: pot.range,
+          Zielbetrag: pot.total,
           Zugeordnet: preferredPlan.allocations.reduce(
-            (sum, entry) => sum + allocationAmountInBucket(entry, bucket.id),
+            (sum, entry) =>
+              sum + allocationAmountInCapitalPot(entry, pot.id),
             0,
           ),
         })),
       ),
-      "Laufzeiten",
+      "Kapitaltöpfe",
     );
-    for (const plan of item.plans)
+    for (const plan of item.plans) {
+      const planPots = capitalPots(
+        item.advisory,
+        plan.total,
+        item.createdAt,
+      );
       XLSX.utils.book_append_sheet(
         workbook,
         XLSX.utils.json_to_sheet(
@@ -5262,15 +5433,13 @@ function ExportCenter({
             Laufzeitband: maturityBuckets.find(
               (bucket) => bucket.id === entry.bucketId,
             )?.label,
-            Topfabdeckung: maturityBuckets
-              .filter(
-                (bucket) => allocationAmountInBucket(entry, bucket.id) > 0,
-              )
+            Topfabdeckung: planPots
+              .filter((pot) => allocationAmountInCapitalPot(entry, pot.id) > 0)
               .map(
-                (bucket) =>
-                  `${bucket.label}: ${allocationAmountInBucket(entry, bucket.id)}`,
+                (pot) =>
+                  `${pot.label}: ${allocationAmountInCapitalPot(entry, pot.id)}`,
               )
-              .join(" | "),
+              .join(" | ") || entry.capitalPotReviewNote || "nicht zugeordnet",
             Betrag: entry.amount,
             Quelle: entry.source,
             Modell: entry.modelId || "",
@@ -5278,6 +5447,7 @@ function ExportCenter({
         ),
         safeFileName(plan.name).slice(0, 31) || "Plan",
       );
+    }
     XLSX.utils.book_append_sheet(
       workbook,
       XLSX.utils.json_to_sheet(
@@ -5288,7 +5458,11 @@ function ExportCenter({
             Bezeichnung: entry.name,
             Produkt: entry.productName || "Noch nicht festgelegt",
             Kapitaltopf:
-              maturityBuckets.find((bucket) => bucket.id === entry.bucketId)?.label || "",
+              capitalPots(item.advisory, plan.total, item.createdAt).find(
+                (pot) => pot.id === entry.capitalPotId,
+              )?.label ||
+              maturityBuckets.find((bucket) => bucket.id === entry.bucketId)?.label ||
+              "",
             Rate: entry.installmentAmount,
             Anzahl_Raten: entry.installments || "fortlaufend",
             Rhythmus:
@@ -5638,18 +5812,18 @@ function ExportCenter({
           </section>
         )}
         <section>
-          <h2>Kapitalbedarfe und Laufzeiten</h2>
+          <h2>Kapitalbedarfe und Zeitstruktur</h2>
           <div className="print-table">
             <div>
-              <strong>Laufzeitband</strong>
+              <strong>Kapitaltopf</strong>
               <strong>Zeitraum</strong>
               <strong>Betrag</strong>
             </div>
-            {maturityBuckets.map((bucket) => (
-              <div key={bucket.id}>
-                <span>{bucket.label}</span>
-                <span>{bucket.range}</span>
-                <b>{euro.format(targets[bucket.id])}</b>
+            {exportPots.map((pot) => (
+              <div key={pot.id}>
+                <span>{pot.label}</span>
+                <span>{pot.range}</span>
+                <b>{euro.format(pot.total)}</b>
               </div>
             ))}
           </div>
@@ -5741,20 +5915,19 @@ function ExportCenter({
           <div className="print-table product-print">
             <div>
               <strong>Produkt</strong>
-              <strong>Laufzeitband</strong>
+              <strong>Kapitaltopf</strong>
               <strong>Betrag</strong>
             </div>
             {preferredPlan.allocations.map((entry) => (
               <div key={entry.id}>
                 <span>{entry.productName}</span>
                 <span>
-                  {maturityBuckets
+                  {exportPots
                     .filter(
-                      (bucket) =>
-                        allocationAmountInBucket(entry, bucket.id) > 0,
+                      (pot) => allocationAmountInCapitalPot(entry, pot.id) > 0,
                     )
-                    .map((bucket) => bucket.label)
-                    .join(" / ") || "nicht zugeordnet"}
+                    .map((pot) => pot.label)
+                    .join(" / ") || entry.capitalPotReviewNote || "nicht zugeordnet"}
                 </span>
                 <b>{euro.format(entry.amount)}</b>
               </div>

@@ -5896,6 +5896,202 @@ body[data-print-mode="customer"] .internal-only {
   border-top: 1px solid var(--line);
   padding: 16px 24px;
 }
+
+/* V0.12: dynamische Kapitaltöpfe und Zeitstruktur. */
+.capital-pot-workspace {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.capital-timeline {
+  display: flex;
+  align-items: stretch;
+  gap: 9px;
+  overflow-x: auto;
+  padding: 2px 2px 8px;
+  scrollbar-width: thin;
+}
+.capital-timeline button {
+  position: relative;
+  flex: 1 0 142px;
+  min-height: 92px;
+  border: 1px solid #cedbe7;
+  border-top: 4px solid #7caed4;
+  border-radius: 8px;
+  background: #fff;
+  padding: 12px;
+  color: var(--navy);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+.capital-timeline button:hover {
+  border-color: var(--navy-2);
+  transform: translateY(-1px);
+}
+.capital-timeline button.active {
+  border-color: var(--navy-2);
+  border-top-color: var(--orange);
+  background: #f1f7fb;
+  box-shadow: 0 7px 18px rgba(0, 55, 111, 0.12);
+}
+.capital-timeline span,
+.capital-timeline strong,
+.capital-timeline small {
+  display: block;
+}
+.capital-timeline span {
+  color: #167e88;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+.capital-timeline strong {
+  margin: 7px 0 5px;
+  font-size: 13px;
+}
+.capital-timeline small {
+  color: #69778a;
+  font-size: 7px;
+  line-height: 1.35;
+}
+.capital-timeline i {
+  position: absolute;
+  top: 50%;
+  right: -9px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: var(--navy);
+  color: #fff;
+  font-size: 9px;
+  font-style: normal;
+  transform: translate(50%, -50%);
+}
+.capital-pot-detail {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  padding: 16px;
+}
+.capital-pot-detail > header {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid #e7edf2;
+  padding-bottom: 13px;
+}
+.capital-pot-detail > header span,
+.capital-pot-detail > header small,
+.capital-pot-detail > header strong {
+  display: block;
+}
+.capital-pot-detail > header span {
+  color: #16818a;
+  font-size: 8px;
+  font-weight: 800;
+}
+.capital-pot-detail > header h2 {
+  margin: 3px 0;
+  color: var(--navy);
+  font: 600 21px Georgia, "Times New Roman", serif;
+}
+.capital-pot-detail > header small {
+  color: #788597;
+  font-size: 8px;
+}
+.capital-pot-detail > header > div:last-child {
+  text-align: right;
+}
+.capital-pot-detail > header > div:last-child strong {
+  color: var(--navy);
+  font-size: 15px;
+}
+.capital-pot-detail > header > div:last-child small {
+  margin-top: 4px;
+}
+.capital-need-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+.capital-need-list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-left: 3px solid #8fb8db;
+  border-radius: 5px;
+  background: #f5f8fb;
+  padding: 9px 11px;
+}
+.capital-need-list span,
+.capital-need-list strong,
+.capital-need-list small {
+  display: block;
+}
+.capital-need-list strong {
+  color: var(--navy);
+  font-size: 9px;
+}
+.capital-need-list small {
+  margin-top: 3px;
+  color: #748195;
+  font-size: 7px;
+}
+.capital-need-list b {
+  color: #34465f;
+  font-size: 9px;
+  white-space: nowrap;
+}
+.capital-pot-house {
+  margin-top: 16px;
+  border-top: 1px solid #dfe7ed;
+  padding-top: 16px;
+}
+.capital-pot-house > div:first-child h3 {
+  margin: 3px 0 12px;
+  color: var(--navy);
+  font: 600 19px Georgia, "Times New Roman", serif;
+}
+.capital-pot-house .house-roof strong {
+  font-size: 15px;
+}
+.capital-shortfall {
+  border-color: #e4a28f;
+  background: #fff2ed;
+  color: #8e3f2e;
+}
+.capital-review-alert {
+  border-color: #e2c47d;
+  background: #fff9ea;
+}
+.migration-review {
+  color: #9a5a32 !important;
+  font-weight: 700 !important;
+}
+.bucket-preview.dynamic-pots,
+.maturity-summary.dynamic-pots {
+  grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+}
+@media (max-width: 760px) {
+  .capital-timeline {
+    padding-bottom: 10px;
+  }
+  .capital-timeline button {
+    flex-basis: 150px;
+  }
+  .capital-pot-detail > header {
+    flex-direction: column;
+  }
+  .capital-pot-detail > header > div:last-child {
+    text-align: left;
+  }
+}
 @media (max-width: 620px) {
   .risk-orientation-card-head {
     flex-direction: column;

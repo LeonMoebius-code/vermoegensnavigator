@@ -55,6 +55,21 @@ export const maturityBuckets = [
 
 export type BucketId = (typeof maturityBuckets)[number]["id"];
 
+export type CapitalPotId = "reserve" | "strategic" | `year-${number}`;
+
+export type CapitalPot = {
+  id: CapitalPotId;
+  kind: "reserve" | "year" | "strategic";
+  label: string;
+  range: string;
+  total: number;
+  year?: number;
+  needs: AdvisoryData["needs"];
+  earliestDueDate?: string;
+  minMonths: number;
+  legacyBucketId: BucketId;
+};
+
 export type PlannerAllocation = {
   id: string;
   productId: string;
@@ -66,6 +81,10 @@ export type PlannerAllocation = {
   modelId?: string;
   allocationMode?: "single" | "overflow" | "manual";
   bucketAmounts?: Partial<Record<BucketId, number>>;
+  capitalPotId?: CapitalPotId;
+  capitalPotAmounts?: Partial<Record<CapitalPotId, number>>;
+  capitalPotReviewAmount?: number;
+  capitalPotReviewNote?: string;
 };
 
 export type StructurePlan = {
@@ -92,6 +111,7 @@ export type InvestmentPlan = {
   productId: string;
   productName: string;
   bucketId: BucketId;
+  capitalPotId?: CapitalPotId;
   installmentAmount: number;
   installments: number;
   frequency: "monthly" | "quarterly" | "semiannual" | "annual";
@@ -212,7 +232,7 @@ export type CustomerChecklistItem = {
 };
 
 export type AdvisoryCase = {
-  schemaVersion: 5;
+  schemaVersion: 6;
   id: string;
   status: "Entwurf" | "In Prüfung" | "Abgeschlossen";
   advisorId: AdvisorId;
@@ -276,7 +296,7 @@ export function createCase(
   const initialTotal = data.liquidAssets;
   const plan = createPlan("Plan A – Ausgangsstruktur", initialTotal);
   return {
-    schemaVersion: 5,
+    schemaVersion: 6,
     id: uid("fall"),
     status: "Entwurf",
     advisorId,
@@ -301,13 +321,17 @@ export function caseSnapshot(item: AdvisoryCase): CaseSnapshot {
   return snapshot as CaseSnapshot;
 }
 
-export function monthsUntilNeed(need: AdvisoryData["needs"][number]): number {
+export function monthsUntilNeed(
+  need: AdvisoryData["needs"][number],
+  referenceDate: Date | string = new Date(),
+): number {
   const dueDate = (need as AdvisoryData["needs"][number] & { dueDate?: string })
     .dueDate;
   if (dueDate) {
     const due = new Date(`${dueDate}T12:00:00`);
     if (!Number.isNaN(due.getTime())) {
-      const now = new Date();
+      const now =
+        referenceDate instanceof Date ? referenceDate : new Date(referenceDate);
       return Math.max(
         0,
         (due.getFullYear() - now.getFullYear()) * 12 +
@@ -317,6 +341,92 @@ export function monthsUntilNeed(need: AdvisoryData["needs"][number]): number {
     }
   }
   return Math.max(0, Math.round(need.years * 12));
+}
+
+function referenceYear(referenceDate: Date | string) {
+  const date =
+    referenceDate instanceof Date ? referenceDate : new Date(referenceDate);
+  return Number.isNaN(date.getTime()) ? new Date().getFullYear() : date.getFullYear();
+}
+
+export function targetYearForNeed(
+  need: AdvisoryData["needs"][number],
+  referenceDate: Date | string = new Date(),
+) {
+  if (need.dueDate) {
+    const year = Number(need.dueDate.slice(0, 4));
+    if (Number.isFinite(year) && year > 1900) return year;
+  }
+  return referenceYear(referenceDate) + Math.max(0, Math.round(need.years));
+}
+
+export function capitalPots(
+  data: AdvisoryData,
+  total: number,
+  referenceDate: Date | string = new Date(),
+): CapitalPot[] {
+  const pots: CapitalPot[] = [];
+  if (data.reserve > 0)
+    pots.push({
+      id: "reserve",
+      kind: "reserve",
+      label: "Liquiditätsreserve",
+      range: "jederzeit verfügbar",
+      total: data.reserve,
+      needs: [],
+      minMonths: 0,
+      legacyBucketId: "reserve",
+    });
+
+  const needsByYear = new Map<number, AdvisoryData["needs"]>();
+  for (const need of data.needs) {
+    if (need.amount <= 0) continue;
+    const year = targetYearForNeed(need, referenceDate);
+    needsByYear.set(year, [...(needsByYear.get(year) || []), need]);
+  }
+  for (const [year, needs] of [...needsByYear.entries()].sort(
+    ([left], [right]) => left - right,
+  )) {
+    const exactDates = needs
+      .map((need) => need.dueDate)
+      .filter((date): date is string => Boolean(date))
+      .sort();
+    const minMonths = Math.min(
+      ...needs.map((need) => monthsUntilNeed(need, referenceDate)),
+    );
+    pots.push({
+      id: `year-${year}`,
+      kind: "year",
+      label: String(year),
+      range: `${needs.length} ${needs.length === 1 ? "Kapitalbedarf" : "Kapitalbedarfe"}`,
+      total: needs.reduce((sum, need) => sum + need.amount, 0),
+      year,
+      needs,
+      earliestDueDate: exactDates[0],
+      minMonths,
+      legacyBucketId: bucketForMonths(minMonths),
+    });
+  }
+
+  const strategic = strategicAmount(data, total);
+  if (strategic > 0)
+    pots.push({
+      id: "strategic",
+      kind: "strategic",
+      label: "Strategisch verfügbares Kapital",
+      range: "kein konkreter Bedarf / langfristig verfügbar",
+      total: strategic,
+      needs: [],
+      minMonths: 600,
+      legacyBucketId: "year10plus",
+    });
+  return pots;
+}
+
+export function planningShortfall(data: AdvisoryData, total: number) {
+  const fixed =
+    data.reserve + data.needs.reduce((sum, need) => sum + need.amount, 0);
+  return Math.max(0, fixed - total);
 }
 
 export function bucketForMonths(months: number): BucketId {
@@ -385,6 +495,49 @@ export function allocationCoverageTotal(allocation: PlannerAllocation): number {
   );
 }
 
+export function allocationCapitalPotAmounts(
+  allocation: PlannerAllocation,
+): Partial<Record<CapitalPotId, number>> {
+  if (
+    allocation.capitalPotAmounts &&
+    Object.values(allocation.capitalPotAmounts).some(
+      (value) => Number(value) > 0,
+    )
+  )
+    return allocation.capitalPotAmounts;
+  return allocation.capitalPotId
+    ? { [allocation.capitalPotId]: allocation.amount }
+    : {};
+}
+
+export function allocationAmountInCapitalPot(
+  allocation: PlannerAllocation,
+  capitalPotId: CapitalPotId,
+) {
+  return Number(allocationCapitalPotAmounts(allocation)[capitalPotId]) || 0;
+}
+
+export function allocationCapitalCoverageTotal(allocation: PlannerAllocation) {
+  return Object.values(allocationCapitalPotAmounts(allocation)).reduce<number>(
+    (sum, value) => sum + (Number(value) || 0),
+    0,
+  );
+}
+
+export function legacyBucketAmountsForCapitalPots(
+  pots: CapitalPot[],
+  amounts: Partial<Record<CapitalPotId, number>>,
+) {
+  const result: Partial<Record<BucketId, number>> = {};
+  for (const pot of pots) {
+    const amount = Number(amounts[pot.id]) || 0;
+    if (amount <= 0) continue;
+    result[pot.legacyBucketId] =
+      (Number(result[pot.legacyBucketId]) || 0) + amount;
+  }
+  return result;
+}
+
 export function planAssetAmounts(plan: StructurePlan) {
   const amounts = Object.fromEntries(
     assetClasses.map((name) => [name, 0]),
@@ -422,7 +575,7 @@ export function normalizeImportedCase(
   const item = candidate as Partial<AdvisoryCase>;
   if (!item.advisory || !Array.isArray(item.plans)) return null;
   const normalized = clone(item) as AdvisoryCase;
-  normalized.schemaVersion = 5;
+  normalized.schemaVersion = 6;
   if (regenerateId) normalized.id = uid("fall-import");
   normalized.updatedAt = iso();
   normalized.versions = Array.isArray(normalized.versions)
@@ -450,32 +603,94 @@ export function normalizeImportedCase(
     temporaryLoss: null,
     financialCapacity: null,
   };
-  normalized.plans = normalized.plans.map((plan) => ({
-    ...plan,
-    total:
+  normalized.plans = normalized.plans.map((plan) => {
+    const total =
       !plan.capitalMode &&
       plan.total === 250000 &&
       normalized.advisory.liquidAssets !== 250000 &&
       (!plan.allocations || plan.allocations.length === 0)
         ? normalized.advisory.liquidAssets
-        : plan.total,
-    capitalMode:
-      plan.capitalMode ||
-      (plan.total === normalized.advisory.liquidAssets ||
-      (plan.total === 250000 && (!plan.allocations || plan.allocations.length === 0))
-        ? "linked"
-        : "manual"),
-    depotMode: plan.depotMode || "none",
-    depotHoldingIds: Array.isArray(plan.depotHoldingIds)
-      ? plan.depotHoldingIds
-      : [],
-    investmentPlans: Array.isArray(plan.investmentPlans)
-      ? plan.investmentPlans
-      : [],
-    allocations: (plan.allocations || []).map((allocation) => ({
-      allocationMode: allocation.allocationMode || "single",
-      ...allocation,
-    })),
-  }));
+        : plan.total;
+    const pots = capitalPots(
+      normalized.advisory,
+      total,
+      normalized.createdAt,
+    );
+    const allocations = (plan.allocations || []).map((allocation) => {
+      const existingPotAmounts = allocationCapitalPotAmounts(allocation);
+      if (Object.values(existingPotAmounts).some((amount) => Number(amount) > 0))
+        return {
+          allocationMode: allocation.allocationMode || "single",
+          ...allocation,
+          capitalPotAmounts: existingPotAmounts,
+        };
+
+      const migratedAmounts: Partial<Record<CapitalPotId, number>> = {};
+      let reviewAmount = 0;
+      const reviewLabels: string[] = [];
+      for (const [bucketId, rawAmount] of Object.entries(
+        allocationBucketAmounts(allocation),
+      )) {
+        const amount = Number(rawAmount) || 0;
+        if (amount <= 0) continue;
+        const candidates = pots.filter(
+          (pot) => pot.legacyBucketId === (bucketId as BucketId),
+        );
+        if (candidates.length === 1) {
+          const target = candidates[0].id;
+          migratedAmounts[target] =
+            (Number(migratedAmounts[target]) || 0) + amount;
+        } else {
+          reviewAmount += amount;
+          reviewLabels.push(
+            maturityBuckets.find((bucket) => bucket.id === bucketId)?.label ||
+              bucketId,
+          );
+        }
+      }
+      const migratedIds = Object.keys(migratedAmounts) as CapitalPotId[];
+      const fallbackCandidate = pots.filter(
+        (pot) => pot.legacyBucketId === allocation.bucketId,
+      );
+      const capitalPotId =
+        migratedIds[0] ||
+        (fallbackCandidate.length === 1 ? fallbackCandidate[0].id : undefined);
+      return {
+        allocationMode: allocation.allocationMode || "single",
+        ...allocation,
+        capitalPotId,
+        capitalPotAmounts: migratedAmounts,
+        capitalPotReviewAmount: reviewAmount || undefined,
+        capitalPotReviewNote: reviewAmount
+          ? `Alte Zuordnung ${Array.from(new Set(reviewLabels)).join(", ")} ist nicht eindeutig. Zuordnung prüfen.`
+          : undefined,
+      };
+    });
+    const firstPotId = pots[0]?.id;
+    return {
+      ...plan,
+      total,
+      capitalMode:
+        plan.capitalMode ||
+        (plan.total === normalized.advisory.liquidAssets ||
+        (plan.total === 250000 && (!plan.allocations || plan.allocations.length === 0))
+          ? "linked"
+          : "manual"),
+      depotMode: plan.depotMode || "none",
+      depotHoldingIds: Array.isArray(plan.depotHoldingIds)
+        ? plan.depotHoldingIds
+        : [],
+      investmentPlans: Array.isArray(plan.investmentPlans)
+        ? plan.investmentPlans.map((entry) => ({
+            ...entry,
+            capitalPotId:
+              entry.capitalPotId ||
+              pots.find((pot) => pot.legacyBucketId === entry.bucketId)?.id ||
+              firstPotId,
+          }))
+        : [],
+      allocations,
+    };
+  });
   return normalized;
 }
