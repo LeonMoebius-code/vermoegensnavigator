@@ -1370,6 +1370,110 @@ function ScopeStep({
   );
 }
 
+function useDepotCsvImport(
+  depot: DepotHolding[],
+  setDepot: (next: DepotHolding[]) => void,
+) {
+  const csvRef = useRef<HTMLInputElement>(null);
+  const [csvPreview, setCsvPreview] = useState<{
+    fileName: string;
+    result: DepotCsvResult;
+  } | null>(null);
+  const [csvError, setCsvError] = useState("");
+  const importCsv = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const result = parseDepotCsv(await file.arrayBuffer());
+      setCsvPreview({ fileName: file.name, result });
+      setCsvError("");
+    } catch (error) {
+      setCsvPreview(null);
+      setCsvError(
+        error instanceof Error ? error.message : "Die CSV konnte nicht gelesen werden.",
+      );
+    }
+    event.target.value = "";
+  };
+  const applyCsv = (mode: "replace" | "append") => {
+    if (!csvPreview) return;
+    setDepot(
+      mode === "replace"
+        ? csvPreview.result.rows
+        : [...depot, ...csvPreview.result.rows],
+    );
+    setCsvPreview(null);
+  };
+  return {
+    open: () => csvRef.current?.click(),
+    input: (
+      <input
+        ref={csvRef}
+        type="file"
+        className="visually-hidden"
+        accept=".csv,text/csv"
+        onChange={importCsv}
+      />
+    ),
+    preview: (
+      <>
+        {csvError && <div className="csv-error">{csvError}</div>}
+        {csvPreview && (
+          <div className="csv-preview">
+            <div>
+              <p className="eyebrow">IMPORTVORSCHAU</p>
+              <h3>{csvPreview.fileName}</h3>
+              <p>
+                {csvPreview.result.format === "structure-overview"
+                  ? "Strukturübersicht erkannt"
+                  : "Navigator-Vorlage erkannt"}
+              </p>
+            </div>
+            <div className="csv-preview-metrics">
+              <span>
+                <b>{csvPreview.result.rows.length}</b>
+                Positionen
+              </span>
+              <span>
+                <b>
+                  {euro.format(
+                    csvPreview.result.rows.reduce((sum, row) => sum + row.value, 0),
+                  )}
+                </b>
+                Gesamtwert
+              </span>
+              <span className={csvPreview.result.unresolved > 0 ? "warning" : ""}>
+                <b>{csvPreview.result.unresolved}</b>
+                Zuordnungen offen
+              </span>
+            </div>
+            {csvPreview.result.ignoredPersonalColumns && (
+              <p className="csv-privacy-note">
+                Depotnummer und Depotinhaber wurden erkannt, werden aber bewusst
+                nicht übernommen. Der öffentliche Prototyp verarbeitet nur die
+                Positionsdaten im Browser.
+              </p>
+            )}
+            <div className="csv-preview-actions">
+              <button className="primary" onClick={() => applyCsv("replace")}>
+                Bestehendes Depot ersetzen
+              </button>
+              {depot.length > 0 && (
+                <button className="secondary" onClick={() => applyCsv("append")}>
+                  Positionen ergänzen
+                </button>
+              )}
+              <button className="text-button" onClick={() => setCsvPreview(null)}>
+                Abbrechen
+              </button>
+            </div>
+          </div>
+        )}
+      </>
+    ),
+  };
+}
+
 function SituationStep({
   data,
   update,
@@ -1387,6 +1491,7 @@ function SituationStep({
   setView: (view: View) => void;
 }) {
   const business = data.scope === "business" || data.scope === "combined";
+  const csvImport = useDepotCsvImport(depot, setDepot);
   const addHolding = () =>
     setDepot([
       ...depot,
@@ -1500,6 +1605,9 @@ function SituationStep({
                 </small>
               </div>
               <div>
+                <button className="secondary" onClick={csvImport.open}>
+                  Depot-CSV importieren
+                </button>
                 <button className="secondary" onClick={() => setView("depot")}>
                   Depotcheck öffnen
                 </button>
@@ -1508,6 +1616,8 @@ function SituationStep({
                 </button>
               </div>
             </div>
+            {csvImport.input}
+            {csvImport.preview}
             {depot.length === 0 ? (
               <button className="mini-empty" onClick={addHolding}>
                 Erste Depotposition erfassen
@@ -1720,6 +1830,136 @@ function NeedsStep({
   );
 }
 
+function RiskOrientationDialog({
+  data,
+  update,
+  onClose,
+}: {
+  data: AdvisoryData;
+  update: <K extends keyof AdvisoryData>(
+    key: K,
+    value: AdvisoryData[K],
+  ) => void;
+  onClose: () => void;
+}) {
+  const firstUnanswered = riskQuestions.findIndex(
+    (question) => data.riskAssessment[question.key] === null,
+  );
+  const [questionIndex, setQuestionIndex] = useState(
+    firstUnanswered === -1 ? riskQuestions.length - 1 : firstUnanswered,
+  );
+  const [showResult, setShowResult] = useState(false);
+  const question = riskQuestions[questionIndex];
+  const orientation = riskOrientation(data);
+  const selected = data.riskAssessment[question.key];
+  const answer = (value: RiskLevel) =>
+    update("riskAssessment", { ...data.riskAssessment, [question.key]: value });
+
+  return (
+    <div className="modal-backdrop risk-dialog-backdrop" role="presentation">
+      <section
+        className="risk-orientation-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Risiko-Orientierung ermitteln"
+      >
+        <header>
+          <div>
+            <p className="eyebrow">KURZE RISIKO-ORIENTIERUNG</p>
+            <h2>{showResult ? "Orientierungswert" : `Frage ${questionIndex + 1} von ${riskQuestions.length}`}</h2>
+          </div>
+          <button
+            className="risk-dialog-close"
+            aria-label="Risiko-Orientierung schließen"
+            onClick={onClose}
+          >
+            <span>Schließen</span>
+            <b aria-hidden="true">×</b>
+          </button>
+        </header>
+        {showResult ? (
+          <div className="risk-orientation-result">
+            <span>{orientation ? `${orientation}/5` : "–"}</span>
+            <div>
+              <strong>{orientation ? riskText[orientation].title : "Noch nicht vollständig"}</strong>
+              <p>
+                {orientation
+                  ? riskText[orientation].text
+                  : "Bitte beantworten Sie alle drei Fragen, bevor der Orientierungswert übernommen wird."}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="risk-dialog-question">
+            <p>{question.title}</p>
+            <div>
+              {question.options.map((option, index) => {
+                const value = (index + 1) as RiskLevel;
+                return (
+                  <button
+                    key={option}
+                    className={selected === value ? "selected" : ""}
+                    onClick={() => answer(value)}
+                  >
+                    <span>{value}</span>
+                    {option}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        <footer>
+          {showResult ? (
+            <>
+              <button className="secondary" onClick={() => setShowResult(false)}>
+                ← Antworten prüfen
+              </button>
+              <button
+                className="primary"
+                disabled={!orientation}
+                onClick={() => {
+                  if (!orientation) return;
+                  update("risk", orientation);
+                  onClose();
+                }}
+              >
+                Orientierungswert übernehmen
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                className="secondary"
+                onClick={() =>
+                  questionIndex === 0
+                    ? onClose()
+                    : setQuestionIndex(questionIndex - 1)
+                }
+              >
+                {questionIndex === 0 ? "Schließen" : "← Zurück"}
+              </button>
+              <button
+                className="primary"
+                disabled={!selected}
+                onClick={() =>
+                  questionIndex === riskQuestions.length - 1
+                    ? setShowResult(true)
+                    : setQuestionIndex(questionIndex + 1)
+                }
+              >
+                {questionIndex === riskQuestions.length - 1
+                  ? "Ergebnis anzeigen"
+                  : "Weiter →"}
+              </button>
+            </>
+          )}
+        </footer>
+      </section>
+    </div>
+  );
+}
+
 function GoalsStep({
   data,
   update,
@@ -1733,15 +1973,11 @@ function GoalsStep({
   togglePriority: (value: string) => void;
 }) {
   const orientation = riskOrientation(data);
-  const answerRiskQuestion = (
-    key: keyof RiskAssessment,
-    value: RiskLevel,
-  ) => {
-    const next = { ...data.riskAssessment, [key]: value };
-    update("riskAssessment", next);
-    const result = riskOrientation(data, next);
-    if (result) update("risk", result);
-  };
+  const [riskDialogOpen, setRiskDialogOpen] = useState(false);
+  const [manualRiskOpen, setManualRiskOpen] = useState(false);
+  const answeredQuestions = riskQuestions.filter(
+    (question) => data.riskAssessment[question.key] !== null,
+  ).length;
   return (
     <>
       <SectionIntro
@@ -1790,74 +2026,61 @@ function GoalsStep({
             <option>Umfangreiche Kenntnisse</option>
           </select>
         </label>
-        <div className="field full risk-check">
-          <div className="risk-check-head">
+        <div className="field full risk-orientation-card">
+          <div className="risk-orientation-card-head">
             <div>
               <span>Kurze Risiko-Orientierung</span>
               <small>
                 Drei Klickfragen werden mit Horizont und Kenntnissen verbunden.
               </small>
             </div>
-            <strong>
+            <strong className={orientation ? "complete" : ""}>
               {orientation
-                ? `Orientierungswert ${orientation}/5`
-                : "Noch nicht vollständig"}
+                ? `${orientation}/5 · ${riskText[orientation].title}`
+                : answeredQuestions > 0
+                  ? `${answeredQuestions}/3 beantwortet`
+                  : "Noch nicht ermittelt"}
             </strong>
           </div>
-          <div className="risk-question-list">
-            {riskQuestions.map((question, questionIndex) => (
-              <section key={question.key}>
-                <p>
-                  <b>{questionIndex + 1}</b>
-                  {question.title}
-                </p>
-                <div>
-                  {question.options.map((option, index) => {
-                    const value = (index + 1) as RiskLevel;
-                    return (
-                      <button
-                        key={option}
-                        className={
-                          data.riskAssessment[question.key] === value
-                            ? "selected"
-                            : ""
-                        }
-                        onClick={() => answerRiskQuestion(question.key, value)}
-                      >
-                        {option}
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
-            ))}
+          <div className="risk-orientation-actions">
+            <button className="primary" onClick={() => setRiskDialogOpen(true)}>
+              Orientierung ermitteln
+            </button>
+            <button
+              className="secondary"
+              onClick={() => setManualRiskOpen((open) => !open)}
+            >
+              Manuell festlegen
+            </button>
           </div>
-          <p className="risk-check-note">
+          <p className="risk-orientation-note">
             Die Auswertung ist eine Gesprächsorientierung. Sie ersetzt weder die
             regulatorische Geeignetheitsprüfung noch die Verlusttragfähigkeitsprüfung.
           </p>
-        </div>
-        <div className="field full">
-          <span>Strategische Risikoeinordnung bestätigen oder anpassen</span>
-          <div className="risk-scale">
-            {([1, 2, 3, 4, 5] as RiskLevel[]).map((risk) => (
-              <button
-                key={risk}
-                className={data.risk === risk ? "selected" : ""}
-                onClick={() => update("risk", risk)}
-              >
-                <b>{risk}</b>
-                <span>{riskText[risk].title}</span>
-              </button>
-            ))}
-          </div>
-          <div className="risk-explainer">
-            <strong>{riskText[data.risk].title}</strong>
-            <p>
-              {riskText[data.risk].text} Keine regulatorische
-              Geeignetheitsprüfung.
-            </p>
-          </div>
+          {manualRiskOpen && (
+            <div className="risk-manual-selection">
+              <span>Strategische Risikoeinordnung direkt festlegen</span>
+              <div className="risk-scale">
+                {([1, 2, 3, 4, 5] as RiskLevel[]).map((risk) => (
+                  <button
+                    key={risk}
+                    className={data.risk === risk ? "selected" : ""}
+                    onClick={() => update("risk", risk)}
+                  >
+                    <b>{risk}</b>
+                    <span>{riskText[risk].title}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="risk-explainer">
+                <strong>{riskText[data.risk].title}</strong>
+                <p>
+                  {riskText[data.risk].text} Keine regulatorische
+                  Geeignetheitsprüfung.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
         <div className="field full">
           <span>Was ist besonders wichtig?</span>
@@ -1875,6 +2098,13 @@ function GoalsStep({
           </div>
         </div>
       </div>
+      {riskDialogOpen && (
+        <RiskOrientationDialog
+          data={data}
+          update={update}
+          onClose={() => setRiskDialogOpen(false)}
+        />
+      )}
     </>
   );
 }
@@ -2270,7 +2500,7 @@ function ResultStep({
             <p>Produkte, Bestand und Durchschau werden in der Strukturplanung erläutert.</p>
           </div>
           <button className="primary" onClick={() => setView("planner")}>
-            Vermögensstruktur öffnen →
+            Strukturplanung öffnen →
           </button>
         </div>
       </section>
@@ -2290,18 +2520,6 @@ function ResultStep({
               <small>{bucket.range}</small>
             </article>
           ))}
-        </div>
-        <div className="result-cta-row">
-          <div>
-            <strong>{plan?.name || "Plan A"}</strong>
-            <p>
-              Kapitaltöpfe mit Produkten befüllen, Anlageklassen durchschauen
-              und Varianten vergleichen.
-            </p>
-          </div>
-          <button className="primary" onClick={() => setView("planner")}>
-            Strukturplanung öffnen →
-          </button>
         </div>
       </section>
       <section className="result-section">
@@ -4529,12 +4747,6 @@ function DepotOptimizer({
   saveCase: (version?: boolean) => void;
   setView: (view: View) => void;
 }) {
-  const csvRef = useRef<HTMLInputElement>(null);
-  const [csvPreview, setCsvPreview] = useState<{
-    fileName: string;
-    result: DepotCsvResult;
-  } | null>(null);
-  const [csvError, setCsvError] = useState("");
   const depot = item.depot;
   const total = depot.reduce((sum, entry) => sum + entry.value, 0);
   const afterSales = depot.reduce(
@@ -4568,6 +4780,7 @@ function DepotOptimizer({
       },
       depot: next,
     });
+  const csvImport = useDepotCsvImport(depot, setDepotPositions);
   const addHolding = () =>
     setDepotPositions([
       ...depot,
@@ -4633,28 +4846,6 @@ function DepotOptimizer({
       },
     ]);
   };
-  const importCsv = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    try {
-      const result = parseDepotCsv(await file.arrayBuffer());
-      setCsvPreview({ fileName: file.name, result });
-      setCsvError("");
-    } catch (error) {
-      setCsvPreview(null);
-      setCsvError(
-        error instanceof Error ? error.message : "Die CSV konnte nicht gelesen werden.",
-      );
-    }
-    event.target.value = "";
-  };
-  const applyCsv = (mode: "replace" | "append") => {
-    if (!csvPreview) return;
-    setDepotPositions(
-      mode === "replace" ? csvPreview.result.rows : [...depot, ...csvPreview.result.rows],
-    );
-    setCsvPreview(null);
-  };
   const largest = [...depot].sort((a, b) => b.value - a.value)[0];
   return (
     <div className="tool-view depot-view">
@@ -4715,7 +4906,7 @@ function DepotOptimizer({
           <div>
             <button
               className="secondary"
-              onClick={() => csvRef.current?.click()}
+              onClick={csvImport.open}
             >
               CSV importieren
             </button>
@@ -4724,65 +4915,8 @@ function DepotOptimizer({
             </button>
           </div>
         </div>
-        <input
-          ref={csvRef}
-          type="file"
-          className="visually-hidden"
-          accept=".csv,text/csv"
-          onChange={importCsv}
-        />
-        {csvError && <div className="csv-error">{csvError}</div>}
-        {csvPreview && (
-          <div className="csv-preview">
-            <div>
-              <p className="eyebrow">IMPORTVORSCHAU</p>
-              <h3>{csvPreview.fileName}</h3>
-              <p>
-                {csvPreview.result.format === "structure-overview"
-                  ? "Strukturübersicht erkannt"
-                  : "Navigator-Vorlage erkannt"}
-              </p>
-            </div>
-            <div className="csv-preview-metrics">
-              <span>
-                <b>{csvPreview.result.rows.length}</b>
-                Positionen
-              </span>
-              <span>
-                <b>
-                  {euro.format(
-                    csvPreview.result.rows.reduce((sum, row) => sum + row.value, 0),
-                  )}
-                </b>
-                Gesamtwert
-              </span>
-              <span className={csvPreview.result.unresolved > 0 ? "warning" : ""}>
-                <b>{csvPreview.result.unresolved}</b>
-                Zuordnungen offen
-              </span>
-            </div>
-            {csvPreview.result.ignoredPersonalColumns && (
-              <p className="csv-privacy-note">
-                Depotnummer und Depotinhaber wurden erkannt, werden aber bewusst
-                nicht übernommen. Der öffentliche Prototyp verarbeitet nur die
-                Positionsdaten im Browser.
-              </p>
-            )}
-            <div className="csv-preview-actions">
-              <button className="primary" onClick={() => applyCsv("replace")}>
-                Bestehendes Depot ersetzen
-              </button>
-              {depot.length > 0 && (
-                <button className="secondary" onClick={() => applyCsv("append")}>
-                  Positionen ergänzen
-                </button>
-              )}
-              <button className="text-button" onClick={() => setCsvPreview(null)}>
-                Abbrechen
-              </button>
-            </div>
-          </div>
-        )}
+        {csvImport.input}
+        {csvImport.preview}
         {depot.length === 0 ? (
           <button className="empty-state" onClick={loadSample}>
             <span>◫</span>

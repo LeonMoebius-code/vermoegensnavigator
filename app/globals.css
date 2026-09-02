@@ -5694,6 +5694,229 @@ body[data-print-mode="customer"] .internal-only {
 .module-workspace > header .module-return {
   position: static;
 }
+
+/* UX-Block: kompakte, geführte Risiko-Orientierung. */
+.risk-orientation-card {
+  border: 1px solid #cbdced;
+  border-radius: 8px;
+  background: #f5f9fc;
+  padding: 16px;
+}
+.risk-orientation-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+.risk-orientation-card-head > div > span,
+.risk-orientation-card-head > div > small {
+  display: block;
+}
+.risk-orientation-card-head > div > small,
+.risk-orientation-note {
+  color: #6b788a;
+  font-size: 8px;
+  line-height: 1.45;
+}
+.risk-orientation-card-head > div > small {
+  margin-top: 4px;
+}
+.risk-orientation-card-head > strong {
+  border-radius: 999px;
+  background: #e5edf5;
+  color: var(--navy);
+  padding: 7px 10px;
+  font-size: 9px;
+  white-space: nowrap;
+}
+.risk-orientation-card-head > strong.complete {
+  background: var(--navy-2);
+  color: #fff;
+}
+.risk-orientation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.risk-orientation-actions button {
+  min-height: 38px;
+}
+.risk-orientation-note {
+  margin: 12px 0 0;
+}
+.risk-manual-selection {
+  margin-top: 14px;
+  border-top: 1px solid #d6e1eb;
+  padding-top: 14px;
+}
+.risk-manual-selection > span {
+  display: block;
+  margin-bottom: 9px;
+  color: var(--navy);
+  font-size: 9px;
+  font-weight: 800;
+}
+.risk-orientation-dialog {
+  width: min(680px, 100%);
+  overflow: hidden;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 25px 70px rgba(0, 45, 103, 0.3);
+}
+.risk-orientation-dialog > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+  border-bottom: 1px solid var(--line);
+  padding: 22px 24px;
+}
+.risk-orientation-dialog h2 {
+  margin: 4px 0 0;
+  color: var(--navy);
+  font-size: 23px;
+}
+.risk-dialog-close {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  border: 1px solid var(--navy-2);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--navy);
+  padding: 5px 7px 5px 11px;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.risk-dialog-close:hover {
+  background: #eef5fa;
+}
+.risk-dialog-close:focus-visible {
+  outline: 3px solid rgba(0, 102, 179, 0.25);
+  outline-offset: 2px;
+}
+.risk-dialog-close b {
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  background: var(--orange);
+  color: #fff;
+  font-size: 18px;
+  line-height: 1;
+}
+.risk-dialog-question,
+.risk-orientation-result {
+  padding: 28px 24px;
+}
+.risk-dialog-question > p {
+  margin: 0 0 16px;
+  color: var(--navy);
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+.risk-dialog-question > div {
+  display: grid;
+  gap: 8px;
+}
+.risk-dialog-question button {
+  display: grid;
+  grid-template-columns: 30px 1fr;
+  align-items: center;
+  gap: 11px;
+  min-height: 50px;
+  border: 1px solid #cbd8e4;
+  border-radius: 7px;
+  background: #fff;
+  padding: 10px 13px;
+  color: var(--navy);
+  text-align: left;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.risk-dialog-question button:hover,
+.risk-dialog-question button.selected {
+  border-color: var(--navy-2);
+  background: #edf5fb;
+}
+.risk-dialog-question button.selected {
+  box-shadow: inset 4px 0 var(--navy-2);
+}
+.risk-dialog-question button span {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #e5eef6;
+  color: var(--navy);
+  font-size: 11px;
+}
+.risk-dialog-question button.selected span {
+  background: var(--navy-2);
+  color: #fff;
+}
+.risk-orientation-result {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  align-items: center;
+  gap: 18px;
+}
+.risk-orientation-result > span {
+  display: grid;
+  place-items: center;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  background: var(--navy);
+  color: #fff;
+  font-size: 25px;
+  font-weight: 800;
+}
+.risk-orientation-result strong {
+  color: var(--navy);
+  font-size: 18px;
+}
+.risk-orientation-result p {
+  margin: 6px 0 0;
+  color: #637286;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.risk-orientation-dialog > footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  padding: 16px 24px;
+}
+@media (max-width: 620px) {
+  .risk-orientation-card-head {
+    flex-direction: column;
+  }
+  .risk-orientation-dialog > header,
+  .risk-dialog-question,
+  .risk-orientation-result,
+  .risk-orientation-dialog > footer {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+  .risk-dialog-close > span {
+    display: none;
+  }
+  .risk-dialog-close {
+    padding: 5px;
+  }
+  .risk-orientation-result {
+    grid-template-columns: 1fr;
+  }
+}
 @media (max-width: 900px) {
   .house-detail-compare {
     grid-template-columns: 1fr;
