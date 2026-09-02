@@ -6070,6 +6070,41 @@ body[data-print-mode="customer"] .internal-only {
   border-color: #e2c47d;
   background: #fff9ea;
 }
+.capital-review-items {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+.capital-review-items > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid rgba(154, 90, 50, 0.2);
+  padding-top: 8px;
+}
+.capital-review-items span,
+.capital-review-items b,
+.capital-review-items small {
+  display: block;
+}
+.capital-review-items small {
+  margin-top: 3px;
+  color: #7b6651;
+}
+.capital-review-items button {
+  border: 1px solid #b88642;
+  border-radius: 5px;
+  background: #fff;
+  padding: 7px 9px;
+  color: #7c4b22;
+  font-weight: 750;
+  cursor: pointer;
+}
+.capital-review-items button:hover {
+  border-color: var(--orange);
+  color: var(--navy);
+}
 .migration-review {
   color: #9a5a32 !important;
   font-weight: 700 !important;
@@ -6090,6 +6125,12 @@ body[data-print-mode="customer"] .internal-only {
   }
   .capital-pot-detail > header > div:last-child {
     text-align: left;
+  }
+  .capital-review-items > div {
+    grid-template-columns: 1fr;
+  }
+  .capital-review-items button {
+    justify-self: start;
   }
 }
 @media (max-width: 620px) {

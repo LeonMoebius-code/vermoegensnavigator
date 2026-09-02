@@ -681,13 +681,18 @@ export function normalizeImportedCase(
         ? plan.depotHoldingIds
         : [],
       investmentPlans: Array.isArray(plan.investmentPlans)
-        ? plan.investmentPlans.map((entry) => ({
-            ...entry,
-            capitalPotId:
-              entry.capitalPotId ||
-              pots.find((pot) => pot.legacyBucketId === entry.bucketId)?.id ||
-              firstPotId,
-          }))
+        ? plan.investmentPlans.map((entry) => {
+            const candidates = pots.filter(
+              (pot) => pot.legacyBucketId === entry.bucketId,
+            );
+            return {
+              ...entry,
+              capitalPotId:
+                entry.capitalPotId ||
+                (candidates.length === 1 ? candidates[0].id : undefined) ||
+                (pots.length === 1 ? firstPotId : undefined),
+            };
+          })
         : [],
       allocations,
     };

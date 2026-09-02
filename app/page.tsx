@@ -230,7 +230,7 @@ const moduleSlides: Record<string, ModuleSlide[]> = {
   maturity: [
     { eyebrow: "ANLASS", title: "Welche Mittel werden wann benötigt?", text: "Die zeitliche Verfügbarkeit ist die erste Planungsgrenze.", points: ["Reserve und konkrete Bedarfe getrennt erfassen", "Bedarfstermine vor Produktauswahl festlegen"], checks: [{ id: "all-needs", label: "Alle bekannten Kapitalbedarfe sind erfasst" }] },
     { eyebrow: "DATEN", title: "Laufzeiten belastbar erfassen", text: "Betrag, Zweck und Termin bestimmen den Kapitaltopf.", points: ["Unklare Termine als offenen Prüfpunkt kennzeichnen", "Puffer für vorgezogene Bedarfe berücksichtigen"], checks: [{ id: "dates", label: "Termine und Beträge wurden mit dem Kunden plausibilisiert" }] },
-    { eyebrow: "EINORDNUNG", title: "Kapitaltöpfe bilden", text: "Jeder Bedarf wird genau einem einheitlichen Laufzeitband zugeordnet.", points: ["Reserve", "Bis 1 Jahr", "1 bis 3, 3 bis 5, 5 bis 10 und strategisch"], checks: [{ id: "buckets", label: "Die Laufzeitbänder sind widerspruchsfrei" }] },
+    { eyebrow: "EINORDNUNG", title: "Kapitaltöpfe bilden", text: "Reserve, konkrete Bedarfsjahre und strategisches Kapital bilden die sichtbare Zeitstruktur.", points: ["Bedarfe desselben Zieljahres zusammenfassen", "Einzeltermine und Zwecke im Jahrestopf nachvollziehbar halten"], checks: [{ id: "buckets", label: "Die Kapitaltöpfe sind zeitlich widerspruchsfrei" }] },
     { eyebrow: "LÖSUNGSWEGE", title: "Produkte passend zuordnen", text: "Mindesthorizont und Verfügbarkeit müssen zum Topf passen.", points: ["Überschüsse dürfen mehrere kurzfristige Töpfe abdecken", "Konflikte werden gewarnt, nicht verdeckt"], checks: [{ id: "products", label: "Produktlaufzeiten wurden gegen Bedarfe geprüft" }] },
     { eyebrow: "ERGEBNIS", title: "Laufzeitenstruktur abschließen", text: "Offene Beträge, Überplanungen und Konflikte bleiben sichtbar.", points: ["Strukturplanung öffnen und Kapitaltöpfe befüllen", "Offene Prüfpunkte dokumentieren"], checks: [{ id: "result", label: "Die Laufzeitenstruktur kann in die Planung übernommen werden" }] },
   ],
@@ -2816,6 +2816,29 @@ function PlannerView({
       ...allocationPotChanges(capitalPotAmounts),
     });
   };
+  const resolveMigrationAllocation = (
+    allocation: PlannerAllocation,
+    capitalPotId: CapitalPotId,
+  ) => {
+    const reviewAmount = Number(allocation.capitalPotReviewAmount) || 0;
+    if (reviewAmount <= 0) return;
+    const pot = visibleCapitalPots.find((entry) => entry.id === capitalPotId);
+    if (!pot) return;
+    const capitalPotAmounts = {
+      ...allocationCapitalPotAmounts(allocation),
+      [capitalPotId]:
+        allocationAmountInCapitalPot(allocation, capitalPotId) + reviewAmount,
+    };
+    updateAllocation(allocation.id, {
+      capitalPotId,
+      allocationMode:
+        Object.values(capitalPotAmounts).filter((amount) => Number(amount) > 0)
+          .length > 1
+          ? "manual"
+          : "single",
+      ...allocationPotChanges(capitalPotAmounts),
+    });
+  };
   const addProduct = (
     productId: string,
     capitalPotId: CapitalPotId = quickBucket,
@@ -3521,6 +3544,40 @@ function PlannerView({
                   <span>
                     {euro.format(migrationReviewAmount)} aus früheren Laufzeitband-Zuordnungen konnten keinem Jahres-Kapitaltopf eindeutig zugeordnet werden. Die Produktbeträge bleiben erhalten.
                   </span>
+                  <div className="capital-review-items">
+                    {plan.allocations
+                      .filter(
+                        (allocation) =>
+                          (Number(allocation.capitalPotReviewAmount) || 0) > 0,
+                      )
+                      .map((allocation) => (
+                        <div key={allocation.id}>
+                          <span>
+                            <b>{allocation.productName}</b>
+                            <small>{allocation.capitalPotReviewNote}</small>
+                          </span>
+                          <strong>
+                            {euro.format(
+                              Number(allocation.capitalPotReviewAmount) || 0,
+                            )}
+                          </strong>
+                          <button
+                            disabled={!selectedPot}
+                            onClick={() =>
+                              selectedPot &&
+                              resolveMigrationAllocation(
+                                allocation,
+                                selectedPot.id,
+                              )
+                            }
+                          >
+                            {selectedPot
+                              ? `Dem Topf „${selectedPot.label}“ zuordnen`
+                              : "Kapitaltopf auswählen"}
+                          </button>
+                        </div>
+                      ))}
+                  </div>
                 </div>
               )}
               {selectedPot && (
@@ -3581,7 +3638,6 @@ function PlannerView({
                       {allocationsForSelectedPot.map((allocation) => {
                         const itemSolution = solution(allocation);
                         const conflict =
-                          selectedPot.kind !== "reserve" &&
                           itemSolution &&
                           itemSolution.minMonths > selectedPot.minMonths;
                         return (
