@@ -768,7 +768,7 @@ export default function Home() {
         </nav>
         <div className="sidebar-foot">
           <p>
-            <strong>Prototyp V0.11</strong>
+            <strong>Prototyp V0.12</strong>
             <br />
             Browser-lokal, keine revisionssichere Speicherung.
           </p>
