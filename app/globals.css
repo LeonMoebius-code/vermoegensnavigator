@@ -5494,3 +5494,215 @@ body[data-print-mode="customer"] .internal-only {
     overflow-x: auto;
   }
 }
+
+/* Block 1: interaktives Vermögenshaus und klarer Rückweg aus Vertiefungen. */
+.house-mode-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 18px 0 12px;
+}
+.house-mode-tabs button {
+  min-width: 82px;
+  border: 1px solid #cbd7e2;
+  border-radius: 6px;
+  background: #fff;
+  color: var(--navy);
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 800;
+}
+.house-mode-tabs button:hover {
+  border-color: var(--navy-2);
+  background: #f1f6fa;
+}
+.house-mode-tabs button.active {
+  border-color: var(--navy);
+  background: var(--navy);
+  color: #fff;
+}
+.house-mode-tabs select {
+  margin-left: auto;
+  min-width: 230px;
+  border: 1px solid #cbd7e2;
+  border-radius: 6px;
+  background: #fff;
+  padding: 10px 12px;
+  color: var(--navy);
+  font-size: 14px;
+}
+.wealth-house > .house-pillars > button {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  min-height: 250px;
+  overflow: hidden;
+  border: 1px solid #d9dee4;
+  border-top: 7px solid var(--pillar-color);
+  background: #f2f3f4;
+  padding: 16px 14px 14px;
+  color: inherit;
+  text-align: left;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+.wealth-house > .house-pillars > button:hover,
+.wealth-house > .house-pillars > button.active {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 24px rgba(0, 43, 92, 0.14);
+  outline: 2px solid var(--pillar-color);
+}
+.wealth-house .house-pillars button .pillar-fill {
+  position: absolute;
+  z-index: -1;
+  inset: auto 0 0;
+  height: var(--pillar-fill);
+  background: var(--pillar-color);
+  opacity: 0.18;
+}
+.wealth-house .house-pillars button header span {
+  display: block;
+  min-height: 38px;
+  color: var(--navy);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+.wealth-house .house-pillars button header strong {
+  display: block;
+  margin-top: 8px;
+  color: var(--pillar-color);
+  font-size: 24px;
+}
+.wealth-house .house-pillars button p {
+  margin: 18px 0;
+  color: #485568;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.wealth-house .house-pillars button footer {
+  margin-top: auto;
+  color: var(--navy);
+  font-size: 16px;
+  font-weight: 800;
+}
+.pillar-delta {
+  display: grid;
+  gap: 3px;
+  margin-top: 12px;
+  border-top: 1px solid rgba(0, 43, 92, 0.18);
+  padding-top: 10px;
+  color: var(--navy);
+  font-size: 13px;
+}
+.pillar-delta b {
+  color: var(--pillar-color);
+}
+.house-detail {
+  margin-top: 14px;
+  padding: 18px;
+}
+.house-detail > header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.house-detail > header h3 {
+  margin: 2px 0 8px;
+  color: var(--navy);
+}
+.house-detail > header button {
+  border: 0;
+  background: transparent;
+  color: var(--navy-2);
+  font-weight: 800;
+}
+.house-detail-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 22px;
+}
+.house-detail h4 {
+  margin: 0 0 8px;
+  color: var(--navy);
+}
+.house-detail-list p,
+.house-detail-compare p {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  border-top: 1px solid #e2e8ee;
+  padding: 10px 0;
+  margin: 0;
+}
+.house-detail p span,
+.house-detail p small {
+  display: block;
+}
+.house-detail p small {
+  margin-top: 3px;
+  color: #6d7888;
+}
+.house-detail p b {
+  white-space: nowrap;
+  color: var(--navy);
+}
+.module-return {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 46px;
+  border: 2px solid var(--orange);
+  border-radius: 7px;
+  background: var(--navy);
+  color: #fff;
+  padding: 7px 9px 7px 14px;
+  font-size: 14px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 150ms ease, transform 150ms ease;
+}
+.module-return:hover {
+  background: var(--navy-2);
+  transform: translateY(-1px);
+}
+.module-return:focus-visible {
+  outline: 3px solid rgba(255, 102, 0, 0.35);
+  outline-offset: 2px;
+}
+.module-return b {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--orange);
+  color: #fff;
+  font-size: 21px;
+  line-height: 1;
+}
+.module-workspace > header .module-return {
+  position: static;
+}
+@media (max-width: 900px) {
+  .house-detail-compare {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 620px) {
+  .house-mode-tabs {
+    flex-wrap: wrap;
+  }
+  .house-mode-tabs select {
+    width: 100%;
+    margin-left: 0;
+  }
+  .module-return > span {
+    display: none;
+  }
+  .module-return {
+    padding: 6px;
+  }
+}

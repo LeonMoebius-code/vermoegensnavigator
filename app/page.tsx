@@ -756,7 +756,7 @@ export default function Home() {
         </nav>
         <div className="sidebar-foot">
           <p>
-            <strong>Prototyp V0.10</strong>
+            <strong>Prototyp V0.11</strong>
             <br />
             Browser-lokal, keine revisionssichere Speicherung.
           </p>
@@ -2037,8 +2037,13 @@ function ModuleWorkspace({
           <span>
             {current + 1} / {slides.length}
           </span>
-          <button className="modal-close" onClick={close} aria-label="Schließen">
-            ×
+          <button
+            className="module-return"
+            onClick={close}
+            aria-label="Vertiefung schließen und zur Beratung zurückkehren"
+          >
+            <span>Zur Beratung</span>
+            <b aria-hidden="true">×</b>
           </button>
         </header>
         <div className="module-workspace-body">
@@ -2258,7 +2263,7 @@ function ResultStep({
           </div>
           <small>fünf wirtschaftliche Anlageklassen</small>
         </div>
-        <WealthHouse plan={plan} depot={item.depot} compact />
+        <WealthHouse plan={plan} plans={item.plans} depot={item.depot} currentLiquidity={item.advisory.liquidAssets} compact />
         <div className="result-cta-row">
           <div>
             <strong>Struktur im Detail prüfen</strong>
@@ -3497,7 +3502,7 @@ function PlannerView({
           </p>
         </>
       )}
-      {mode === "house" && <WealthHouse plan={plan} depot={item.depot} />}
+      {mode === "house" && <WealthHouse plan={plan} plans={item.plans} depot={item.depot} currentLiquidity={item.advisory.liquidAssets} />}
       {mode === "models" && (
         <div className="models-view">
           <div className="section-copy">
@@ -3641,13 +3646,23 @@ function PlannerView({
 
 function WealthHouse({
   plan,
+  plans = [plan],
   depot,
+  currentLiquidity = 0,
   compact = false,
 }: {
   plan: StructurePlan;
+  plans?: StructurePlan[];
   depot: DepotHolding[];
+  currentLiquidity?: number;
   compact?: boolean;
 }) {
+  const [mode, setMode] = useState<"ist" | "plan" | "target" | "compare">(
+    compact ? "target" : "plan",
+  );
+  const [compareWith, setCompareWith] = useState<"plan" | "target">("target");
+  const [selectedAsset, setSelectedAsset] = useState<AssetClass | null>(null);
+  const targetPlan = plans.find((entry) => entry.preferred) || plan;
   const breakdown = planAssetAmounts(plan);
   const selectedIds = new Set(
     plan.depotHoldingIds.length > 0
@@ -3704,6 +3719,152 @@ function WealthHouse({
     (sum, value) => sum + value,
     0,
   );
+  const entireDepotAmounts = Object.fromEntries(
+    assetClasses.map((name) => [
+      name,
+      (name === "Liquidität" ? currentLiquidity : 0) +
+      depot
+        .filter((entry) => entry.assetClass === name)
+        .reduce((sum, entry) => sum + entry.value, 0),
+    ]),
+  ) as Record<AssetClass, number>;
+  const snapshotFor = (selectedPlan: StructurePlan) => {
+    const selectedBreakdown = planAssetAmounts(selectedPlan);
+    const selectedIds = new Set(
+      selectedPlan.depotHoldingIds.length
+        ? selectedPlan.depotHoldingIds
+        : depot.map((entry) => entry.id),
+    );
+    const includeDepot =
+      selectedPlan.depotMode === "retain" ||
+      selectedPlan.depotMode === "afterSales";
+    const amounts = Object.fromEntries(
+      assetClasses.map((name) => {
+        const retained = includeDepot
+          ? depot
+              .filter(
+                (entry) =>
+                  selectedIds.has(entry.id) && entry.assetClass === name,
+              )
+              .reduce(
+                (sum, entry) =>
+                  sum +
+                  (selectedPlan.depotMode === "afterSales"
+                    ? Math.max(0, entry.value - entry.plannedSale)
+                    : entry.value),
+                0,
+              )
+          : 0;
+        const unallocated =
+          name === "Liquidität"
+            ? Math.max(0, selectedPlan.total - selectedBreakdown.total)
+            : 0;
+        return [name, selectedBreakdown.amounts[name] + retained + unallocated];
+      }),
+    ) as Record<AssetClass, number>;
+    return { amounts, unresolved: selectedBreakdown.unresolved };
+  };
+  const istSnapshot = { amounts: entireDepotAmounts, unresolved: 0 };
+  const planSnapshot = snapshotFor(plan);
+  const targetSnapshot = snapshotFor(targetPlan);
+  const shown =
+    mode === "ist"
+      ? istSnapshot
+      : mode === "target"
+        ? targetSnapshot
+        : planSnapshot;
+  const comparison = compareWith === "target" ? targetSnapshot : planSnapshot;
+  const shownTotal = Object.values(shown.amounts).reduce(
+    (sum, value) => sum + value,
+    0,
+  );
+  const istTotal = Object.values(istSnapshot.amounts).reduce(
+    (sum, value) => sum + value,
+    0,
+  );
+  const comparisonTotal = Object.values(comparison.amounts).reduce(
+    (sum, value) => sum + value,
+    0,
+  );
+  const contributors = (
+    asset: AssetClass,
+    source: "ist" | "plan" | "target",
+  ) => {
+    if (source === "ist")
+      return depot
+        .filter((entry) => entry.assetClass === asset)
+        .map((entry) => ({
+          id: entry.id,
+          name: entry.name,
+          amount: entry.value,
+          mix: 100,
+          source: "Bestandsdepot",
+        }));
+    const selectedPlan = source === "target" ? targetPlan : plan;
+    const planEntries = selectedPlan.allocations.flatMap((allocation) => {
+      const product = houseProducts.find(
+        (entry) => entry.id === allocation.productId,
+      );
+      const vv = managedPortfolios.find(
+        (entry) => entry.id === allocation.productId,
+      );
+      const mix = product?.assetMix?.[asset] || vv?.assetMix?.[asset] || 0;
+      return mix
+        ? [
+            {
+              id: allocation.id,
+              name: allocation.productName,
+              amount: (allocation.amount * mix) / 100,
+              mix,
+              source:
+                allocation.source === "vv"
+                  ? "VV-Matrix"
+                  : allocation.source === "model"
+                    ? "Modellportfolio"
+                    : "Hausmeinung",
+            },
+          ]
+        : [];
+    });
+    if (asset === "Liquidität") {
+      const unallocated = Math.max(
+        0,
+        selectedPlan.total - planAssetAmounts(selectedPlan).total,
+      );
+      if (unallocated > 0)
+        planEntries.push({
+          id: `unallocated-${selectedPlan.id}`,
+          name: "Noch nicht zugeordnetes Planungskapital",
+          amount: unallocated,
+          mix: 100,
+          source: "Planungsrest",
+        });
+    }
+    const includeDepot =
+      selectedPlan.depotMode === "retain" ||
+      selectedPlan.depotMode === "afterSales";
+    if (!includeDepot) return planEntries;
+    const ids = new Set(
+      selectedPlan.depotHoldingIds.length
+        ? selectedPlan.depotHoldingIds
+        : depot.map((entry) => entry.id),
+    );
+    return [
+      ...planEntries,
+      ...depot
+        .filter((entry) => ids.has(entry.id) && entry.assetClass === asset)
+        .map((entry) => ({
+          id: `depot-${entry.id}`,
+          name: entry.name,
+          amount:
+            selectedPlan.depotMode === "afterSales"
+              ? Math.max(0, entry.value - entry.plannedSale)
+              : entry.value,
+          mix: 100,
+          source: "Fortbestehender Bestand",
+        })),
+    ];
+  };
   return (
     <div className="house-view">
       {!compact && <div className="section-copy">
@@ -3714,20 +3875,80 @@ function WealthHouse({
           Unterlagen aufgeteilt. Ungeklärte Produkte bleiben separat sichtbar.
         </p>
       </div>}
+      {!compact && (
+        <div className="house-mode-tabs" role="tablist" aria-label="Ansicht der Vermögensstruktur">
+          {(["ist", "plan", "target", "compare"] as const).map((entry) => (
+            <button
+              key={entry}
+              className={mode === entry ? "active" : ""}
+              onClick={() => {
+                setMode(entry);
+                setSelectedAsset(null);
+              }}
+              role="tab"
+              aria-selected={mode === entry}
+            >
+              {entry === "target" ? "SOLL" : entry.toUpperCase()}
+            </button>
+          ))}
+          {mode === "compare" && (
+            <select
+              aria-label="Vergleichsziel"
+              value={compareWith}
+              onChange={(event) =>
+                setCompareWith(event.target.value as "plan" | "target")
+              }
+            >
+              <option value="plan">IST mit aktiver Planung</option>
+              <option value="target">IST mit SOLL</option>
+            </select>
+          )}
+        </div>
+      )}
       <div className="house-layout">
         <div className="wealth-house">
           <div className="house-roof">
-            <span>Vermögensstruktur</span>
-            <strong>{euro.format(displayedKnown + breakdown.unresolved)}</strong>
+            <span>
+              {mode === "ist"
+                ? "IST-Struktur"
+                : mode === "target"
+                  ? `SOLL · ${targetPlan.name}`
+                  : mode === "compare"
+                    ? compareWith === "target"
+                      ? "IST-SOLL-Vergleich"
+                      : "IST-PLAN-Vergleich"
+                    : `PLAN · ${plan.name}`}
+            </span>
+            <strong>
+              {euro.format(
+                mode === "compare"
+                  ? comparisonTotal
+                  : shownTotal + shown.unresolved,
+              )}
+            </strong>
           </div>
           <div className="house-pillars">
             {assetClasses.map((name) => {
-              const value = displayedAmounts[name];
-              const share = displayedKnown ? (value / displayedKnown) * 100 : 0;
-              const fill = value > 0 ? Math.max(5, Math.min(100, share)) : 0;
+              const value = shown.amounts[name];
+              const share = shownTotal ? (value / shownTotal) * 100 : 0;
+              const istShare = istTotal
+                ? (istSnapshot.amounts[name] / istTotal) * 100
+                : 0;
+              const targetShare = comparisonTotal
+                ? (comparison.amounts[name] / comparisonTotal) * 100
+                : 0;
+              const displayValue =
+                mode === "compare" ? comparison.amounts[name] : value;
+              const displayShare = mode === "compare" ? targetShare : share;
+              const fill = displayValue
+                ? Math.max(5, Math.min(100, displayShare))
+                : 0;
               return (
-                <article
+                <button
                   key={name}
+                  className={selectedAsset === name ? "active" : ""}
+                  onClick={() => setSelectedAsset(name)}
+                  aria-label={`${name} öffnen`}
                   style={
                     {
                       "--pillar-color": colors[name],
@@ -3738,28 +3959,40 @@ function WealthHouse({
                   <div className="pillar-fill" />
                   <header>
                     <span>{name}</span>
-                    <strong>{percent.format(share)} %</strong>
+                    <strong>{percent.format(displayShare)} %</strong>
                   </header>
                   <p>{examples[name]}</p>
-                  <footer>{euro.format(value)}</footer>
-                </article>
+                  <footer>{euro.format(displayValue)}</footer>
+                  {mode === "compare" && (
+                    <div className="pillar-delta">
+                      <span>IST {percent.format(istShare)} %</span>
+                      <b>
+                        {targetShare - istShare >= 0 ? "+" : ""}
+                        {percent.format(targetShare - istShare)} %-Pkt.
+                      </b>
+                      <small>
+                        {euro.format(
+                          comparison.amounts[name] - istSnapshot.amounts[name],
+                        )}
+                      </small>
+                    </div>
+                  )}
+                </button>
               );
             })}
           </div>
           <div className="house-foundation">
             <span>
-              {includeInTotal
-                ? "Neue Planung und einbezogener Bestand"
-                : "Wirtschaftliche Durchschau der aktiven Planung"}
+              Wirtschaftliche Durchschau der gewählten Ansicht
             </span>
             <b>
-              {breakdown.unresolved > 0
-                ? `${euro.format(breakdown.unresolved)} noch ungeklärt`
+              {shown.unresolved > 0
+                ? `${euro.format(shown.unresolved)} noch ungeklärt`
                 : "vollständig durchgeschaut"}
             </b>
           </div>
         </div>
-        {!compact && <section className="panel house-table">
+        {!compact && mode === "plan" && <section className="panel house-table">
           <div className="comparison-table">
             <div className="comparison-head">
               <span>Anlageklasse</span>
@@ -3798,7 +4031,40 @@ function WealthHouse({
           </div>
         </section>}
       </div>
-      {!compact && <div className="house-context">
+      {selectedAsset && (
+        <section className="house-detail panel">
+          <header>
+            <div>
+              <p className="eyebrow">DETAILANSICHT</p>
+              <h3>{selectedAsset}</h3>
+            </div>
+            <button onClick={() => setSelectedAsset(null)}>Schließen ×</button>
+          </header>
+          {mode === "compare" ? (
+            <div className="house-detail-compare">
+              <section>
+                <h4>IST</h4>
+                {contributors(selectedAsset, "ist").length ? contributors(selectedAsset, "ist").map((entry) => (
+                  <p key={`ist-${entry.id}`}><span>{entry.name}<small>{entry.source}</small></span><b>{euro.format(entry.amount)}</b></p>
+                )) : <small>Keine wirtschaftlich zugeordnete Position.</small>}
+              </section>
+              <section>
+                <h4>{compareWith === "target" ? "SOLL" : "PLAN"}</h4>
+                {contributors(selectedAsset, compareWith).length ? contributors(selectedAsset, compareWith).map((entry) => (
+                  <p key={`compare-${entry.id}`}><span>{entry.name}<small>{entry.source} · Anteil {percent.format(entry.mix)} %</small></span><b>{euro.format(entry.amount)}</b></p>
+                )) : <small>Keine wirtschaftlich zugeordnete Position.</small>}
+              </section>
+            </div>
+          ) : (
+            <div className="house-detail-list">
+              {contributors(selectedAsset, mode === "target" ? "target" : mode === "ist" ? "ist" : "plan").length ? contributors(selectedAsset, mode === "target" ? "target" : mode === "ist" ? "ist" : "plan").map((entry) => (
+                <p key={entry.id}><span>{entry.name}<small>{entry.source} · Anteil {percent.format(entry.mix)} %</small></span><b>{euro.format(entry.amount)}</b></p>
+              )) : <small>Keine wirtschaftlich zugeordnete Position.</small>}
+            </div>
+          )}
+        </section>
+      )}
+      {!compact && mode === "plan" && <div className="house-context">
         <strong>Depotmodus</strong>
         <span>
           {plan.depotMode === "none"
@@ -3810,17 +4076,17 @@ function WealthHouse({
                 : "Ausgewählte Positionen als fortbestehender Bestand einbezogen"}
         </span>
       </div>}
-      {!compact && breakdown.unresolved > 0 && (
+      {!compact && mode !== "ist" && shown.unresolved > 0 && (
         <div className="planner-alert">
           <strong>Datenproblem</strong>
           <span>
-            {euro.format(breakdown.unresolved)} entfallen auf Bausteine ohne
+            {euro.format(shown.unresolved)} entfallen auf Bausteine ohne
             freigegebene Durchschau. Dazu zählen insbesondere
             Modellbezeichnungen sowie ZinsFix Index und MEA Einzelwert.
           </span>
         </div>
       )}
-      {!compact && <section className="panel lookthrough">
+      {!compact && mode === "plan" && <section className="panel lookthrough">
         <div className="panel-heading">
           <div>
             <p className="eyebrow">DURCHSCHAU</p>
