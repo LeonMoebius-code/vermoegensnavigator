@@ -74,6 +74,7 @@ export type StructurePlan = {
   total: number;
   capitalMode: "linked" | "manual";
   allocations: PlannerAllocation[];
+  investmentPlans: InvestmentPlan[];
   preferred: boolean;
   notes: string;
   modelId?: string;
@@ -82,6 +83,20 @@ export type StructurePlan = {
   depotHoldingIds: string[];
   createdAt: string;
   updatedAt: string;
+};
+
+export type InvestmentPlan = {
+  id: string;
+  name: string;
+  type: "savings" | "phased";
+  productId: string;
+  productName: string;
+  bucketId: BucketId;
+  installmentAmount: number;
+  installments: number;
+  frequency: "monthly" | "quarterly" | "semiannual" | "annual";
+  startDate: string;
+  note: string;
 };
 
 export type DepotHolding = {
@@ -94,6 +109,11 @@ export type DepotHolding = {
   risk: number;
   plannedSale: number;
   note: string;
+  wkn?: string;
+  currency?: string;
+  maturity?: string;
+  sourceType?: string;
+  classificationStatus?: "mapped" | "matched" | "unresolved";
 };
 
 export type VvFilters = {
@@ -192,7 +212,7 @@ export type CustomerChecklistItem = {
 };
 
 export type AdvisoryCase = {
-  schemaVersion: 4;
+  schemaVersion: 5;
   id: string;
   status: "Entwurf" | "In Prüfung" | "Abgeschlossen";
   advisorId: AdvisorId;
@@ -237,6 +257,7 @@ export function createPlan(name: string, total: number): StructurePlan {
     total,
     capitalMode: "linked",
     allocations: [],
+    investmentPlans: [],
     preferred: true,
     notes: "",
     depotMode: "none",
@@ -255,7 +276,7 @@ export function createCase(
   const initialTotal = data.liquidAssets;
   const plan = createPlan("Plan A – Ausgangsstruktur", initialTotal);
   return {
-    schemaVersion: 4,
+    schemaVersion: 5,
     id: uid("fall"),
     status: "Entwurf",
     advisorId,
@@ -401,7 +422,7 @@ export function normalizeImportedCase(
   const item = candidate as Partial<AdvisoryCase>;
   if (!item.advisory || !Array.isArray(item.plans)) return null;
   const normalized = clone(item) as AdvisoryCase;
-  normalized.schemaVersion = 4;
+  normalized.schemaVersion = 5;
   if (regenerateId) normalized.id = uid("fall-import");
   normalized.updatedAt = iso();
   normalized.versions = Array.isArray(normalized.versions)
@@ -424,6 +445,11 @@ export function normalizeImportedCase(
     ...blankVvFilters(normalized.advisory.liquidAssets),
     ...(normalized.vvFilters || {}),
   };
+  normalized.advisory.riskAssessment = normalized.advisory.riskAssessment || {
+    lossReaction: null,
+    temporaryLoss: null,
+    financialCapacity: null,
+  };
   normalized.plans = normalized.plans.map((plan) => ({
     ...plan,
     total:
@@ -442,6 +468,9 @@ export function normalizeImportedCase(
     depotMode: plan.depotMode || "none",
     depotHoldingIds: Array.isArray(plan.depotHoldingIds)
       ? plan.depotHoldingIds
+      : [],
+    investmentPlans: Array.isArray(plan.investmentPlans)
+      ? plan.investmentPlans
       : [],
     allocations: (plan.allocations || []).map((allocation) => ({
       allocationMode: allocation.allocationMode || "single",

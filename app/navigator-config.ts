@@ -9,6 +9,12 @@ export type Need = {
   dueDate?: string;
 };
 
+export type RiskAssessment = {
+  lossReaction: RiskLevel | null;
+  temporaryLoss: RiskLevel | null;
+  financialCapacity: RiskLevel | null;
+};
+
 export type AdvisoryData = {
   caseName: string;
   scope: Scope | null;
@@ -22,6 +28,7 @@ export type AdvisoryData = {
   goal: string;
   horizon: number;
   risk: RiskLevel;
+  riskAssessment: RiskAssessment;
   experience: string;
   priorities: string[];
   modules: string[];
@@ -41,6 +48,11 @@ export const emptyAdvisory: AdvisoryData = {
   goal: "Ausgewogenes Verhältnis",
   horizon: 8,
   risk: 3,
+  riskAssessment: {
+    lossReaction: null,
+    temporaryLoss: null,
+    financialCapacity: null,
+  },
   experience: "Grundkenntnisse",
   priorities: ["Werterhalt", "Flexibilität"],
   modules: ["maturity", "market"],

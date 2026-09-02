@@ -2,6 +2,7 @@
 
 import {
   ChangeEvent,
+  CSSProperties,
   Dispatch,
   ReactNode,
   SetStateAction,
@@ -17,6 +18,7 @@ import {
   modules,
   percent,
   priorityOptions,
+  RiskAssessment,
   RiskLevel,
   scenarios,
   Scope,
@@ -51,11 +53,13 @@ import {
   normalizeImportedCase,
   planAssetAmounts,
   PlannerAllocation,
+  InvestmentPlan,
   strategicAmount,
   StructurePlan,
   VvFilters,
   advisors,
 } from "./case-model";
+import { DepotCsvResult, parseDepotCsv } from "./depot-csv";
 
 type View = "home" | "cases" | "wizard" | "planner" | "depot" | "export";
 
@@ -91,6 +95,63 @@ const riskText: Record<RiskLevel, { title: string; text: string }> = {
   },
 };
 
+const riskQuestions: Array<{
+  key: keyof RiskAssessment;
+  title: string;
+  options: string[];
+}> = [
+  {
+    key: "lossReaction",
+    title: "Wie würden Sie bei einem deutlichen zwischenzeitlichen Verlust reagieren?",
+    options: [
+      "Sofort verkaufen",
+      "Risiko deutlich reduzieren",
+      "Zunächst abwarten",
+      "Strategie beibehalten",
+      "Nachkauf bewusst prüfen",
+    ],
+  },
+  {
+    key: "temporaryLoss",
+    title: "Welche vorübergehende Wertminderung erscheint noch tragbar?",
+    options: ["Bis 5 %", "Bis 10 %", "Bis 15 %", "Bis 25 %", "Mehr als 25 %"],
+  },
+  {
+    key: "financialCapacity",
+    title: "Welche Auswirkung hätte ein Verlust auf geplante Ausgaben?",
+    options: [
+      "Ziele wären gefährdet",
+      "Deutliche Einschränkungen",
+      "Teilweise Anpassungen",
+      "Kaum Einschränkungen",
+      "Keine Einschränkungen",
+    ],
+  },
+];
+
+function riskOrientation(data: AdvisoryData, assessment = data.riskAssessment) {
+  const answers = Object.values(assessment);
+  if (answers.some((value) => value === null)) return null;
+  const horizon =
+    data.horizon <= 2 ? 1 : data.horizon <= 4 ? 2 : data.horizon <= 7 ? 3 : data.horizon <= 12 ? 4 : 5;
+  const experience = data.experience.startsWith("Keine")
+    ? 1
+    : data.experience === "Grundkenntnisse"
+      ? 2
+      : data.experience === "Erweiterte Kenntnisse"
+        ? 3
+        : 4;
+  const raw = Math.round(
+    (Number(assessment.lossReaction) +
+      Number(assessment.temporaryLoss) +
+      Number(assessment.financialCapacity) +
+      horizon +
+      experience) /
+      5,
+  );
+  return Math.max(1, Math.min(5, raw)) as RiskLevel;
+}
+
 const goalOptions = [
   "Liquidität rentierlich strukturieren",
   "Vermögensaufbau",
@@ -99,6 +160,19 @@ const goalOptions = [
   "Struktur optimieren",
   "Vermögen ganzheitlich ordnen",
 ];
+
+const investmentFrequencies: Array<{
+  value: InvestmentPlan["frequency"];
+  label: string;
+}> = [
+  { value: "monthly", label: "monatlich" },
+  { value: "quarterly", label: "vierteljährlich" },
+  { value: "semiannual", label: "halbjährlich" },
+  { value: "annual", label: "jährlich" },
+];
+
+const investmentPlanTotal = (entry: InvestmentPlan) =>
+  entry.installments > 0 ? entry.installmentAmount * entry.installments : 0;
 const moduleDetails: Record<string, string[]> = {
   maturity: [
     "Konkrete Bedarfe werden automatisch einem einheitlichen Laufzeitband zugeordnet.",
@@ -682,7 +756,7 @@ export default function Home() {
         </nav>
         <div className="sidebar-foot">
           <p>
-            <strong>Prototyp V0.9</strong>
+            <strong>Prototyp V0.10</strong>
             <br />
             Browser-lokal, keine revisionssichere Speicherung.
           </p>
@@ -761,7 +835,7 @@ export default function Home() {
               ×
             </button>
             <p className="eyebrow">TESTHINWEISE</p>
-            <h2>Was V0.9 jetzt zusammenführt</h2>
+            <h2>Was V0.10 jetzt zusammenführt</h2>
             <ol>
               <li>
                 Ein Fall enthält Beratung, alle Planvarianten, VV-Auswahl und
@@ -781,6 +855,14 @@ export default function Home() {
               <li>
                 Verantwortliche Person und Kunden-Checkliste werden im Fall und
                 in den Exporten gespeichert.
+              </li>
+              <li>
+                Das Vermögenshaus steht als fünf Säulen im Ergebnis und in der
+                Strukturplanung im Mittelpunkt.
+              </li>
+              <li>
+                Risiko-Orientierung, Depot-CSV-Vorschau sowie Spar- und
+                Investitionspläne sind fallbezogen dokumentierbar.
               </li>
             </ol>
             <p className="notice">
@@ -1650,6 +1732,16 @@ function GoalsStep({
   ) => void;
   togglePriority: (value: string) => void;
 }) {
+  const orientation = riskOrientation(data);
+  const answerRiskQuestion = (
+    key: keyof RiskAssessment,
+    value: RiskLevel,
+  ) => {
+    const next = { ...data.riskAssessment, [key]: value };
+    update("riskAssessment", next);
+    const result = riskOrientation(data, next);
+    if (result) update("risk", result);
+  };
   return (
     <>
       <SectionIntro
@@ -1698,8 +1790,55 @@ function GoalsStep({
             <option>Umfangreiche Kenntnisse</option>
           </select>
         </label>
+        <div className="field full risk-check">
+          <div className="risk-check-head">
+            <div>
+              <span>Kurze Risiko-Orientierung</span>
+              <small>
+                Drei Klickfragen werden mit Horizont und Kenntnissen verbunden.
+              </small>
+            </div>
+            <strong>
+              {orientation
+                ? `Orientierungswert ${orientation}/5`
+                : "Noch nicht vollständig"}
+            </strong>
+          </div>
+          <div className="risk-question-list">
+            {riskQuestions.map((question, questionIndex) => (
+              <section key={question.key}>
+                <p>
+                  <b>{questionIndex + 1}</b>
+                  {question.title}
+                </p>
+                <div>
+                  {question.options.map((option, index) => {
+                    const value = (index + 1) as RiskLevel;
+                    return (
+                      <button
+                        key={option}
+                        className={
+                          data.riskAssessment[question.key] === value
+                            ? "selected"
+                            : ""
+                        }
+                        onClick={() => answerRiskQuestion(question.key, value)}
+                      >
+                        {option}
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+          </div>
+          <p className="risk-check-note">
+            Die Auswertung ist eine Gesprächsorientierung. Sie ersetzt weder die
+            regulatorische Geeignetheitsprüfung noch die Verlusttragfähigkeitsprüfung.
+          </p>
+        </div>
         <div className="field full">
-          <span>Strategische Risikoeinordnung</span>
+          <span>Strategische Risikoeinordnung bestätigen oder anpassen</span>
           <div className="risk-scale">
             {([1, 2, 3, 4, 5] as RiskLevel[]).map((risk) => (
               <button
@@ -2111,10 +2250,29 @@ function ResultStep({
           </p>
         </div>
       )}
-      <section className="result-section">
+      <section className="result-section result-house-section">
         <div className="result-section-head">
           <div>
             <span>01</span>
+            <h3>Vermögenshaus</h3>
+          </div>
+          <small>fünf wirtschaftliche Anlageklassen</small>
+        </div>
+        <WealthHouse plan={plan} depot={item.depot} compact />
+        <div className="result-cta-row">
+          <div>
+            <strong>Struktur im Detail prüfen</strong>
+            <p>Produkte, Bestand und Durchschau werden in der Strukturplanung erläutert.</p>
+          </div>
+          <button className="primary" onClick={() => setView("planner")}>
+            Vermögensstruktur öffnen →
+          </button>
+        </div>
+      </section>
+      <section className="result-section">
+        <div className="result-section-head">
+          <div>
+            <span>02</span>
             <h3>Einheitliche Laufzeitenstruktur</h3>
           </div>
           <small>identisch in Planung und Export</small>
@@ -2144,7 +2302,7 @@ function ResultStep({
       <section className="result-section">
         <div className="result-section-head">
           <div>
-            <span>02</span>
+            <span>03</span>
             <h3>Fachmodule</h3>
           </div>
           <small>{data.modules.length} Vertiefungen</small>
@@ -2424,6 +2582,38 @@ function PlannerView({
     const remaining = item.plans.filter((entry) => entry.id !== plan.id);
     setItem({ ...item, plans: remaining, activePlanId: remaining[0].id });
   };
+  const addInvestmentPlan = (type: InvestmentPlan["type"] = "phased") => {
+    const allocation = plan.allocations[0];
+    const next: InvestmentPlan = {
+      id: uid("investment"),
+      name: type === "savings" ? "Neuer Sparplan" : "Gestaffelte Investition",
+      type,
+      productId: allocation?.productId || "",
+      productName: allocation?.productName || "",
+      bucketId: allocation?.bucketId || "year10plus",
+      installmentAmount: 0,
+      installments: type === "savings" ? 12 : 3,
+      frequency: "monthly",
+      startDate: new Date().toISOString().slice(0, 10),
+      note: "",
+    };
+    updatePlan({ investmentPlans: [...(plan.investmentPlans || []), next] });
+  };
+  const updateInvestmentPlan = (
+    id: string,
+    changes: Partial<InvestmentPlan>,
+  ) =>
+    updatePlan({
+      investmentPlans: (plan.investmentPlans || []).map((entry) =>
+        entry.id === id ? { ...entry, ...changes } : entry,
+      ),
+    });
+  const removeInvestmentPlan = (id: string) =>
+    updatePlan({
+      investmentPlans: (plan.investmentPlans || []).filter(
+        (entry) => entry.id !== id,
+      ),
+    });
 
   const applyModel = (action: "new" | "supplement" | "replace") => {
     if (!modelDialog) return;
@@ -3133,6 +3323,173 @@ function PlannerView({
               })}
             </section>
           </div>
+          <section className="investment-plan-panel panel">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">UMSETZUNGSWEG</p>
+                <h2>Spar- und Investitionspläne</h2>
+                <p>
+                  Einmal geplante Produktbeträge können zeitlich gestaffelt
+                  umgesetzt werden. Die Raten werden nicht zusätzlich zum
+                  Planungsbetrag gezählt.
+                </p>
+              </div>
+              <div className="investment-plan-actions">
+                <button className="secondary" onClick={() => addInvestmentPlan("savings")}>
+                  ＋ Sparplan
+                </button>
+                <button className="secondary" onClick={() => addInvestmentPlan("phased")}>
+                  ＋ Gestaffelte Anlage
+                </button>
+              </div>
+            </div>
+            {(plan.investmentPlans || []).length === 0 ? (
+              <div className="investment-plan-empty">
+                Noch kein Spar- oder Investitionsplan erfasst.
+              </div>
+            ) : (
+              <div className="investment-plan-list">
+                {(plan.investmentPlans || []).map((entry) => (
+                  <article key={entry.id}>
+                    <header>
+                      <span>{entry.type === "savings" ? "Sparplan" : "Gestaffelte Anlage"}</span>
+                      <strong>
+                        {entry.installments > 0
+                          ? euro.format(investmentPlanTotal(entry))
+                          : "fortlaufend"}
+                      </strong>
+                      <button onClick={() => removeInvestmentPlan(entry.id)}>×</button>
+                    </header>
+                    <div className="investment-plan-fields">
+                      <label>
+                        <span>Bezeichnung</span>
+                        <input
+                          value={entry.name}
+                          onChange={(event) =>
+                            updateInvestmentPlan(entry.id, { name: event.target.value })
+                          }
+                        />
+                      </label>
+                      <label>
+                        <span>Produkt</span>
+                        <select
+                          value={entry.productId}
+                          onChange={(event) => {
+                            const allocation = plan.allocations.find(
+                              (item) => item.productId === event.target.value,
+                            );
+                            updateInvestmentPlan(entry.id, {
+                              productId: event.target.value,
+                              productName: allocation?.productName || "",
+                              bucketId: allocation?.bucketId || entry.bucketId,
+                            });
+                          }}
+                        >
+                          <option value="">Noch nicht festgelegt</option>
+                          {Array.from(
+                            new Map(
+                              plan.allocations.map((item) => [item.productId, item]),
+                            ).values(),
+                          ).map((item) => (
+                            <option key={item.productId} value={item.productId}>
+                              {item.productName}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        <span>Rate</span>
+                        <div className="inline-amount">
+                          <input
+                            inputMode="numeric"
+                            value={
+                              entry.installmentAmount
+                                ? entry.installmentAmount.toLocaleString("de-DE")
+                                : ""
+                            }
+                            onChange={(event) =>
+                              updateInvestmentPlan(entry.id, {
+                                installmentAmount: parseAmount(event.target.value),
+                              })
+                            }
+                          />
+                          <b>€</b>
+                        </div>
+                      </label>
+                      <label>
+                        <span>Anzahl Raten</span>
+                        <input
+                          type="number"
+                          min="0"
+                          value={entry.installments}
+                          onChange={(event) =>
+                            updateInvestmentPlan(entry.id, {
+                              installments: Math.max(0, Number(event.target.value)),
+                            })
+                          }
+                        />
+                        <small>0 bedeutet fortlaufend</small>
+                      </label>
+                      <label>
+                        <span>Rhythmus</span>
+                        <select
+                          value={entry.frequency}
+                          onChange={(event) =>
+                            updateInvestmentPlan(entry.id, {
+                              frequency: event.target.value as InvestmentPlan["frequency"],
+                            })
+                          }
+                        >
+                          {investmentFrequencies.map((frequency) => (
+                            <option key={frequency.value} value={frequency.value}>
+                              {frequency.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        <span>Start</span>
+                        <input
+                          type="date"
+                          value={entry.startDate}
+                          onChange={(event) =>
+                            updateInvestmentPlan(entry.id, { startDate: event.target.value })
+                          }
+                        />
+                      </label>
+                      <label>
+                        <span>Kapitaltopf</span>
+                        <select
+                          value={entry.bucketId}
+                          onChange={(event) =>
+                            updateInvestmentPlan(entry.id, {
+                              bucketId: event.target.value as InvestmentPlan["bucketId"],
+                            })
+                          }
+                        >
+                          {maturityBuckets.map((bucket) => (
+                            <option key={bucket.id} value={bucket.id}>
+                              {bucket.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="investment-note">
+                        <span>Hinweis</span>
+                        <input
+                          value={entry.note}
+                          placeholder="z. B. nach Freigabe starten"
+                          onChange={(event) =>
+                            updateInvestmentPlan(entry.id, { note: event.target.value })
+                          }
+                        />
+                      </label>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
           <p className="tool-legal">
             Kapitaltopf und Produktzuordnung sind getrennt: Ein Zieltopf zeigt
             den Bedarf, eine Produktposition dessen geplante Umsetzung. Dadurch
@@ -3285,15 +3642,13 @@ function PlannerView({
 function WealthHouse({
   plan,
   depot,
+  compact = false,
 }: {
   plan: StructurePlan;
   depot: DepotHolding[];
+  compact?: boolean;
 }) {
   const breakdown = planAssetAmounts(plan);
-  const planKnown = Object.values(breakdown.amounts).reduce(
-    (sum, value) => sum + value,
-    0,
-  );
   const selectedIds = new Set(
     plan.depotHoldingIds.length > 0
       ? plan.depotHoldingIds
@@ -3330,10 +3685,6 @@ function WealthHouse({
     (sum, value) => sum + value,
     0,
   );
-  const includedDepotTotal = Object.values(depotAmounts).reduce(
-    (sum, value) => sum + value,
-    0,
-  );
   const colors: Record<AssetClass, string> = {
     Liquidität: "#96bee6",
     Geldwerte: "#327dc8",
@@ -3341,41 +3692,74 @@ function WealthHouse({
     "Alternative Anlagen": "#ff6600",
     Sachwerte: "#006e73",
   };
+  const examples: Record<AssetClass, string> = {
+    Liquidität: "Tagesgeld, Kontoguthaben, Reserve",
+    Geldwerte: "Anleihen, Renten- und Geldmarktfonds",
+    Substanzwerte: "Aktien, Aktienfonds, Aktienanteile",
+    "Alternative Anlagen": "Rohstoffe und alternative Strategien",
+    Sachwerte: "Immobilien und offene Immobilienfonds",
+  };
+  const displayedAmounts = includeInTotal ? combinedAmounts : breakdown.amounts;
+  const displayedKnown = Object.values(displayedAmounts).reduce(
+    (sum, value) => sum + value,
+    0,
+  );
   return (
     <div className="house-view">
-      <div className="section-copy">
+      {!compact && <div className="section-copy">
         <p className="eyebrow">VERMÖGENSHAUS</p>
         <h2>Wirtschaftliche Durchschau statt Produktetikett</h2>
         <p>
           Mischfonds und Vermögensverwaltungen werden anhand der Quoten aus den
           Unterlagen aufgeteilt. Ungeklärte Produkte bleiben separat sichtbar.
         </p>
-      </div>
+      </div>}
       <div className="house-layout">
         <div className="wealth-house">
-          {[...assetClasses].reverse().map((name) => {
-            const value = breakdown.amounts[name];
-            return (
-              <div key={name} style={{ borderLeftColor: colors[name] }}>
-                <span>{name}</span>
-                <strong>{euro.format(value)}</strong>
-                <small>
-                  {percent.format(
-                    planKnown ? (value / planKnown) * 100 : 0,
-                  )}{" "}
-                  % der bekannten Durchschau
-                </small>
-              </div>
-            );
-          })}
           <div className="house-roof">
-            <span>{includeInTotal ? "Gesamtbetrachtung" : "Planvolumen"}</span>
-            <strong>
-              {euro.format(plan.total + (includeInTotal ? includedDepotTotal : 0))}
-            </strong>
+            <span>Vermögensstruktur</span>
+            <strong>{euro.format(displayedKnown + breakdown.unresolved)}</strong>
+          </div>
+          <div className="house-pillars">
+            {assetClasses.map((name) => {
+              const value = displayedAmounts[name];
+              const share = displayedKnown ? (value / displayedKnown) * 100 : 0;
+              const fill = value > 0 ? Math.max(5, Math.min(100, share)) : 0;
+              return (
+                <article
+                  key={name}
+                  style={
+                    {
+                      "--pillar-color": colors[name],
+                      "--pillar-fill": `${fill}%`,
+                    } as CSSProperties
+                  }
+                >
+                  <div className="pillar-fill" />
+                  <header>
+                    <span>{name}</span>
+                    <strong>{percent.format(share)} %</strong>
+                  </header>
+                  <p>{examples[name]}</p>
+                  <footer>{euro.format(value)}</footer>
+                </article>
+              );
+            })}
+          </div>
+          <div className="house-foundation">
+            <span>
+              {includeInTotal
+                ? "Neue Planung und einbezogener Bestand"
+                : "Wirtschaftliche Durchschau der aktiven Planung"}
+            </span>
+            <b>
+              {breakdown.unresolved > 0
+                ? `${euro.format(breakdown.unresolved)} noch ungeklärt`
+                : "vollständig durchgeschaut"}
+            </b>
           </div>
         </div>
-        <section className="panel house-table">
+        {!compact && <section className="panel house-table">
           <div className="comparison-table">
             <div className="comparison-head">
               <span>Anlageklasse</span>
@@ -3412,9 +3796,9 @@ function WealthHouse({
               </b>
             </div>
           </div>
-        </section>
+        </section>}
       </div>
-      <div className="house-context">
+      {!compact && <div className="house-context">
         <strong>Depotmodus</strong>
         <span>
           {plan.depotMode === "none"
@@ -3425,8 +3809,8 @@ function WealthHouse({
                 ? "Ausgewählte Positionen nach simulierten Verkäufen einbezogen"
                 : "Ausgewählte Positionen als fortbestehender Bestand einbezogen"}
         </span>
-      </div>
-      {breakdown.unresolved > 0 && (
+      </div>}
+      {!compact && breakdown.unresolved > 0 && (
         <div className="planner-alert">
           <strong>Datenproblem</strong>
           <span>
@@ -3436,7 +3820,7 @@ function WealthHouse({
           </span>
         </div>
       )}
-      <section className="panel lookthrough">
+      {!compact && <section className="panel lookthrough">
         <div className="panel-heading">
           <div>
             <p className="eyebrow">DURCHSCHAU</p>
@@ -3473,7 +3857,7 @@ function WealthHouse({
             );
           })}
         </div>
-      </section>
+      </section>}
     </div>
   );
 }
@@ -3863,6 +4247,11 @@ function DepotOptimizer({
   setView: (view: View) => void;
 }) {
   const csvRef = useRef<HTMLInputElement>(null);
+  const [csvPreview, setCsvPreview] = useState<{
+    fileName: string;
+    result: DepotCsvResult;
+  } | null>(null);
+  const [csvError, setCsvError] = useState("");
   const depot = item.depot;
   const total = depot.reduce((sum, entry) => sum + entry.value, 0);
   const afterSales = depot.reduce(
@@ -3964,25 +4353,24 @@ function DepotOptimizer({
   const importCsv = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    const lines = (await file.text()).split(/\r?\n/).filter(Boolean);
-    const rows = lines
-      .slice(1)
-      .map((line) => line.split(";"))
-      .filter((row) => row.length >= 2)
-      .map((row) => ({
-        id: uid("holding"),
-        name: row[0],
-        value: parseAmount(row[1]),
-        assetClass: (assetClasses.includes(row[2] as AssetClass)
-          ? row[2]
-          : "Geldwerte") as AssetClass,
-        region: row[3] || "Weltweit",
-        risk: Number(row[4]) || 2,
-        plannedSale: 0,
-        note: row[5] || "",
-      }));
-    setDepotPositions(rows);
+    try {
+      const result = parseDepotCsv(await file.arrayBuffer());
+      setCsvPreview({ fileName: file.name, result });
+      setCsvError("");
+    } catch (error) {
+      setCsvPreview(null);
+      setCsvError(
+        error instanceof Error ? error.message : "Die CSV konnte nicht gelesen werden.",
+      );
+    }
     event.target.value = "";
+  };
+  const applyCsv = (mode: "replace" | "append") => {
+    if (!csvPreview) return;
+    setDepotPositions(
+      mode === "replace" ? csvPreview.result.rows : [...depot, ...csvPreview.result.rows],
+    );
+    setCsvPreview(null);
   };
   const largest = [...depot].sort((a, b) => b.value - a.value)[0];
   return (
@@ -4060,11 +4448,65 @@ function DepotOptimizer({
           accept=".csv,text/csv"
           onChange={importCsv}
         />
+        {csvError && <div className="csv-error">{csvError}</div>}
+        {csvPreview && (
+          <div className="csv-preview">
+            <div>
+              <p className="eyebrow">IMPORTVORSCHAU</p>
+              <h3>{csvPreview.fileName}</h3>
+              <p>
+                {csvPreview.result.format === "structure-overview"
+                  ? "Strukturübersicht erkannt"
+                  : "Navigator-Vorlage erkannt"}
+              </p>
+            </div>
+            <div className="csv-preview-metrics">
+              <span>
+                <b>{csvPreview.result.rows.length}</b>
+                Positionen
+              </span>
+              <span>
+                <b>
+                  {euro.format(
+                    csvPreview.result.rows.reduce((sum, row) => sum + row.value, 0),
+                  )}
+                </b>
+                Gesamtwert
+              </span>
+              <span className={csvPreview.result.unresolved > 0 ? "warning" : ""}>
+                <b>{csvPreview.result.unresolved}</b>
+                Zuordnungen offen
+              </span>
+            </div>
+            {csvPreview.result.ignoredPersonalColumns && (
+              <p className="csv-privacy-note">
+                Depotnummer und Depotinhaber wurden erkannt, werden aber bewusst
+                nicht übernommen. Der öffentliche Prototyp verarbeitet nur die
+                Positionsdaten im Browser.
+              </p>
+            )}
+            <div className="csv-preview-actions">
+              <button className="primary" onClick={() => applyCsv("replace")}>
+                Bestehendes Depot ersetzen
+              </button>
+              {depot.length > 0 && (
+                <button className="secondary" onClick={() => applyCsv("append")}>
+                  Positionen ergänzen
+                </button>
+              )}
+              <button className="text-button" onClick={() => setCsvPreview(null)}>
+                Abbrechen
+              </button>
+            </div>
+          </div>
+        )}
         {depot.length === 0 ? (
           <button className="empty-state" onClick={loadSample}>
             <span>◫</span>
             <strong>Musterdepot laden</strong>
-            <small>CSV-Spalten: Name;Wert;Anlageklasse;Region;RK;Notiz</small>
+            <small>
+              Navigator-Vorlage oder exportierte Strukturübersicht im CSV-Format
+            </small>
           </button>
         ) : (
           <div className="holding-list">
@@ -4079,12 +4521,21 @@ function DepotOptimizer({
             </div>
             {depot.map((holding) => (
               <div className="holding-row holding-row-v2" key={holding.id}>
-                <input
-                  value={holding.name}
-                  onChange={(event) =>
-                    updateHolding(holding.id, { name: event.target.value })
-                  }
-                />
+                <div className="holding-name-field">
+                  <input
+                    value={holding.name}
+                    onChange={(event) =>
+                      updateHolding(holding.id, { name: event.target.value })
+                    }
+                  />
+                  {(holding.wkn || holding.sourceType) && (
+                    <small>
+                      {[holding.wkn ? `WKN ${holding.wkn}` : "", holding.sourceType]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </small>
+                  )}
+                </div>
                 <div className="inline-amount">
                   <input
                     inputMode="numeric"
@@ -4104,6 +4555,7 @@ function DepotOptimizer({
                   onChange={(event) =>
                     updateHolding(holding.id, {
                       assetClass: event.target.value as AssetClass,
+                      classificationStatus: "mapped",
                     })
                   }
                 >
@@ -4133,8 +4585,10 @@ function DepotOptimizer({
                     })
                   }
                 >
-                  {[1, 2, 3, 4].map((risk) => (
-                    <option key={risk}>{risk}</option>
+                  {[0, 1, 2, 3, 4].map((risk) => (
+                    <option key={risk} value={risk}>
+                      {risk === 0 ? "offen" : risk}
+                    </option>
                   ))}
                 </select>
                 <div className="inline-amount sale">
@@ -4333,6 +4787,9 @@ function ExportCenter({
         ["Verantwortlich", advisor.name],
         ["Funktion", advisor.title],
         ["Risiko", item.advisory.risk],
+        ["Risiko-Orientierung Verlustreaktion", item.advisory.riskAssessment.lossReaction || "offen"],
+        ["Risiko-Orientierung Wertminderung", item.advisory.riskAssessment.temporaryLoss || "offen"],
+        ["Risiko-Orientierung Tragfähigkeit", item.advisory.riskAssessment.financialCapacity || "offen"],
         ["Ziel", item.advisory.goal],
         ["Erstellt", item.createdAt],
         ["Aktualisiert", item.updatedAt],
@@ -4404,6 +4861,30 @@ function ExportCenter({
         ),
         safeFileName(plan.name).slice(0, 31) || "Plan",
       );
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.json_to_sheet(
+        item.plans.flatMap((plan) =>
+          (plan.investmentPlans || []).map((entry) => ({
+            Plan: plan.name,
+            Art: entry.type === "savings" ? "Sparplan" : "Gestaffelte Anlage",
+            Bezeichnung: entry.name,
+            Produkt: entry.productName || "Noch nicht festgelegt",
+            Kapitaltopf:
+              maturityBuckets.find((bucket) => bucket.id === entry.bucketId)?.label || "",
+            Rate: entry.installmentAmount,
+            Anzahl_Raten: entry.installments || "fortlaufend",
+            Rhythmus:
+              investmentFrequencies.find((frequency) => frequency.value === entry.frequency)
+                ?.label || entry.frequency,
+            Start: entry.startDate,
+            Gesamtbetrag: investmentPlanTotal(entry),
+            Hinweis: entry.note,
+          })),
+        ),
+      ),
+      "Investitionspläne",
+    );
     const structureRows: Array<{
       Anlageklasse: string;
       Betrag: number;
@@ -4433,6 +4914,11 @@ function ExportCenter({
           Region: entry.region,
           RK: entry.risk,
           Verkauf: entry.plannedSale,
+          WKN: entry.wkn || "",
+          Währung: entry.currency || "",
+          Fälligkeit: entry.maturity || "",
+          Quelltyp: entry.sourceType || "",
+          Zuordnungsstatus: entry.classificationStatus || "",
           Notiz: entry.note,
         })),
       ),
@@ -4690,6 +5176,25 @@ function ExportCenter({
             </p>
           </div>
         </section>
+        <section className="print-risk-orientation">
+          <h2>Risiko-Orientierung</h2>
+          <div className="print-overview">
+            <div>
+              <p>
+                <span>Strategische Einordnung</span>
+                <strong>{item.advisory.risk}/5 · {riskText[item.advisory.risk].title}</strong>
+              </p>
+              <p>
+                <span>Klickstrecke</span>
+                <strong>
+                  {riskOrientation(item.advisory)
+                    ? "vollständig durchgeführt"
+                    : "nicht vollständig durchgeführt"}
+                </strong>
+              </p>
+            </div>
+          </div>
+        </section>
         {item.advisory.needs.length > 0 && (
           <section>
             <h2>Konkrete Kapitalbedarfe</h2>
@@ -4734,6 +5239,21 @@ function ExportCenter({
         </section>
         <section>
           <h2>Vermögensstruktur der bevorzugten Planung</h2>
+          <div className="print-house-pillars">
+            {assetClasses.map((name) => (
+              <article key={name}>
+                <span>{name}</span>
+                <strong>
+                  {percent.format(
+                    breakdown.total
+                      ? (breakdown.amounts[name] / breakdown.total) * 100
+                      : 0,
+                  )} %
+                </strong>
+                <b>{euro.format(breakdown.amounts[name])}</b>
+              </article>
+            ))}
+          </div>
           <div className="print-table">
             <div>
               <strong>Anlageklasse</strong>
@@ -4768,6 +5288,37 @@ function ExportCenter({
             </div>
           </div>
         </section>
+        {(preferredPlan.investmentPlans || []).length > 0 && (
+          <section>
+            <h2>Spar- und Investitionspläne</h2>
+            <div className="print-table product-print">
+              <div>
+                <strong>Umsetzungsweg</strong>
+                <strong>Rhythmus und Start</strong>
+                <strong>Rate / Gesamt</strong>
+              </div>
+              {preferredPlan.investmentPlans.map((entry) => (
+                <div key={entry.id}>
+                  <span>
+                    {entry.name}
+                    {entry.productName ? ` · ${entry.productName}` : ""}
+                  </span>
+                  <span>
+                    {investmentFrequencies.find(
+                      (frequency) => frequency.value === entry.frequency,
+                    )?.label || entry.frequency}
+                    {entry.startDate ? ` ab ${entry.startDate}` : ""}
+                  </span>
+                  <b>
+                    {euro.format(entry.installmentAmount)} / {entry.installments > 0
+                      ? euro.format(investmentPlanTotal(entry))
+                      : "fortlaufend"}
+                  </b>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
         <section>
           <h2>Lösungsbausteine der bevorzugten Planung</h2>
           <div className="print-table product-print">
