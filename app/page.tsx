@@ -3690,10 +3690,17 @@ function WealthHouse({
   ) as Record<AssetClass, number>;
   const includeInTotal =
     plan.depotMode === "retain" || plan.depotMode === "afterSales";
+  const unallocatedPlan = Math.max(0, plan.total - breakdown.total);
+  const plannedAmounts = Object.fromEntries(
+    assetClasses.map((name) => [
+      name,
+      breakdown.amounts[name] + (name === "Liquidität" ? unallocatedPlan : 0),
+    ]),
+  ) as Record<AssetClass, number>;
   const combinedAmounts = Object.fromEntries(
     assetClasses.map((name) => [
       name,
-      breakdown.amounts[name] + (includeInTotal ? depotAmounts[name] : 0),
+      plannedAmounts[name] + (includeInTotal ? depotAmounts[name] : 0),
     ]),
   ) as Record<AssetClass, number>;
   const combinedKnown = Object.values(combinedAmounts).reduce(
@@ -3714,11 +3721,6 @@ function WealthHouse({
     "Alternative Anlagen": "Rohstoffe und alternative Strategien",
     Sachwerte: "Immobilien und offene Immobilienfonds",
   };
-  const displayedAmounts = includeInTotal ? combinedAmounts : breakdown.amounts;
-  const displayedKnown = Object.values(displayedAmounts).reduce(
-    (sum, value) => sum + value,
-    0,
-  );
   const entireDepotAmounts = Object.fromEntries(
     assetClasses.map((name) => [
       name,
@@ -3791,15 +3793,26 @@ function WealthHouse({
     source: "ist" | "plan" | "target",
   ) => {
     if (source === "ist")
-      return depot
-        .filter((entry) => entry.assetClass === asset)
-        .map((entry) => ({
-          id: entry.id,
-          name: entry.name,
-          amount: entry.value,
-          mix: 100,
-          source: "Bestandsdepot",
-        }));
+      return [
+        ...(asset === "Liquidität" && currentLiquidity > 0
+          ? [{
+              id: "current-liquidity",
+              name: "Erfasste Liquidität",
+              amount: currentLiquidity,
+              mix: 100,
+              source: "Ausgangslage",
+            }]
+          : []),
+        ...depot
+          .filter((entry) => entry.assetClass === asset)
+          .map((entry) => ({
+            id: entry.id,
+            name: entry.name,
+            amount: entry.value,
+            mix: 100,
+            source: "Bestandsdepot",
+          })),
+      ];
     const selectedPlan = source === "target" ? targetPlan : plan;
     const planEntries = selectedPlan.allocations.flatMap((allocation) => {
       const product = houseProducts.find(
@@ -3888,7 +3901,11 @@ function WealthHouse({
               role="tab"
               aria-selected={mode === entry}
             >
-              {entry === "target" ? "SOLL" : entry.toUpperCase()}
+              {entry === "target"
+                ? "SOLL"
+                : entry === "compare"
+                  ? "VERGLEICH"
+                  : entry.toUpperCase()}
             </button>
           ))}
           {mode === "compare" && (
@@ -4004,7 +4021,7 @@ function WealthHouse({
               <div key={name}>
                 <strong>{name}</strong>
                 <span>{euro.format(depotAmounts[name])}</span>
-                <span>{euro.format(breakdown.amounts[name])}</span>
+                <span>{euro.format(plannedAmounts[name])}</span>
                 <b>
                   {percent.format(
                     combinedKnown
