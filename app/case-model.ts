@@ -609,6 +609,28 @@ export function depotAssetAmounts(
   return { amounts, unresolved, total };
 }
 
+export function depotPlanAssetAmounts(
+  depot: DepotHolding[],
+  plan: StructurePlan,
+) {
+  const retained = depotAssetAmounts(
+    depot,
+    (holding) => Math.max(0, holding.value - holding.plannedSale),
+  );
+  const purchases = planAssetAmounts(plan);
+  const amounts = Object.fromEntries(
+    assetClasses.map((name) => [
+      name,
+      retained.amounts[name] + purchases.amounts[name],
+    ]),
+  ) as Record<AssetClass, number>;
+  return {
+    amounts,
+    unresolved: retained.unresolved + purchases.unresolved,
+    total: retained.total + purchases.total,
+  };
+}
+
 export function dataState() {
   return Object.fromEntries(
     dataSources.map((source) => [source.title, source.date]),

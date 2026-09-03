@@ -174,9 +174,11 @@ export function parseDepotCsv(buffer: ArrayBuffer): DepotCsvResult {
   const holdingAtValuationEnd = column(headers, "Bestand per (Bewertungsende)");
   const parsed = rows.slice(1).map((row) => {
     const wknValue = valueAt(row, wkn).trim();
-    const matched = houseProducts.find(
-      (product) => product.wkn.toUpperCase() === wknValue.toUpperCase(),
-    );
+    const matched = wknValue
+      ? houseProducts.find(
+          (product) => product.wkn.toUpperCase() === wknValue.toUpperCase(),
+        )
+      : undefined;
     const segmentValue = valueAt(row, segment);
     const mediumValue = valueAt(row, investmentMedium);
     const securityTypeValue = valueAt(row, securityType);

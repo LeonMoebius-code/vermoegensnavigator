@@ -46,6 +46,8 @@ import {
   CustomerChecklistCategory,
   createCase,
   createPlan,
+  depotAssetAmounts,
+  depotPlanAssetAmounts,
   DepotHolding,
   defaultAdvisorId,
   maturityBuckets,
@@ -53,6 +55,7 @@ import {
   ModuleState,
   normalizeImportedCase,
   planAssetAmounts,
+  productAssetMix,
   PlannerAllocation,
   InvestmentPlan,
   legacyBucketAmountsForCapitalPots,
@@ -63,6 +66,7 @@ import {
   advisors,
 } from "./case-model";
 import { DepotCsvResult, parseDepotCsv } from "./depot-csv";
+import { depotCountryName } from "./depot-country-codes";
 
 type View = "home" | "cases" | "wizard" | "planner" | "depot" | "export";
 
@@ -768,7 +772,7 @@ export default function Home() {
         </nav>
         <div className="sidebar-foot">
           <p>
-            <strong>Prototyp V0.12</strong>
+            <strong>Prototyp V0.13</strong>
             <br />
             Browser-lokal, keine revisionssichere Speicherung.
           </p>
@@ -814,7 +818,7 @@ export default function Home() {
           <DepotOptimizer
             item={activeCase}
             setItem={setActiveCase}
-            plan={preferredPlan}
+            plan={activePlan}
             saveCase={saveCase}
             setView={setView}
           />
@@ -4079,15 +4083,17 @@ function WealthHouse({
   depot,
   currentLiquidity = 0,
   compact = false,
+  context = "planner",
 }: {
   plan: StructurePlan;
   plans?: StructurePlan[];
   depot: DepotHolding[];
   currentLiquidity?: number;
   compact?: boolean;
+  context?: "planner" | "depot";
 }) {
   const [mode, setMode] = useState<"ist" | "plan" | "target" | "compare">(
-    compact ? "target" : "plan",
+    context === "depot" ? "ist" : compact ? "target" : "plan",
   );
   const [compareWith, setCompareWith] = useState<"plan" | "target">("target");
   const [selectedAsset, setSelectedAsset] = useState<AssetClass | null>(null);
@@ -4102,21 +4108,14 @@ function WealthHouse({
     plan.depotMode === "none"
       ? []
       : depot.filter((entry) => selectedIds.has(entry.id));
-  const depotAmounts = Object.fromEntries(
-    assetClasses.map((name) => [
-      name,
-      relevantDepot
-        .filter((entry) => entry.assetClass === name)
-        .reduce(
-          (sum, entry) =>
-            sum +
-            (plan.depotMode === "afterSales"
-              ? Math.max(0, entry.value - entry.plannedSale)
-              : entry.value),
-          0,
-        ),
-    ]),
-  ) as Record<AssetClass, number>;
+  const depotBreakdown = depotAssetAmounts(
+    relevantDepot,
+    (entry) =>
+      plan.depotMode === "afterSales"
+        ? Math.max(0, entry.value - entry.plannedSale)
+        : entry.value,
+  );
+  const depotAmounts = depotBreakdown.amounts;
   const includeInTotal =
     plan.depotMode === "retain" || plan.depotMode === "afterSales";
   const unallocatedPlan = Math.max(0, plan.total - breakdown.total);
@@ -4150,15 +4149,12 @@ function WealthHouse({
     "Alternative Anlagen": "Rohstoffe und alternative Strategien",
     Sachwerte: "Immobilien und offene Immobilienfonds",
   };
-  const entireDepotAmounts = Object.fromEntries(
-    assetClasses.map((name) => [
-      name,
-      (name === "Liquidität" ? currentLiquidity : 0) +
-      depot
-        .filter((entry) => entry.assetClass === name)
-        .reduce((sum, entry) => sum + entry.value, 0),
-    ]),
-  ) as Record<AssetClass, number>;
+  const entireDepotBreakdown = depotAssetAmounts(depot);
+  const entireDepotAmounts = {
+    ...entireDepotBreakdown.amounts,
+    Liquidität:
+      entireDepotBreakdown.amounts.Liquidität + currentLiquidity,
+  };
   const snapshotFor = (selectedPlan: StructurePlan) => {
     const selectedBreakdown = planAssetAmounts(selectedPlan);
     const selectedIds = new Set(
@@ -4169,23 +4165,18 @@ function WealthHouse({
     const includeDepot =
       selectedPlan.depotMode === "retain" ||
       selectedPlan.depotMode === "afterSales";
+    const retainedBreakdown = depotAssetAmounts(
+      includeDepot
+        ? depot.filter((entry) => selectedIds.has(entry.id))
+        : [],
+      (entry) =>
+        selectedPlan.depotMode === "afterSales"
+          ? Math.max(0, entry.value - entry.plannedSale)
+          : entry.value,
+    );
     const amounts = Object.fromEntries(
       assetClasses.map((name) => {
-        const retained = includeDepot
-          ? depot
-              .filter(
-                (entry) =>
-                  selectedIds.has(entry.id) && entry.assetClass === name,
-              )
-              .reduce(
-                (sum, entry) =>
-                  sum +
-                  (selectedPlan.depotMode === "afterSales"
-                    ? Math.max(0, entry.value - entry.plannedSale)
-                    : entry.value),
-                0,
-              )
-          : 0;
+        const retained = retainedBreakdown.amounts[name];
         const unallocated =
           name === "Liquidität"
             ? Math.max(0, selectedPlan.total - selectedBreakdown.total)
@@ -4193,10 +4184,23 @@ function WealthHouse({
         return [name, selectedBreakdown.amounts[name] + retained + unallocated];
       }),
     ) as Record<AssetClass, number>;
-    return { amounts, unresolved: selectedBreakdown.unresolved };
+    return {
+      amounts,
+      unresolved: selectedBreakdown.unresolved + retainedBreakdown.unresolved,
+    };
   };
-  const istSnapshot = { amounts: entireDepotAmounts, unresolved: 0 };
-  const planSnapshot = snapshotFor(plan);
+  const istSnapshot = {
+    amounts: entireDepotAmounts,
+    unresolved: entireDepotBreakdown.unresolved,
+  };
+  const depotPlanBreakdown = depotPlanAssetAmounts(depot, plan);
+  const planSnapshot =
+    context === "depot"
+      ? {
+          amounts: depotPlanBreakdown.amounts,
+          unresolved: depotPlanBreakdown.unresolved,
+        }
+      : snapshotFor(plan);
   const targetSnapshot = snapshotFor(targetPlan);
   const shown =
     mode === "ist"
@@ -4204,19 +4208,52 @@ function WealthHouse({
       : mode === "target"
         ? targetSnapshot
         : planSnapshot;
-  const comparison = compareWith === "target" ? targetSnapshot : planSnapshot;
-  const shownTotal = Object.values(shown.amounts).reduce(
+  const comparison =
+    context === "depot" || compareWith === "plan"
+      ? planSnapshot
+      : targetSnapshot;
+  const shownKnown = Object.values(shown.amounts).reduce(
     (sum, value) => sum + value,
     0,
   );
-  const istTotal = Object.values(istSnapshot.amounts).reduce(
+  const istKnown = Object.values(istSnapshot.amounts).reduce(
     (sum, value) => sum + value,
     0,
   );
-  const comparisonTotal = Object.values(comparison.amounts).reduce(
+  const comparisonKnown = Object.values(comparison.amounts).reduce(
     (sum, value) => sum + value,
     0,
   );
+  const shownTotal =
+    shownKnown + (context === "depot" ? shown.unresolved : 0);
+  const istTotal =
+    istKnown + (context === "depot" ? istSnapshot.unresolved : 0);
+  const comparisonTotal =
+    comparisonKnown + (context === "depot" ? comparison.unresolved : 0);
+  const holdingContributors = (
+    holdings: DepotHolding[],
+    asset: AssetClass,
+    source: string,
+    valueFor: (holding: DepotHolding) => number,
+  ) =>
+    holdings.flatMap((entry) => {
+      const mix = entry.productId
+        ? productAssetMix(entry.productId)?.[asset] || 0
+        : entry.classificationStatus !== "unresolved" &&
+            entry.assetClass === asset
+          ? 100
+          : 0;
+      const value = Math.max(0, valueFor(entry));
+      return mix > 0 && value > 0
+        ? [{
+            id: entry.id,
+            name: entry.name,
+            amount: (value * mix) / 100,
+            mix,
+            source,
+          }]
+        : [];
+    });
   const contributors = (
     asset: AssetClass,
     source: "ist" | "plan" | "target",
@@ -4232,15 +4269,12 @@ function WealthHouse({
               source: "Ausgangslage",
             }]
           : []),
-        ...depot
-          .filter((entry) => entry.assetClass === asset)
-          .map((entry) => ({
-            id: entry.id,
-            name: entry.name,
-            amount: entry.value,
-            mix: 100,
-            source: "Bestandsdepot",
-          })),
+        ...holdingContributors(
+          depot,
+          asset,
+          "Bestandsdepot",
+          (entry) => entry.value,
+        ),
       ];
     const selectedPlan = source === "target" ? targetPlan : plan;
     const planEntries = selectedPlan.allocations.flatMap((allocation) => {
@@ -4282,6 +4316,16 @@ function WealthHouse({
           source: "Planungsrest",
         });
     }
+    if (context === "depot")
+      return [
+        ...holdingContributors(
+          depot,
+          asset,
+          "Bestand nach Verkäufen",
+          (entry) => Math.max(0, entry.value - entry.plannedSale),
+        ),
+        ...planEntries,
+      ];
     const includeDepot =
       selectedPlan.depotMode === "retain" ||
       selectedPlan.depotMode === "afterSales";
@@ -4293,25 +4337,26 @@ function WealthHouse({
     );
     return [
       ...planEntries,
-      ...depot
-        .filter((entry) => ids.has(entry.id) && entry.assetClass === asset)
-        .map((entry) => ({
-          id: `depot-${entry.id}`,
-          name: entry.name,
-          amount:
-            selectedPlan.depotMode === "afterSales"
-              ? Math.max(0, entry.value - entry.plannedSale)
-              : entry.value,
-          mix: 100,
-          source: "Fortbestehender Bestand",
-        })),
+      ...holdingContributors(
+        depot.filter((entry) => ids.has(entry.id)),
+        asset,
+        "Fortbestehender Bestand",
+        (entry) =>
+          selectedPlan.depotMode === "afterSales"
+            ? Math.max(0, entry.value - entry.plannedSale)
+            : entry.value,
+      ).map((entry) => ({ ...entry, id: `depot-${entry.id}` })),
     ];
   };
   return (
     <div className="house-view">
       {!compact && <div className="section-copy">
         <p className="eyebrow">VERMÖGENSHAUS</p>
-        <h2>Wirtschaftliche Durchschau statt Produktetikett</h2>
+        <h2>
+          {context === "depot"
+            ? "Bestehende Depotstruktur"
+            : "Wirtschaftliche Durchschau statt Produktetikett"}
+        </h2>
         <p>
           Mischfonds und Vermögensverwaltungen werden anhand der Quoten aus den
           Unterlagen aufgeteilt. Ungeklärte Produkte bleiben separat sichtbar.
@@ -4319,7 +4364,10 @@ function WealthHouse({
       </div>}
       {!compact && (
         <div className="house-mode-tabs" role="tablist" aria-label="Ansicht der Vermögensstruktur">
-          {(["ist", "plan", "target", "compare"] as const).map((entry) => (
+          {(context === "depot"
+            ? (["ist", "plan", "compare"] as const)
+            : (["ist", "plan", "target", "compare"] as const)
+          ).map((entry) => (
             <button
               key={entry}
               className={mode === entry ? "active" : ""}
@@ -4337,7 +4385,7 @@ function WealthHouse({
                   : entry.toUpperCase()}
             </button>
           ))}
-          {mode === "compare" && (
+          {mode === "compare" && context !== "depot" && (
             <select
               aria-label="Vergleichsziel"
               value={compareWith}
@@ -4356,20 +4404,26 @@ function WealthHouse({
           <div className="house-roof">
             <span>
               {mode === "ist"
-                ? "IST-Struktur"
+                ? context === "depot"
+                  ? "IST · Bestehende Depotstruktur"
+                  : "IST-Struktur"
                 : mode === "target"
                   ? `SOLL · ${targetPlan.name}`
                   : mode === "compare"
-                    ? compareWith === "target"
+                    ? context === "depot"
+                      ? "IST-PLAN-Vergleich"
+                      : compareWith === "target"
                       ? "IST-SOLL-Vergleich"
                       : "IST-PLAN-Vergleich"
-                    : `PLAN · ${plan.name}`}
+                    : context === "depot"
+                      ? `PLAN · nach Transaktionen · ${plan.name}`
+                      : `PLAN · ${plan.name}`}
             </span>
             <strong>
               {euro.format(
                 mode === "compare"
                   ? comparisonTotal
-                  : shownTotal + shown.unresolved,
+                  : shownTotal,
               )}
             </strong>
           </div>
@@ -4438,7 +4492,7 @@ function WealthHouse({
             </b>
           </div>
         </div>
-        {!compact && mode === "plan" && <section className="panel house-table">
+        {!compact && context === "planner" && mode === "plan" && <section className="panel house-table">
           <div className="comparison-table">
             <div className="comparison-head">
               <span>Anlageklasse</span>
@@ -4495,8 +4549,8 @@ function WealthHouse({
                 )) : <small>Keine wirtschaftlich zugeordnete Position.</small>}
               </section>
               <section>
-                <h4>{compareWith === "target" ? "SOLL" : "PLAN"}</h4>
-                {contributors(selectedAsset, compareWith).length ? contributors(selectedAsset, compareWith).map((entry) => (
+                <h4>{context === "depot" || compareWith === "plan" ? "PLAN" : "SOLL"}</h4>
+                {contributors(selectedAsset, context === "depot" ? "plan" : compareWith).length ? contributors(selectedAsset, context === "depot" ? "plan" : compareWith).map((entry) => (
                   <p key={`compare-${entry.id}`}><span>{entry.name}<small>{entry.source} · Anteil {percent.format(entry.mix)} %</small></span><b>{euro.format(entry.amount)}</b></p>
                 )) : <small>Keine wirtschaftlich zugeordnete Position.</small>}
               </section>
@@ -4510,7 +4564,7 @@ function WealthHouse({
           )}
         </section>
       )}
-      {!compact && mode === "plan" && <div className="house-context">
+      {!compact && context === "planner" && mode === "plan" && <div className="house-context">
         <strong>Depotmodus</strong>
         <span>
           {plan.depotMode === "none"
@@ -4527,8 +4581,10 @@ function WealthHouse({
           <strong>Datenproblem</strong>
           <span>
             {euro.format(shown.unresolved)} entfallen auf Bausteine ohne
-            freigegebene Durchschau. Dazu zählen insbesondere
-            Modellbezeichnungen sowie ZinsFix Index und MEA Einzelwert.
+            freigegebene Durchschau.
+            {context === "planner"
+              ? " Dazu zählen insbesondere Modellbezeichnungen sowie ZinsFix Index und MEA Einzelwert."
+              : " Diese Positionen bleiben bewusst außerhalb der fünf Säulen sichtbar."}
           </span>
         </div>
       )}
@@ -4945,6 +5001,106 @@ function PlanComparison({
   );
 }
 
+const depotDecimal = new Intl.NumberFormat("de-DE", {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 4,
+});
+
+const formatDepotDate = (value?: string) => {
+  if (!value) return "";
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? germanDate(value) : value;
+};
+
+function DepotDetailGroup({
+  title,
+  entries,
+}: {
+  title: string;
+  entries: Array<{ label: string; value: ReactNode; present: boolean }>;
+}) {
+  const visible = entries.filter((entry) => entry.present);
+  if (!visible.length) return null;
+  return (
+    <section>
+      <h4>{title}</h4>
+      <dl>
+        {visible.map((entry, index) => (
+          <div key={`${entry.label}-${index}`}>
+            <dt>{entry.label}</dt>
+            <dd>{entry.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
+function DepotHoldingDetails({ holding }: { holding: DepotHolding }) {
+  const present = (value: unknown) =>
+    value !== undefined && value !== null && value !== "";
+  const price = (value?: number) =>
+    present(value)
+      ? `${depotDecimal.format(value || 0)}${holding.currency ? ` ${holding.currency}` : ""}`
+      : "";
+  const country = holding.rawCountry
+    ? `${depotCountryName(holding.rawCountry)} (${holding.rawCountry})`
+    : "";
+  return (
+    <div className="holding-details">
+      <DepotDetailGroup
+        title="Allgemein"
+        entries={[
+          { label: "WKN", value: holding.wkn, present: present(holding.wkn) },
+          { label: "Anlagesegment", value: holding.segment, present: present(holding.segment) },
+          { label: "Anlagemedium", value: holding.investmentMedium, present: present(holding.investmentMedium) },
+          { label: "Wertpapiertyp", value: holding.securityType || holding.sourceType, present: present(holding.securityType || holding.sourceType) },
+          { label: "Produkt- oder Domizilland", value: country, present: present(country) },
+          { label: "Währung", value: holding.currency, present: present(holding.currency) },
+          { label: "Branche", value: holding.industry, present: present(holding.industry) },
+          { label: "Zertifikateklasse", value: holding.certificateClass, present: present(holding.certificateClass) },
+        ]}
+      />
+      <DepotDetailGroup
+        title="Kauf und Kurs"
+        entries={[
+          { label: "Letztes Kaufdatum", value: formatDepotDate(holding.lastPurchaseDate), present: present(holding.lastPurchaseDate) },
+          { label: "Durchschnittlicher Einstandskurs", value: price(holding.averageEntryPrice), present: present(holding.averageEntryPrice) },
+          { label: "Kaufkosten", value: present(holding.purchaseCosts) ? euro.format(holding.purchaseCosts || 0) : "", present: present(holding.purchaseCosts) },
+          { label: "Aktueller Kurs", value: price(holding.currentPrice), present: present(holding.currentPrice) },
+          { label: "Einstandsdevisenkurs", value: present(holding.averageEntryFx) ? depotDecimal.format(holding.averageEntryFx || 0) : "", present: present(holding.averageEntryFx) },
+          { label: "Devisenkurs", value: present(holding.fxRate) ? depotDecimal.format(holding.fxRate || 0) : "", present: present(holding.fxRate) },
+        ]}
+      />
+      <DepotDetailGroup
+        title="Rentenposition"
+        entries={[
+          { label: "Stück / Nominal", value: present(holding.nominalOrUnits) ? depotDecimal.format(holding.nominalOrUnits || 0) : "", present: present(holding.nominalOrUnits) },
+          { label: "Zinssatz", value: present(holding.coupon) ? `${depotDecimal.format(holding.coupon || 0)} %` : "", present: present(holding.coupon) },
+          { label: "Endfälligkeit", value: formatDepotDate(holding.maturity), present: present(holding.maturity) },
+          { label: "Stückzinsen", value: present(holding.accruedInterest) ? euro.format(holding.accruedInterest || 0) : "", present: present(holding.accruedInterest) },
+        ]}
+      />
+      <DepotDetailGroup
+        title="Ergebnis"
+        entries={[
+          { label: "Kursgewinn / -verlust in EUR", value: present(holding.gainLossAmount) ? euro.format(holding.gainLossAmount || 0) : "", present: present(holding.gainLossAmount) },
+          { label: "Kursgewinn / -verlust in %", value: present(holding.gainLossPercent) ? `${depotDecimal.format(holding.gainLossPercent || 0)} %` : "", present: present(holding.gainLossPercent) },
+        ]}
+      />
+      <DepotDetailGroup
+        title="Quelldaten zur Bewertung"
+        entries={[
+          { label: "Bewertungsanfang", value: formatDepotDate(holding.valuationStart), present: present(holding.valuationStart) },
+          { label: "Bewertungsende", value: formatDepotDate(holding.valuationEnd), present: present(holding.valuationEnd) },
+          { label: "Bestand am Bewertungsanfang", value: present(holding.holdingAtValuationStart) ? euro.format(holding.holdingAtValuationStart || 0) : "", present: present(holding.holdingAtValuationStart) },
+          { label: "Bestand am Bewertungsende", value: present(holding.holdingAtValuationEnd) ? euro.format(holding.holdingAtValuationEnd || 0) : "", present: present(holding.holdingAtValuationEnd) },
+          { label: "Depotanteil laut Import", value: present(holding.sourceDepotShare) ? `${depotDecimal.format(holding.sourceDepotShare || 0)} %` : "", present: present(holding.sourceDepotShare) },
+        ]}
+      />
+    </div>
+  );
+}
+
 function DepotOptimizer({
   item,
   setItem,
@@ -4958,6 +5114,8 @@ function DepotOptimizer({
   saveCase: (version?: boolean) => void;
   setView: (view: View) => void;
 }) {
+  const [section, setSection] = useState<"positions" | "house">("positions");
+  const [expandedHoldingId, setExpandedHoldingId] = useState<string | null>(null);
   const depot = item.depot;
   const total = depot.reduce((sum, entry) => sum + entry.value, 0);
   const afterSales = depot.reduce(
@@ -4965,22 +5123,7 @@ function DepotOptimizer({
     0,
   );
   const buys = plan.allocations.reduce((sum, entry) => sum + entry.amount, 0);
-  const actual = Object.fromEntries(
-    assetClasses.map((name) => [
-      name,
-      depot
-        .filter((entry) => entry.assetClass === name)
-        .reduce((sum, entry) => sum + entry.value, 0),
-    ]),
-  ) as Record<AssetClass, number>;
-  const projected = { ...actual };
-  for (const holding of depot)
-    projected[holding.assetClass] -= Math.min(
-      holding.value,
-      holding.plannedSale,
-    );
-  const planMix = planAssetAmounts(plan);
-  for (const name of assetClasses) projected[name] += planMix.amounts[name];
+  const planTotal = depotPlanAssetAmounts(depot, plan).total;
   const setDepotPositions = (next: DepotHolding[]) =>
     setItem({
       ...item,
@@ -5000,7 +5143,7 @@ function DepotOptimizer({
         name: "",
         value: 0,
         assetClass: "Geldwerte",
-        region: "Weltweit",
+        region: "Nicht zugeordnet",
         risk: 2,
         plannedSale: 0,
         note: "",
@@ -5057,7 +5200,6 @@ function DepotOptimizer({
       },
     ]);
   };
-  const largest = [...depot].sort((a, b) => b.value - a.value)[0];
   return (
     <div className="tool-view depot-view">
       <div className="tool-head">
@@ -5068,9 +5210,8 @@ function DepotOptimizer({
           <p className="eyebrow">BESTANDSDEPOT IM BERATUNGSFALL</p>
           <h1>Depotcheck und Transaktionssimulation</h1>
           <p>
-            Das Depot wird gegen die bevorzugte Strukturplanung verglichen.
-            Steuerliche, kostenbezogene und kundenindividuelle Gründe für
-            Abweichungen bleiben dokumentierbar.
+            Bestand und simulierte Transaktionen werden mit dem aktuell aktiven
+            Strukturplan {plan.name} verbunden.
           </p>
         </div>
         <div className="tool-head-actions">
@@ -5082,16 +5223,16 @@ function DepotOptimizer({
           </button>
         </div>
       </div>
-      <div className="depot-top">
+      {depot.length > 0 && <div className="depot-top depot-top-v3">
         <article>
           <span>Ist-Depot</span>
           <strong>{euro.format(total)}</strong>
           <small>{depot.length} Positionen</small>
         </article>
         <article>
-          <span>Nach Verkäufen</span>
-          <strong>{euro.format(afterSales)}</strong>
-          <small>simulierter Restbestand</small>
+          <span>Plan-Depot</span>
+          <strong>{euro.format(planTotal)}</strong>
+          <small>Verkäufe und Käufe berücksichtigt</small>
         </article>
         <article>
           <span>Geplante Käufe</span>
@@ -5099,16 +5240,22 @@ function DepotOptimizer({
           <small>aus {plan.name}</small>
         </article>
         <article>
-          <span>Größte Position</span>
-          <strong>
-            {largest && total
-              ? `${Math.round((largest.value / total) * 100)} %`
-              : "–"}
-          </strong>
-          <small>{largest?.name || "keine Position"}</small>
+          <span>Simulierte Verkäufe</span>
+          <strong>{euro.format(total - afterSales)}</strong>
+          <small>begrenzt auf den aktuellen Positionswert</small>
         </article>
-      </div>
-      <section className="depot-entry panel">
+      </div>}
+      {depot.length > 0 && (
+        <div className="depot-section-tabs" role="tablist" aria-label="Depotcheck-Bereiche">
+          <button className={section === "positions" ? "active" : ""} onClick={() => setSection("positions")} role="tab" aria-selected={section === "positions"}>
+            Bestand &amp; Transaktionen
+          </button>
+          <button className={section === "house" ? "active" : ""} onClick={() => setSection("house")} role="tab" aria-selected={section === "house"}>
+            Vermögenshaus
+          </button>
+        </div>
+      )}
+      {(depot.length === 0 || section === "positions") && <section className="depot-entry panel">
         <div className="panel-heading">
           <div>
             <p className="eyebrow">IST-BESTAND</p>
@@ -5129,26 +5276,33 @@ function DepotOptimizer({
         {csvImport.input}
         {csvImport.preview}
         {depot.length === 0 ? (
-          <button className="empty-state" onClick={loadSample}>
+          <div className="depot-empty-state">
             <span>◫</span>
-            <strong>Musterdepot laden</strong>
-            <small>
-              Navigator-Vorlage oder exportierte Strukturübersicht im CSV-Format
-            </small>
-          </button>
+            <h3>Noch kein Depot importiert</h3>
+            <p>
+              Importieren Sie eine Navigator-CSV oder eine exportierte
+              Strukturübersicht. Erst danach werden Bestand und Vermögenshaus
+              dargestellt.
+            </p>
+            <div>
+              <button className="primary" onClick={csvImport.open}>Depot-CSV importieren</button>
+              <button className="secondary" onClick={loadSample}>Musterdepot laden</button>
+            </div>
+          </div>
         ) : (
           <div className="holding-list">
             <div className="holding-head holding-head-v2">
               <span>Position</span>
-              <span>Wert</span>
+              <span>Aktueller Wert</span>
+              <span>Depotanteil</span>
               <span>Anlageklasse</span>
               <span>Region</span>
-              <span>RK</span>
-              <span>Verkauf</span>
+              <span>Geplanter Verkauf</span>
               <span></span>
             </div>
             {depot.map((holding) => (
-              <div className="holding-row holding-row-v2" key={holding.id}>
+              <div className="holding-card" key={holding.id}>
+              <div className="holding-row holding-row-v2">
                 <div className="holding-name-field">
                   <input
                     value={holding.name}
@@ -5156,13 +5310,14 @@ function DepotOptimizer({
                       updateHolding(holding.id, { name: event.target.value })
                     }
                   />
-                  {(holding.wkn || holding.sourceType) && (
+                  {(holding.wkn || holding.securityType || holding.sourceType) && (
                     <small>
-                      {[holding.wkn ? `WKN ${holding.wkn}` : "", holding.sourceType]
+                      {[holding.wkn ? `WKN ${holding.wkn}` : "", holding.securityType || holding.sourceType]
                         .filter(Boolean)
                         .join(" · ")}
                     </small>
                   )}
+                  {holding.classificationStatus === "unresolved" && <small className="classification-open">Durchschau ungeklärt</small>}
                 </div>
                 <div className="inline-amount">
                   <input
@@ -5178,6 +5333,9 @@ function DepotOptimizer({
                   />
                   <b>€</b>
                 </div>
+                <strong className="holding-share">
+                  {total ? `${percent.format((holding.value / total) * 100)} %` : "–"}
+                </strong>
                 <select
                   value={holding.assetClass}
                   onChange={(event) =>
@@ -5204,20 +5362,7 @@ function DepotOptimizer({
                   <option>Asien</option>
                   <option>Schweiz</option>
                   <option>Sonstige</option>
-                </select>
-                <select
-                  value={holding.risk}
-                  onChange={(event) =>
-                    updateHolding(holding.id, {
-                      risk: Number(event.target.value),
-                    })
-                  }
-                >
-                  {[0, 1, 2, 3, 4].map((risk) => (
-                    <option key={risk} value={risk}>
-                      {risk === 0 ? "offen" : risk}
-                    </option>
-                  ))}
+                  <option>Nicht zugeordnet</option>
                 </select>
                 <div className="inline-amount sale">
                   <input
@@ -5238,102 +5383,20 @@ function DepotOptimizer({
                   />
                   <b>€</b>
                 </div>
-                <button
-                  onClick={() =>
-                    setDepotPositions(
-                      depot.filter((entry) => entry.id !== holding.id),
-                    )
-                  }
-                >
-                  ×
-                </button>
+                <div className="holding-actions">
+                  <button className="holding-detail-button" onClick={() => setExpandedHoldingId(expandedHoldingId === holding.id ? null : holding.id)} aria-expanded={expandedHoldingId === holding.id}>
+                    {expandedHoldingId === holding.id ? "Weniger" : "Details"}
+                  </button>
+                  <button className="holding-remove-button" aria-label={`${holding.name || "Position"} entfernen`} onClick={() => setDepotPositions(depot.filter((entry) => entry.id !== holding.id))}>×</button>
+                </div>
+              </div>
+              {expandedHoldingId === holding.id && <DepotHoldingDetails holding={holding} />}
               </div>
             ))}
           </div>
         )}
-      </section>
-      <div className="depot-analysis">
-        <section className="panel">
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">IST / SIMULATION</p>
-              <h2>Fünf Anlageklassen</h2>
-            </div>
-            <span className="step-chip">{plan.name}</span>
-          </div>
-          <div className="comparison-table">
-            <div className="comparison-head">
-              <span>Anlageklasse</span>
-              <span>Ist</span>
-              <span>Nach Transaktionen</span>
-              <span>Veränderung</span>
-            </div>
-            {assetClasses.map((name) => (
-              <div key={name}>
-                <strong>{name}</strong>
-                <span>{euro.format(actual[name])}</span>
-                <span>{euro.format(projected[name])}</span>
-                <b>{euro.format(projected[name] - actual[name])}</b>
-              </div>
-            ))}
-          </div>
-        </section>
-        <section className="panel findings">
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">PRÜFPUNKTE</p>
-              <h2>Keine automatische Optimierung</h2>
-            </div>
-          </div>
-          <ul>
-            {depot.length === 0 && (
-              <li className="neutral">
-                <span>!</span>
-                <div>
-                  <strong>Keine Analyse möglich</strong>
-                  <p>Erfasse zuerst Positionen.</p>
-                </div>
-              </li>
-            )}
-            {largest && total > 0 && largest.value / total > 0.25 && (
-              <li>
-                <span>!</span>
-                <div>
-                  <strong>Einzelpositionsrisiko</strong>
-                  <p>
-                    {largest.name} bindet{" "}
-                    {Math.round((largest.value / total) * 100)} % des
-                    Depotwerts.
-                  </p>
-                </div>
-              </li>
-            )}
-            {planMix.unresolved > 0 && (
-              <li>
-                <span>!</span>
-                <div>
-                  <strong>Unvollständige Durchschau</strong>
-                  <p>
-                    {euro.format(planMix.unresolved)} geplanter Käufe sind noch
-                    keiner Anlageklasse zugeordnet.
-                  </p>
-                </div>
-              </li>
-            )}
-            <li className="neutral">
-              <span>i</span>
-              <div>
-                <strong>Begründungen dokumentieren</strong>
-                <p>
-                  Einstandskurse, steuerliche Altbestände, Kosten, Kundenwünsche
-                  und Liquiditätsbedarf können Abweichungen rechtfertigen.
-                </p>
-              </div>
-            </li>
-          </ul>
-        </section>
-      </div>
-      <section className="panel transaction-plan">
+      </section>}
+      {depot.length > 0 && section === "positions" && <section className="panel transaction-plan">
         <div className="panel-heading">
           <div>
             <p className="eyebrow">TRANSAKTIONSPLAN</p>
@@ -5368,7 +5431,12 @@ function DepotOptimizer({
             {plan.allocations.length === 0 && <em>keine Käufe geplant</em>}
           </div>
         </div>
-      </section>
+      </section>}
+      {depot.length > 0 && section === "house" && (
+        <section className="depot-house-panel panel">
+          <WealthHouse plan={plan} plans={[plan]} depot={depot} context="depot" />
+        </section>
+      )}
       <p className="tool-legal">
         Die Simulation ermittelt ausschließlich rechnerische Auswirkungen. Sie
         berücksichtigt weder Kurse noch Steuern, Spreads, Kosten, Stückelungen,
@@ -5557,14 +5625,37 @@ function ExportCenter({
         item.depot.map((entry) => ({
           Position: entry.name,
           Wert: entry.value,
+          Dynamischer_Depotanteil: item.depot.reduce((sum, holding) => sum + holding.value, 0)
+            ? entry.value / item.depot.reduce((sum, holding) => sum + holding.value, 0)
+            : 0,
           Anlageklasse: entry.assetClass,
           Region: entry.region,
-          RK: entry.risk,
           Verkauf: entry.plannedSale,
           WKN: entry.wkn || "",
+          Anlagesegment: entry.segment || "",
+          Anlagemedium: entry.investmentMedium || "",
+          Wertpapiertyp: entry.securityType || entry.sourceType || "",
+          Landcode: entry.rawCountry || "",
           Währung: entry.currency || "",
+          Branche: entry.industry || "",
+          Zertifikateklasse: entry.certificateClass || "",
+          Zinssatz: entry.coupon ?? "",
           Fälligkeit: entry.maturity || "",
-          Quelltyp: entry.sourceType || "",
+          Stück_Nominal: entry.nominalOrUnits ?? "",
+          Letztes_Kaufdatum: entry.lastPurchaseDate || "",
+          Durchschnittlicher_Einstandskurs: entry.averageEntryPrice ?? "",
+          Kaufkosten: entry.purchaseCosts ?? "",
+          Aktueller_Kurs: entry.currentPrice ?? "",
+          Kursgewinn_Verlust_Prozent: entry.gainLossPercent ?? "",
+          Kursgewinn_Verlust_EUR: entry.gainLossAmount ?? "",
+          Stückzinsen: entry.accruedInterest ?? "",
+          Depotanteil_laut_Import: entry.sourceDepotShare ?? "",
+          Durchschnittlicher_Einstandsdevisenkurs: entry.averageEntryFx ?? "",
+          Devisenkurs: entry.fxRate ?? "",
+          Bewertungsanfang: entry.valuationStart || "",
+          Bewertungsende: entry.valuationEnd || "",
+          Bestand_Bewertungsanfang: entry.holdingAtValuationStart ?? "",
+          Bestand_Bewertungsende: entry.holdingAtValuationEnd ?? "",
           Zuordnungsstatus: entry.classificationStatus || "",
           Notiz: entry.note,
         })),
