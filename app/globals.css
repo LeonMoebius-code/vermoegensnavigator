@@ -6331,9 +6331,19 @@ body[data-print-mode="customer"] .internal-only {
   width: 132px;
   height: auto;
 }
-.brand-logos img:last-child {
-  width: 86px;
+.private-banking-mark {
+  position: relative;
+  width: 140px;
+  height: 13px;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+.private-banking-mark img {
+  position: absolute;
+  width: 164px;
   height: auto;
+  left: -12px;
+  top: -17px;
 }
 .brand-logos i {
   width: 1px;

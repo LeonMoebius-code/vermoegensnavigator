@@ -682,7 +682,9 @@ export default function Home() {
           <span className="brand-logos" aria-label="Volksbank pur Private Banking">
             <img src="branding/volksbank-pur-logo.png" alt="Volksbank pur" />
             <i aria-hidden="true" />
-            <img src="branding/private-banking-logo.png" alt="Private Banking" />
+            <span className="private-banking-mark">
+              <img src="branding/private-banking-logo.png" alt="Private Banking" />
+            </span>
           </span>
           <strong>VermögensNavigator</strong>
         </button>
