@@ -6317,6 +6317,229 @@ body[data-print-mode="customer"] .internal-only {
     grid-template-columns: 1fr;
   }
 }
+
+/* V0.14: konsolidierte Planer-, Marken- und VV-Darstellung */
+.brand {
+  gap: 17px;
+}
+.brand-logos {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.brand-logos img:first-child {
+  width: 132px;
+  height: auto;
+}
+.brand-logos img:last-child {
+  width: 86px;
+  height: auto;
+}
+.brand-logos i {
+  width: 1px;
+  height: 29px;
+  background: var(--line);
+}
+.brand > strong {
+  border-left: 1px solid var(--line);
+  padding-left: 17px;
+  color: var(--navy);
+  font-size: 16px;
+}
+.home-view .welcome-row {
+  align-items: flex-start;
+  margin-bottom: 22px;
+}
+.plan-toolbar {
+  grid-template-columns: 1.1fr 1.5fr auto auto auto minmax(225px, 1fr) auto;
+}
+.depot-plan-status {
+  min-height: 52px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  column-gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #f7f9fb;
+  padding: 7px 9px;
+}
+.depot-plan-status > span,
+.depot-plan-status > strong {
+  display: block;
+  grid-column: 1;
+}
+.depot-plan-status > span {
+  color: var(--muted);
+  font-size: 7px;
+  text-transform: uppercase;
+  letter-spacing: 0.35px;
+}
+.depot-plan-status > strong {
+  color: var(--navy);
+  font-size: 9px;
+  line-height: 1.35;
+}
+.depot-plan-status > button {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  border: 0;
+  background: none;
+  color: var(--navy-2);
+  font-size: 8px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.depot-plan-status.active {
+  border-color: var(--blue-b);
+  background: var(--blue-d);
+}
+.allocation-overflow-warning {
+  display: block;
+  margin-top: 7px;
+  border-left: 3px solid var(--orange, #ff6600);
+  background: #fff5ee;
+  color: #8b431e !important;
+  padding: 7px 9px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.capital-pot-structure {
+  margin-top: 16px;
+  border-top: 1px solid #dfe7ed;
+  padding-top: 16px;
+}
+.capital-pot-structure h3 {
+  margin: 3px 0 12px;
+  color: var(--navy);
+  font-size: 16px;
+}
+.capital-pot-asset-bars {
+  display: grid;
+  gap: 7px;
+}
+.capital-pot-asset-bars > button {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f7f9fb;
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.capital-pot-asset-bars > button:hover,
+.capital-pot-asset-bars > button.active {
+  border-color: var(--navy-2);
+  box-shadow: 0 4px 12px rgba(0, 45, 103, 0.09);
+}
+.capital-pot-asset-bars > button span {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+.capital-pot-asset-bars strong,
+.capital-pot-asset-bars b {
+  color: var(--navy);
+  font-size: 10px;
+}
+.capital-pot-asset-bars i {
+  position: absolute;
+  inset: auto auto 0 0;
+  height: 4px;
+  background: var(--navy-2);
+}
+.capital-pot-asset-detail {
+  margin-top: 9px;
+  border: 1px solid var(--blue-c);
+  background: #f5f9fd;
+  padding: 11px;
+}
+.capital-pot-asset-detail > strong {
+  color: var(--navy);
+  font-size: 9px;
+}
+.capital-pot-asset-detail p {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 0 0;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+  color: var(--ink);
+  font-size: 9px;
+}
+.capital-pot-asset-detail small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 7px;
+}
+.capital-pot-structure-empty,
+.capital-pot-unresolved {
+  margin: 0;
+  background: #f5f7f9;
+  color: var(--muted);
+  padding: 10px;
+  font-size: 8px;
+}
+.capital-pot-unresolved {
+  margin-top: 7px;
+  background: #fff8ef;
+  color: #8b5b24;
+  font-weight: 700;
+}
+.vv-investment-amount {
+  display: block;
+  margin-top: 12px;
+}
+.vv-investment-amount > span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--navy);
+  font-size: 8px;
+  font-weight: 800;
+}
+.vv-investment-amount input {
+  width: 100%;
+  border: 1px solid var(--blue-b);
+  border-radius: 5px;
+  background: #fff;
+  padding: 8px 25px 8px 8px;
+  color: var(--navy);
+  font-weight: 700;
+}
+.vv-minimum-warning,
+.vv-transfer-feedback {
+  min-height: 0 !important;
+  margin: 8px 0 0 !important;
+  border-left: 3px solid var(--orange, #ff6600);
+  background: #fff5ee;
+  color: #87451f !important;
+  padding: 7px 8px;
+  font-size: 8px !important;
+  line-height: 1.4 !important;
+}
+.vv-transfer-feedback {
+  border-left-color: var(--teal);
+  background: #eaf7f7;
+  color: #145f65 !important;
+  font-weight: 700;
+}
+.vv-result-grid article.vv-added {
+  border-color: var(--teal);
+  box-shadow: 0 5px 15px rgba(0, 110, 115, 0.1);
+}
+@media (max-width: 1180px) {
+  .plan-toolbar {
+    grid-template-columns: 1fr 1fr repeat(3, auto);
+  }
+  .depot-plan-status {
+    grid-column: 1 / -2;
+  }
+}
 @media (max-width: 620px) {
   .house-mode-tabs {
     flex-wrap: wrap;

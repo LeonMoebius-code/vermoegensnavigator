@@ -160,7 +160,7 @@ export type DepotHolding = {
 };
 
 export type VvFilters = {
-  sustainable: "Keine Präferenz" | "Ja" | "Nein";
+  sustainable: "Keine Präferenz" | "Ja";
   currency: "Keine Präferenz" | "EUR" | "CHF";
   region: string;
   metals: "Keine Präferenz" | "Ja" | "Nein" | "Individuell";
@@ -684,6 +684,8 @@ export function normalizeImportedCase(
   normalized.vvFilters = {
     ...blankVvFilters(normalized.advisory.liquidAssets),
     ...(normalized.vvFilters || {}),
+    sustainable:
+      normalized.vvFilters?.sustainable === "Ja" ? "Ja" : "Keine Präferenz",
   };
   normalized.advisory.riskAssessment = normalized.advisory.riskAssessment || {
     lossReaction: null,
