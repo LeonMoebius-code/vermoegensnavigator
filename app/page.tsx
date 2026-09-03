@@ -5038,6 +5038,41 @@ function DepotDetailGroup({
 function DepotHoldingDetails({ holding }: { holding: DepotHolding }) {
   const present = (value: unknown) =>
     value !== undefined && value !== null && value !== "";
+  const hasImportedDetails = [
+    holding.wkn,
+    holding.segment,
+    holding.investmentMedium,
+    holding.securityType,
+    holding.sourceType,
+    holding.rawCountry,
+    holding.currency,
+    holding.industry,
+    holding.certificateClass,
+    holding.coupon,
+    holding.maturity,
+    holding.nominalOrUnits,
+    holding.lastPurchaseDate,
+    holding.averageEntryPrice,
+    holding.purchaseCosts,
+    holding.currentPrice,
+    holding.gainLossPercent,
+    holding.gainLossAmount,
+    holding.accruedInterest,
+    holding.sourceDepotShare,
+    holding.averageEntryFx,
+    holding.fxRate,
+    holding.valuationStart,
+    holding.valuationEnd,
+    holding.holdingAtValuationStart,
+    holding.holdingAtValuationEnd,
+  ].some(present);
+  if (!hasImportedDetails)
+    return (
+      <div className="holding-details holding-details-empty">
+        Für diese manuell erfasste Position liegen keine zusätzlichen
+        Importdetails vor.
+      </div>
+    );
   const price = (value?: number) =>
     present(value)
       ? `${depotDecimal.format(value || 0)}${holding.currency ? ` ${holding.currency}` : ""}`
