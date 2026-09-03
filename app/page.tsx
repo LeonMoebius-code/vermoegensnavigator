@@ -40,6 +40,7 @@ import {
   allocationCapitalPotAmounts,
   bucketForMonths,
   CapitalPotId,
+  CapitalPot,
   capitalPots,
   caseSnapshot,
   customerChecklistCategories,
@@ -518,8 +519,6 @@ export default function Home() {
   const [newCaseAdvisorId, setNewCaseAdvisorId] =
     useState<AdvisorId>(defaultAdvisorId);
   const [savedCases, setSavedCases] = useState<AdvisoryCase[]>([]);
-  const [hydrated, setHydrated] = useState(false);
-  const [showHelp, setShowHelp] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
 
@@ -561,7 +560,6 @@ export default function Home() {
       } catch {
         window.localStorage.removeItem("vermoegensnavigator-cases-v2");
       }
-      setHydrated(true);
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
@@ -681,21 +679,16 @@ export default function Home() {
     <main className="app-shell">
       <header className="topbar">
         <button className="brand" onClick={() => setView("home")}>
-          <span className="brand-placeholder" aria-label="Logoplatzhalter">
-            Logo
+          <span className="brand-logos" aria-label="Volksbank pur Private Banking">
+            <img src="branding/volksbank-pur-logo.png" alt="Volksbank pur" />
+            <i aria-hidden="true" />
+            <span className="private-banking-mark">
+              <img src="branding/private-banking-logo.png" alt="Private Banking" />
+            </span>
           </span>
-          <span>
-            <strong>VermögensNavigator</strong>
-            <small>Durchgängiger Beratungsfall</small>
-          </span>
+          <strong>VermögensNavigator</strong>
         </button>
         <div className="topbar-actions">
-          <span className="prototype-pill">
-            Testumgebung · nur erfundene Daten
-          </span>
-          <button className="icon-button" onClick={() => setShowHelp(true)}>
-            ?
-          </button>
           <div className="profile-selector">
             <button
               className="profile-button"
@@ -772,7 +765,7 @@ export default function Home() {
         </nav>
         <div className="sidebar-foot">
           <p>
-            <strong>Prototyp V0.13</strong>
+            <strong>Prototyp V0.14</strong>
             <br />
             Browser-lokal, keine revisionssichere Speicherung.
           </p>
@@ -781,11 +774,7 @@ export default function Home() {
       <section className="workspace">
         {view === "home" && (
           <HomeView
-            cases={savedCases}
             start={start}
-            openCase={openSavedCase}
-            setView={setView}
-            hydrated={hydrated}
           />
         )}
         {view === "cases" && (
@@ -841,70 +830,14 @@ export default function Home() {
         accept="application/json,.json"
         onChange={importJson}
       />
-      {showHelp && (
-        <div className="modal-backdrop" onClick={() => setShowHelp(false)}>
-          <section
-            className="help-modal"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <button className="modal-close" onClick={() => setShowHelp(false)}>
-              ×
-            </button>
-            <p className="eyebrow">TESTHINWEISE</p>
-            <h2>Was V0.10 jetzt zusammenführt</h2>
-            <ol>
-              <li>
-                Ein Fall enthält Beratung, alle Planvarianten, VV-Auswahl und
-                Depot.
-              </li>
-              <li>
-                „Fall speichern“ schreibt den vollständigen Stand browser-lokal.
-              </li>
-              <li>
-                Modellportfolios werden standardmäßig nur auf strategisches
-                Kapital angewendet.
-              </li>
-              <li>
-                JSON kann exportiert und wieder importiert werden; Excel enthält
-                mehrere Tabellenblätter.
-              </li>
-              <li>
-                Verantwortliche Person und Kunden-Checkliste werden im Fall und
-                in den Exporten gespeichert.
-              </li>
-              <li>
-                Das Vermögenshaus steht als fünf Säulen im Ergebnis und in der
-                Strukturplanung im Mittelpunkt.
-              </li>
-              <li>
-                Risiko-Orientierung, Depot-CSV-Vorschau sowie Spar- und
-                Investitionspläne sind fallbezogen dokumentierbar.
-              </li>
-            </ol>
-            <p className="notice">
-              Für den produktiven Einsatz fehlen weiterhin zentrale Datenbank,
-              Berechtigungen, revisionssichere Historie, bankfachliche Freigabe
-              und Systemintegration.
-            </p>
-          </section>
-        </div>
-      )}
     </main>
   );
 }
 
 function HomeView({
-  cases,
   start,
-  openCase,
-  setView,
-  hydrated,
 }: {
-  cases: AdvisoryCase[];
   start: (scope?: Scope, scenarioId?: string) => void;
-  openCase: (item: AdvisoryCase) => void;
-  setView: (view: View) => void;
-  hydrated: boolean;
 }) {
   return (
     <div className="home-view">
@@ -912,72 +845,8 @@ function HomeView({
         <div>
           <p className="eyebrow">MODULARER BERATUNGSNAVIGATOR</p>
           <h1>Ein Fall. Mehrere Planungen. Eine konsistente Struktur.</h1>
-          <p>
-            Kapitalbedarfe, Laufzeiten, fünf Anlageklassen, Modellportfolios,
-            Vermögensverwaltungen und Bestandsdepot greifen nun auf dieselbe
-            Fallakte zu.
-          </p>
         </div>
-        <button className="primary" onClick={() => start()}>
-          <span>＋</span> Neue Beratung starten
-        </button>
       </div>
-      <div className="metric-grid">
-        <article className="metric-card accent">
-          <div className="metric-icon">01</div>
-          <div>
-            <small>GESPEICHERT</small>
-            <strong>{hydrated ? cases.length : "–"}</strong>
-            <p>vollständige Testfälle im Browser</p>
-          </div>
-        </article>
-        <article className="metric-card">
-          <div className="metric-icon blue">02</div>
-          <div>
-            <small>PLANVARIANTEN</small>
-            <strong>
-              {cases.reduce((sum, item) => sum + item.plans.length, 0)}
-            </strong>
-            <p>separat speicher- und vergleichbar</p>
-          </div>
-        </article>
-        <article className="metric-card">
-          <div className="metric-icon gold">03</div>
-          <div>
-            <small>DATENBASIS</small>
-            <strong>5</strong>
-            <p>eingebundene Projektunterlagen</p>
-          </div>
-        </article>
-      </div>
-      {cases.length > 0 && (
-        <section className="panel recent-cases">
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">ZULETZT BEARBEITET</p>
-              <h2>Beratungsfälle fortsetzen</h2>
-            </div>
-            <button className="secondary" onClick={() => setView("cases")}>
-              Alle Fälle
-            </button>
-          </div>
-          <div className="case-card-grid">
-            {cases.slice(0, 3).map((item) => (
-              <button key={item.id} onClick={() => openCase(item)}>
-                <span>{item.status}</span>
-                <strong>
-                  {item.advisory.caseName || "Unbenannter Testfall"}
-                </strong>
-                <small>
-                  {scopeLabel(item.advisory.scope)} · {item.plans.length}{" "}
-                  Planungen · {advisorFor(item.advisorId).name}
-                </small>
-                <em>Zuletzt {dateLabel(item.updatedAt)} →</em>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
       <section className="panel quick-start">
         <div className="panel-heading">
           <div>
@@ -2699,6 +2568,14 @@ function PlannerView({
     (plan.depotMode === "retain" || plan.depotMode === "afterSales"
       ? includedDepotTotal
       : 0);
+  const depotStatus =
+    plan.depotMode === "none"
+      ? "Nicht berücksichtigt"
+      : plan.depotMode === "compare"
+        ? `Nur vergleichend · ${euro.format(includedDepotTotal)}`
+        : plan.depotMode === "retain"
+          ? `${selectedDepot.length} ${selectedDepot.length === 1 ? "Position" : "Positionen"} ausgewählt · ${euro.format(includedDepotTotal)}`
+          : `Nach simulierten Verkäufen · ${euro.format(includedDepotTotal)}`;
 
   const updatePlan = (changes: Partial<StructurePlan>) =>
     setItem({
@@ -2848,14 +2725,39 @@ function PlannerView({
     capitalPotId: CapitalPotId = quickBucket,
     source?: PlannerAllocation["source"],
     amount = 0,
-  ) => {
+  ): "added" | "updated" | "ignored" => {
     const product = houseProducts.find((entry) => entry.id === productId);
     const vv = managedPortfolios.find((entry) => entry.id === productId);
-    if (!product && !vv) return;
+    if (!product && !vv) return "ignored";
     const pot =
       visibleCapitalPots.find((entry) => entry.id === capitalPotId) ||
       fallbackCapitalPot;
-    if (!pot) return;
+    if (!pot) return "ignored";
+    const existingVv =
+      source === "vv"
+        ? plan.allocations.find(
+            (allocation) =>
+              allocation.source === "vv" && allocation.productId === productId,
+          )
+        : undefined;
+    if (existingVv) {
+      const capitalPotAmounts = { [pot.id]: amount };
+      updatePlan({
+        allocations: plan.allocations.map((allocation) =>
+          allocation.id === existingVv.id
+            ? {
+                ...allocation,
+                amount,
+                bucketId: pot.legacyBucketId,
+                capitalPotId: pot.id,
+                allocationMode: "single",
+                ...allocationPotChanges(capitalPotAmounts),
+              }
+            : allocation,
+        ),
+      });
+      return "updated";
+    }
     updatePlan({
       allocations: [
         ...plan.allocations,
@@ -2874,6 +2776,7 @@ function PlannerView({
         },
       ],
     });
+    return "added";
   };
   const createNewPlan = () => {
     const next = createPlan(
@@ -3092,22 +2995,6 @@ function PlannerView({
   const selectedPotCoverage = selectedPot
     ? Number(coverageByCapitalPot[selectedPot.id]) || 0
     : 0;
-  const selectedPotPlan: StructurePlan | null = selectedPot
-    ? {
-        ...plan,
-        id: `${plan.id}-${selectedPot.id}`,
-        name: `${plan.name} · ${selectedPot.label}`,
-        total: selectedPotCoverage,
-        depotMode: "none",
-        depotHoldingIds: [],
-        allocations: allocationsForSelectedPot
-          .map((allocation) => ({
-            ...allocation,
-            amount: allocationAmountInCapitalPot(allocation, selectedPot.id),
-          }))
-          .filter((allocation) => allocation.amount > 0),
-      }
-    : null;
   const migrationReviewAmount = plan.allocations.reduce(
     (sum, allocation) => sum + (Number(allocation.capitalPotReviewAmount) || 0),
     0,
@@ -3210,12 +3097,13 @@ function PlannerView({
         >
           ★ Bevorzugt
         </button>
-        <button
-          className={plan.depotMode !== "none" ? "depot-plan-button active" : "depot-plan-button"}
-          onClick={() => setShowDepotPanel((current) => !current)}
-        >
-          ◫ Bestandsdepot
-        </button>
+        <div className={plan.depotMode !== "none" ? "depot-plan-status active" : "depot-plan-status"}>
+          <span>Bestandsdepot im Plan</span>
+          <strong>{depotStatus}</strong>
+          <button onClick={() => setShowDepotPanel((current) => !current)}>
+            {showDepotPanel ? "Schließen" : "Ändern"}
+          </button>
+        </div>
         <button
           className="text-button danger"
           disabled={item.plans.length === 1}
@@ -3665,6 +3553,12 @@ function PlannerView({
                               {allocation.capitalPotReviewNote && (
                                 <small className="migration-review">{allocation.capitalPotReviewNote}</small>
                               )}
+                              {allocation.allocationMode === "overflow" &&
+                                allocation.amount - allocationCapitalCoverageTotal(allocation) > 0 && (
+                                  <small className="allocation-overflow-warning">
+                                    {euro.format(allocation.amount - allocationCapitalCoverageTotal(allocation))} können keinem Kapitaltopf zugeordnet werden. Alle verfügbaren Kapitaltöpfe sind bereits vollständig abgedeckt.
+                                  </small>
+                                )}
                             </span>
                             <div>
                               <input
@@ -3726,21 +3620,10 @@ function PlannerView({
                       })}
                     </div>
                   )}
-                  {selectedPotPlan && (
-                    <div className="capital-pot-house">
-                      <div>
-                        <p className="eyebrow">VERMÖGENSSTRUKTUR DIESES KAPITALTOPFS</p>
-                        <h3>Fünf-Säulen-Durchschau</h3>
-                      </div>
-                      <WealthHouse
-                        plan={selectedPotPlan}
-                        plans={[selectedPotPlan]}
-                        depot={[]}
-                        currentLiquidity={0}
-                        compact
-                      />
-                    </div>
-                  )}
+                  <CapitalPotStructure
+                    pot={selectedPot}
+                    allocations={allocationsForSelectedPot}
+                  />
                 </article>
               )}
             </section>
@@ -4002,6 +3885,7 @@ function PlannerView({
         <VvSelection
           item={item}
           setItem={setItem}
+          plan={plan}
           addToPlan={(id, amount) =>
             addProduct(
               id,
@@ -4074,6 +3958,101 @@ function PlannerView({
         </div>
       )}
     </div>
+  );
+}
+
+function CapitalPotStructure({
+  pot,
+  allocations,
+}: {
+  pot: CapitalPot;
+  allocations: PlannerAllocation[];
+}) {
+  const [selectedAsset, setSelectedAsset] = useState<AssetClass | null>(null);
+  const contributors = assetClasses.map((asset) => ({
+    asset,
+    entries: allocations.flatMap((allocation) => {
+      const amount = allocationAmountInCapitalPot(allocation, pot.id);
+      const mix = productAssetMix(allocation.productId)?.[asset] || 0;
+      return amount > 0 && mix > 0
+        ? [{
+            id: allocation.id,
+            name: allocation.productName,
+            amount: (amount * mix) / 100,
+            mix,
+          }]
+        : [];
+    }),
+  }));
+  const rows = contributors
+    .map((entry) => ({
+      ...entry,
+      amount: entry.entries.reduce((sum, product) => sum + product.amount, 0),
+    }))
+    .filter((entry) => entry.amount > 0);
+  const knownTotal = rows.reduce((sum, entry) => sum + entry.amount, 0);
+  const assignedTotal = allocations.reduce(
+    (sum, allocation) =>
+      sum + allocationAmountInCapitalPot(allocation, pot.id),
+    0,
+  );
+  const unresolved = Math.max(0, assignedTotal - knownTotal);
+  const heading =
+    pot.kind === "reserve"
+      ? "Struktur der Liquiditätsreserve"
+      : pot.kind === "strategic"
+        ? "Struktur des strategisch verfügbaren Kapitals"
+        : `Struktur des Kapitaltopfs ${pot.label}`;
+
+  return (
+    <section className="capital-pot-structure">
+      <p className="eyebrow">STRUKTUR DES KAPITALTOPFS</p>
+      <h3>{heading}</h3>
+      {rows.length ? (
+        <div className="capital-pot-asset-bars">
+          {rows.map((row) => {
+            const share = assignedTotal ? (row.amount / assignedTotal) * 100 : 0;
+            return (
+              <button
+                key={row.asset}
+                className={selectedAsset === row.asset ? "active" : ""}
+                onClick={() =>
+                  setSelectedAsset(selectedAsset === row.asset ? null : row.asset)
+                }
+              >
+                <span>
+                  <strong>{row.asset}</strong>
+                  <b>{percent.format(share)} % · {euro.format(row.amount)}</b>
+                </span>
+                <i style={{ width: `${Math.min(100, share)}%` }} />
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="capital-pot-structure-empty">
+          Noch keine wirtschaftlich durchgeschauten Produkte zugeordnet.
+        </p>
+      )}
+      {unresolved > 0 && (
+        <p className="capital-pot-unresolved">
+          {euro.format(unresolved)} ohne freigegebene Durchschau
+        </p>
+      )}
+      {selectedAsset && (
+        <div className="capital-pot-asset-detail">
+          <strong>Beiträge zu {selectedAsset}</strong>
+          {contributors
+            .find((entry) => entry.asset === selectedAsset)
+            ?.entries.map((entry) => (
+              <p key={entry.id}>
+                <span>{entry.name}<small>Anteil am Produkt {percent.format(entry.mix)} %</small></span>
+                <b>{euro.format(entry.amount)}</b>
+              </p>
+            ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -4355,7 +4334,7 @@ function WealthHouse({
         <h2>
           {context === "depot"
             ? "Bestehende Depotstruktur"
-            : "Wirtschaftliche Durchschau statt Produktetikett"}
+            : "Geplante Vermögensstruktur"}
         </h2>
         <p>
           Mischfonds und Vermögensverwaltungen werden anhand der Quoten aus den
@@ -4379,7 +4358,7 @@ function WealthHouse({
               aria-selected={mode === entry}
             >
               {entry === "target"
-                ? "SOLL"
+                ? "ZIELPLAN"
                 : entry === "compare"
                   ? "VERGLEICH"
                   : entry.toUpperCase()}
@@ -4394,7 +4373,7 @@ function WealthHouse({
               }
             >
               <option value="plan">IST mit aktiver Planung</option>
-              <option value="target">IST mit SOLL</option>
+              <option value="target">IST mit Zielplan</option>
             </select>
           )}
         </div>
@@ -4408,23 +4387,21 @@ function WealthHouse({
                   ? "IST · Bestehende Depotstruktur"
                   : "IST-Struktur"
                 : mode === "target"
-                  ? `SOLL · ${targetPlan.name}`
+                  ? `ZIELPLAN · ${targetPlan.name}`
                   : mode === "compare"
                     ? context === "depot"
                       ? "IST-PLAN-Vergleich"
                       : compareWith === "target"
-                      ? "IST-SOLL-Vergleich"
+                      ? "IST-ZIELPLAN-Vergleich"
                       : "IST-PLAN-Vergleich"
                     : context === "depot"
                       ? `PLAN · nach Transaktionen · ${plan.name}`
                       : `PLAN · ${plan.name}`}
             </span>
             <strong>
-              {euro.format(
-                mode === "compare"
-                  ? comparisonTotal
-                  : shownTotal,
-              )}
+              {mode === "compare" && context === "depot"
+                ? `${euro.format(istTotal)} → ${euro.format(comparisonTotal)}`
+                : euro.format(mode === "compare" ? comparisonTotal : shownTotal)}
             </strong>
           </div>
           <div className="house-pillars">
@@ -4549,7 +4526,7 @@ function WealthHouse({
                 )) : <small>Keine wirtschaftlich zugeordnete Position.</small>}
               </section>
               <section>
-                <h4>{context === "depot" || compareWith === "plan" ? "PLAN" : "SOLL"}</h4>
+                <h4>{context === "depot" || compareWith === "plan" ? "PLAN" : "ZIELPLAN"}</h4>
                 {contributors(selectedAsset, context === "depot" ? "plan" : compareWith).length ? contributors(selectedAsset, context === "depot" ? "plan" : compareWith).map((entry) => (
                   <p key={`compare-${entry.id}`}><span>{entry.name}<small>{entry.source} · Anteil {percent.format(entry.mix)} %</small></span><b>{euro.format(entry.amount)}</b></p>
                 )) : <small>Keine wirtschaftlich zugeordnete Position.</small>}
@@ -4633,13 +4610,17 @@ function WealthHouse({
 function VvSelection({
   item,
   setItem,
+  plan,
   addToPlan,
 }: {
   item: AdvisoryCase;
   setItem: (item: AdvisoryCase) => void;
-  addToPlan: (id: string, amount: number) => void;
+  plan: StructurePlan;
+  addToPlan: (id: string, amount: number) => "added" | "updated" | "ignored";
 }) {
   const filters = item.vvFilters;
+  const [amounts, setAmounts] = useState<Record<string, number>>({});
+  const [feedback, setFeedback] = useState<{ id: string; text: string } | null>(null);
   const setFilter = <K extends keyof VvFilters>(key: K, value: VvFilters[K]) =>
     setItem({ ...item, vvFilters: { ...filters, [key]: value } });
   const matchBool = (filter: string, value: boolean) =>
@@ -4700,7 +4681,7 @@ function VvSelection({
             [
               "Nachhaltigkeit",
               "sustainable",
-              ["Keine Präferenz", "Ja", "Nein"],
+              ["Keine Präferenz", "Ja"],
             ],
             ["Währung", "currency", ["Keine Präferenz", "EUR", "CHF"]],
             [
@@ -4783,7 +4764,7 @@ function VvSelection({
           </div>
           <div className="vv-result-grid">
             {matches.map((entry) => (
-              <article key={entry.id}>
+              <article key={entry.id} className={feedback?.id === entry.id ? "vv-added" : ""}>
                 <header>
                   <span>RK {entry.risk}</span>
                   <strong>{entry.name}</strong>
@@ -4820,6 +4801,32 @@ function VvSelection({
                   {entry.targetFunds && <span>Zielfonds</span>}
                   {entry.individual && <span>individualisierbar</span>}
                 </div>
+                <label className="vv-investment-amount">
+                  <span>Anlagebetrag</span>
+                  <div className="inline-amount">
+                    <input
+                      inputMode="numeric"
+                      value={(amounts[entry.id] ?? filters.amount)
+                        ? (amounts[entry.id] ?? filters.amount).toLocaleString("de-DE")
+                        : ""}
+                      onChange={(event) =>
+                        setAmounts((current) => ({
+                          ...current,
+                          [entry.id]: parseAmount(event.target.value),
+                        }))
+                      }
+                    />
+                    <b>€</b>
+                  </div>
+                </label>
+                {(amounts[entry.id] ?? filters.amount) < entry.minimum && (
+                  <p className="vv-minimum-warning">
+                    Der Anlagebetrag liegt unter der ausgewiesenen Mindestanlage von {euro.format(entry.minimum)}. Bei einer Aufstockung kann dies zulässig sein. Bitte fachlich prüfen.
+                  </p>
+                )}
+                {feedback?.id === entry.id && (
+                  <p className="vv-transfer-feedback" role="status">{feedback.text}</p>
+                )}
                 <div className="vv-card-actions">
                   <button
                     className={
@@ -4835,14 +4842,28 @@ function VvSelection({
                   </button>
                   <button
                     className="primary"
-                    onClick={() =>
-                      addToPlan(
-                        entry.id,
-                        Math.min(filters.amount, Math.max(entry.minimum, 0)),
-                      )
-                    }
+                    onClick={() => {
+                      const amount = amounts[entry.id] ?? filters.amount;
+                      const result = addToPlan(entry.id, amount);
+                      if (result !== "ignored")
+                        setFeedback({
+                          id: entry.id,
+                          text: `${entry.name} mit ${euro.format(amount)} ${result === "updated" ? "im Plan aktualisiert" : "in Plan übernommen"}.`,
+                        });
+                    }}
                   >
-                    In Plan übernehmen
+                    {plan.allocations.some(
+                      (allocation) =>
+                        allocation.source === "vv" && allocation.productId === entry.id,
+                    )
+                      ? `Im Plan · ${euro.format(
+                          plan.allocations.find(
+                            (allocation) =>
+                              allocation.source === "vv" &&
+                              allocation.productId === entry.id,
+                          )?.amount || 0,
+                        )}`
+                      : "In Plan übernehmen"}
                   </button>
                 </div>
               </article>
@@ -4927,7 +4948,7 @@ function PlanComparison({
     <div className="compare-view">
       <div className="section-copy">
         <p className="eyebrow">SZENARIOVERGLEICH</p>
-        <h2>Plan A, B und C nebeneinander</h2>
+        <h2>Planvarianten im Vergleich</h2>
         <p>
           Planvolumen, Laufzeiten, Anlageklassen, Modellbezug und offene
           Durchschau werden aus denselben Positionen berechnet.
@@ -5080,6 +5101,19 @@ function DepotHoldingDetails({ holding }: { holding: DepotHolding }) {
   const country = holding.rawCountry
     ? `${depotCountryName(holding.rawCountry)} (${holding.rawCountry})`
     : "";
+  const productType = [
+    holding.securityType,
+    holding.sourceType,
+    holding.investmentMedium,
+    holding.segment,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  const isBond = /(anleihe|rente|bond|schuldverschreibung|festverzins)/.test(
+    productType,
+  );
+  const isEquity = /(aktie|equity)/.test(productType) && !isBond;
   return (
     <div className="holding-details">
       <DepotDetailGroup
@@ -5106,15 +5140,25 @@ function DepotHoldingDetails({ holding }: { holding: DepotHolding }) {
           { label: "Devisenkurs", value: present(holding.fxRate) ? depotDecimal.format(holding.fxRate || 0) : "", present: present(holding.fxRate) },
         ]}
       />
-      <DepotDetailGroup
-        title="Rentenposition"
-        entries={[
-          { label: "Stück / Nominal", value: present(holding.nominalOrUnits) ? depotDecimal.format(holding.nominalOrUnits || 0) : "", present: present(holding.nominalOrUnits) },
-          { label: "Zinssatz", value: present(holding.coupon) ? `${depotDecimal.format(holding.coupon || 0)} %` : "", present: present(holding.coupon) },
-          { label: "Endfälligkeit", value: formatDepotDate(holding.maturity), present: present(holding.maturity) },
-          { label: "Stückzinsen", value: present(holding.accruedInterest) ? euro.format(holding.accruedInterest || 0) : "", present: present(holding.accruedInterest) },
-        ]}
-      />
+      {isEquity && (
+        <DepotDetailGroup
+          title="Bestand"
+          entries={[
+            { label: "Stück", value: present(holding.nominalOrUnits) ? depotDecimal.format(holding.nominalOrUnits || 0) : "", present: present(holding.nominalOrUnits) },
+          ]}
+        />
+      )}
+      {isBond && (
+        <DepotDetailGroup
+          title="Rentenposition"
+          entries={[
+            { label: "Nominal", value: present(holding.nominalOrUnits) ? depotDecimal.format(holding.nominalOrUnits || 0) : "", present: present(holding.nominalOrUnits) },
+            { label: "Zinssatz", value: present(holding.coupon) ? `${depotDecimal.format(holding.coupon || 0)} %` : "", present: present(holding.coupon) },
+            { label: "Endfälligkeit", value: formatDepotDate(holding.maturity), present: present(holding.maturity) },
+            { label: "Stückzinsen", value: present(holding.accruedInterest) ? euro.format(holding.accruedInterest || 0) : "", present: present(holding.accruedInterest) },
+          ]}
+        />
+      )}
       <DepotDetailGroup
         title="Ergebnis"
         entries={[

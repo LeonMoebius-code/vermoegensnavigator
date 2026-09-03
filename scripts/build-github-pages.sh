@@ -23,6 +23,8 @@ sed "s/__BUILD_HASH__/${build_hash}/g" \
 cp "${output_dir}/index.html" "${output_dir}/404.html"
 cp "${project_root}/public/favicon.svg" "${output_dir}/favicon.svg"
 cp "${project_root}/public/og.png" "${output_dir}/og.png"
+mkdir -p "${output_dir}/branding"
+cp -R "${project_root}/public/branding/." "${output_dir}/branding/"
 : > "${output_dir}/.nojekyll"
 
 node --check "${output_dir}/app.js"
@@ -33,6 +35,10 @@ done
 
 for referenced_file in app.js styles.css favicon.svg og.png; do
   test -f "${output_dir}/${referenced_file}"
+done
+
+for branding_file in volksbank-pur-logo.png private-banking-logo.png; do
+  test -f "${output_dir}/branding/${branding_file}"
 done
 
 echo "GitHub-Pages-Build vollständig: ${output_dir}"
