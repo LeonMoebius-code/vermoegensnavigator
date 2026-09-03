@@ -4965,6 +4965,11 @@ input[inputmode="numeric"],
   font-weight: 700;
   text-align: right;
 }
+.holding-details-empty {
+  display: block;
+  color: #718094;
+  font-size: 10px;
+}
 .depot-house-panel {
   padding: 20px;
 }
