@@ -130,8 +130,31 @@ export type DepotHolding = {
   plannedSale: number;
   note: string;
   wkn?: string;
+  segment?: string;
+  investmentMedium?: string;
+  securityType?: string;
+  rawCountry?: string;
   currency?: string;
+  industry?: string;
+  certificateClass?: string;
+  coupon?: number;
   maturity?: string;
+  nominalOrUnits?: number;
+  lastPurchaseDate?: string;
+  averageEntryPrice?: number;
+  purchaseCosts?: number;
+  currentPrice?: number;
+  gainLossPercent?: number;
+  gainLossAmount?: number;
+  accruedInterest?: number;
+  sourceDepotShare?: number;
+  averageEntryFx?: number;
+  fxRate?: number;
+  valuationStart?: string;
+  valuationEnd?: string;
+  holdingAtValuationStart?: number;
+  holdingAtValuationEnd?: number;
+  /** Compatibility with depot positions saved before V0.13. */
   sourceType?: string;
   classificationStatus?: "mapped" | "matched" | "unresolved";
 };
@@ -559,6 +582,33 @@ export function planAssetAmounts(plan: StructurePlan) {
   };
 }
 
+export function depotAssetAmounts(
+  depot: DepotHolding[],
+  valueFor: (holding: DepotHolding) => number = (holding) => holding.value,
+) {
+  const amounts = Object.fromEntries(
+    assetClasses.map((name) => [name, 0]),
+  ) as Record<AssetClass, number>;
+  let unresolved = 0;
+  let total = 0;
+  for (const holding of depot) {
+    const value = Math.max(0, Number(valueFor(holding)) || 0);
+    total += value;
+    const assetMix = holding.productId
+      ? productAssetMix(holding.productId)
+      : null;
+    if (assetMix) {
+      for (const name of assetClasses)
+        amounts[name] += (value * assetMix[name]) / 100;
+    } else if (holding.classificationStatus !== "unresolved") {
+      amounts[holding.assetClass] += value;
+    } else {
+      unresolved += value;
+    }
+  }
+  return { amounts, unresolved, total };
+}
+
 export function dataState() {
   return Object.fromEntries(
     dataSources.map((source) => [source.title, source.date]),
@@ -581,7 +631,22 @@ export function normalizeImportedCase(
   normalized.versions = Array.isArray(normalized.versions)
     ? normalized.versions
     : [];
-  normalized.depot = Array.isArray(normalized.depot) ? normalized.depot : [];
+  normalized.depot = Array.isArray(normalized.depot)
+    ? normalized.depot.map((holding) => ({
+        ...holding,
+        value: Math.max(0, Number(holding.value) || 0),
+        plannedSale: Math.min(
+          Math.max(0, Number(holding.value) || 0),
+          Math.max(0, Number(holding.plannedSale) || 0),
+        ),
+        risk: Number(holding.risk) || 0,
+        note: holding.note || "",
+        region: holding.region || "Nicht zugeordnet",
+        securityType: holding.securityType || holding.sourceType,
+        classificationStatus:
+          holding.classificationStatus || "mapped",
+      }))
+    : [];
   normalized.moduleStates = normalized.moduleStates || {};
   normalized.customerChecklist = Array.isArray(normalized.customerChecklist)
     ? normalized.customerChecklist

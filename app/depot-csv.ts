@@ -1,5 +1,6 @@
 import { DepotHolding } from "./case-model";
 import { AssetClass, assetClasses, houseProducts } from "./investment-data";
+import { depotRegionForCountry } from "./depot-country-codes";
 
 export type DepotCsvFormat = "navigator" | "structure-overview";
 
@@ -76,6 +77,19 @@ function valueAt(row: string[], index: number) {
   return index >= 0 ? row[index] || "" : "";
 }
 
+function optionalNumber(row: string[], index: number) {
+  const raw = valueAt(row, index).trim();
+  return raw ? parseGermanNumber(raw) : undefined;
+}
+
+function normalizedDate(value: string) {
+  const raw = value.trim();
+  const match = raw.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  return match
+    ? `${match[3]}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}`
+    : raw || undefined;
+}
+
 function mapAssetClass(segment: string, type: string): AssetClass | null {
   const source = `${segment} ${type}`.toLowerCase();
   if (/liquid|tagesgeld|termingeld|kontoguthaben/.test(source))
@@ -87,16 +101,6 @@ function mapAssetClass(segment: string, type: string): AssetClass | null {
   if (/rohstoff|edelmetall|gold|alternative/.test(source))
     return "Alternative Anlagen";
   return null;
-}
-
-function mapRegion(country: string) {
-  const normalized = country.trim().toUpperCase();
-  if (normalized === "D" || normalized === "DE") return "Deutschland";
-  if (["USA", "US"].includes(normalized)) return "USA";
-  if (["CH"].includes(normalized)) return "Schweiz";
-  if (["JP", "CN", "HK", "SG"].includes(normalized)) return "Asien";
-  if (normalized) return "Europa";
-  return "Weltweit";
 }
 
 export function parseDepotCsv(buffer: ArrayBuffer): DepotCsvResult {
@@ -144,17 +148,42 @@ export function parseDepotCsv(buffer: ArrayBuffer): DepotCsvResult {
   const name = column(headers, "Bezeichnung");
   const amount = column(headers, "Kurswert incl. Stückzinsen");
   const segment = column(headers, "Anlagesegment");
-  const type = column(headers, "Wertpapiertyp", "Anlagemedium");
+  const investmentMedium = column(headers, "Anlagemedium");
+  const securityType = column(headers, "Wertpapiertyp");
   const country = column(headers, "Land");
   const currency = column(headers, "Währung");
+  const industry = column(headers, "Branche");
+  const certificateClass = column(headers, "Zertifikateklasse");
+  const coupon = column(headers, "Zinssatz");
   const maturity = column(headers, "Endfälligkeit");
   const wkn = column(headers, "WKN");
+  const nominalOrUnits = column(headers, "Stück/Nominal", "Stück / Nominal");
+  const lastPurchaseDate = column(headers, "letztes Kaufdatum");
+  const averageEntryPrice = column(headers, "Durchschnittl. Einstandskurs");
+  const purchaseCosts = column(headers, "Kaufkosten");
+  const currentPrice = column(headers, "Kurs");
+  const gainLossPercent = column(headers, "Kursgewinn/-verlust seit Kauf in %");
+  const gainLossAmount = column(headers, "Kursgewinn/-verlust seit Kauf");
+  const sourceDepotShare = column(headers, "Depotanteil in %");
+  const accruedInterest = column(headers, "Stückzinsen");
+  const averageEntryFx = column(headers, "Durchschnittl. Einstandsdevisenkurs");
+  const fxRate = column(headers, "Devisenkurs");
+  const valuationStart = column(headers, "Bewertungsanfang");
+  const valuationEnd = column(headers, "Bewertungsende");
+  const holdingAtValuationStart = column(headers, "Bestand per (Bewertungsanfang)");
+  const holdingAtValuationEnd = column(headers, "Bestand per (Bewertungsende)");
   const parsed = rows.slice(1).map((row) => {
     const wknValue = valueAt(row, wkn).trim();
     const matched = houseProducts.find(
       (product) => product.wkn.toUpperCase() === wknValue.toUpperCase(),
     );
-    const mapped = mapAssetClass(valueAt(row, segment), valueAt(row, type));
+    const segmentValue = valueAt(row, segment);
+    const mediumValue = valueAt(row, investmentMedium);
+    const securityTypeValue = valueAt(row, securityType);
+    const mapped = mapAssetClass(
+      segmentValue,
+      `${mediumValue} ${securityTypeValue}`,
+    );
     const matchedClass = matched?.assetMix
       ? (Object.entries(matched.assetMix).sort((a, b) => b[1] - a[1])[0]?.[0] as AssetClass)
       : null;
@@ -166,14 +195,35 @@ export function parseDepotCsv(buffer: ArrayBuffer): DepotCsvResult {
       name: valueAt(row, name),
       value: parseGermanNumber(valueAt(row, amount)),
       assetClass,
-      region: matched?.region || mapRegion(valueAt(row, country)),
+      region: matched?.region || depotRegionForCountry(valueAt(row, country)),
       risk: matched?.risk || 0,
       plannedSale: 0,
       note: classificationStatus === "unresolved" ? "Anlageklasse fachlich prüfen" : "",
       wkn: wknValue,
+      segment: segmentValue,
+      investmentMedium: mediumValue,
+      securityType: securityTypeValue,
+      rawCountry: valueAt(row, country).trim(),
       currency: valueAt(row, currency),
-      maturity: valueAt(row, maturity),
-      sourceType: valueAt(row, type),
+      industry: valueAt(row, industry),
+      certificateClass: valueAt(row, certificateClass),
+      coupon: optionalNumber(row, coupon),
+      maturity: normalizedDate(valueAt(row, maturity)),
+      nominalOrUnits: optionalNumber(row, nominalOrUnits),
+      lastPurchaseDate: normalizedDate(valueAt(row, lastPurchaseDate)),
+      averageEntryPrice: optionalNumber(row, averageEntryPrice),
+      purchaseCosts: optionalNumber(row, purchaseCosts),
+      currentPrice: optionalNumber(row, currentPrice),
+      gainLossPercent: optionalNumber(row, gainLossPercent),
+      gainLossAmount: optionalNumber(row, gainLossAmount),
+      accruedInterest: optionalNumber(row, accruedInterest),
+      sourceDepotShare: optionalNumber(row, sourceDepotShare),
+      averageEntryFx: optionalNumber(row, averageEntryFx),
+      fxRate: optionalNumber(row, fxRate),
+      valuationStart: normalizedDate(valueAt(row, valuationStart)),
+      valuationEnd: normalizedDate(valueAt(row, valuationEnd)),
+      holdingAtValuationStart: optionalNumber(row, holdingAtValuationStart),
+      holdingAtValuationEnd: optionalNumber(row, holdingAtValuationEnd),
       classificationStatus,
     } satisfies DepotHolding;
   }).filter((row) => row.name || row.value > 0);
