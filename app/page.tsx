@@ -519,7 +519,6 @@ export default function Home() {
   const [newCaseAdvisorId, setNewCaseAdvisorId] =
     useState<AdvisorId>(defaultAdvisorId);
   const [savedCases, setSavedCases] = useState<AdvisoryCase[]>([]);
-  const [hydrated, setHydrated] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
 
@@ -561,7 +560,6 @@ export default function Home() {
       } catch {
         window.localStorage.removeItem("vermoegensnavigator-cases-v2");
       }
-      setHydrated(true);
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
@@ -774,11 +772,7 @@ export default function Home() {
       <section className="workspace">
         {view === "home" && (
           <HomeView
-            cases={savedCases}
             start={start}
-            openCase={openSavedCase}
-            setView={setView}
-            hydrated={hydrated}
           />
         )}
         {view === "cases" && (
@@ -839,17 +833,9 @@ export default function Home() {
 }
 
 function HomeView({
-  cases,
   start,
-  openCase,
-  setView,
-  hydrated,
 }: {
-  cases: AdvisoryCase[];
   start: (scope?: Scope, scenarioId?: string) => void;
-  openCase: (item: AdvisoryCase) => void;
-  setView: (view: View) => void;
-  hydrated: boolean;
 }) {
   return (
     <div className="home-view">
