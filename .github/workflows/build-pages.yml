@@ -10,6 +10,7 @@ on:
       - styles.css
       - favicon.svg
       - og.png
+      - branding/**
       - .nojekyll
   workflow_dispatch:
 
@@ -52,10 +53,12 @@ jobs:
           cp .pages-dist/styles.css styles.css
           cp .pages-dist/favicon.svg favicon.svg
           cp .pages-dist/og.png og.png
+          mkdir -p branding
+          cp -R .pages-dist/branding/. branding/
           cp .pages-dist/.nojekyll .nojekyll
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add index.html 404.html app.js styles.css favicon.svg og.png .nojekyll
+          git add index.html 404.html app.js styles.css favicon.svg og.png branding .nojekyll
           if git diff --cached --quiet; then
             echo "Der veröffentlichte Stand ist bereits aktuell."
           else
