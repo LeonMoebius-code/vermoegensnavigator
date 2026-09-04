@@ -12,7 +12,7 @@
 
 ## 0. Zweck dieses Dokuments
 
-Dieses Dokument ist die zentrale **Source of Truth** für Produktkonzept, fachliche Entscheidungen, offenen Konzeptbedarf, Work-Pakete und bekannte Fixes des VermögensNavigators.
+Dieses Dokument ist die zentrale **Source of Truth** für Produktkonzept, fachliche Entscheidungen, bekannte Fehler, offene Fachthemen, Work-Pakete und Roadmap des VermögensNavigators.
 
 Es ersetzt **nicht** den Quellcode und **nicht** einzelne Work-Prompts. Es dokumentiert den aktuellen fachlichen Sollstand der Anwendung und trennt klar zwischen:
 
@@ -33,7 +33,7 @@ Bei Widersprüchen gilt künftig:
 3. aktueller Brainstorming-Chat für noch nicht in diese Datei übernommene neue Entscheidungen
 4. ältere Chats und alte Work-Prompts nur als historische Referenz
 
-Nach einem abgeschlossenen Brainstorming-Block oder Work-Paket wird diese Datei aktualisiert. Nicht jede kleine Zwischenidee wird sofort eingetragen.
+Nach einem abgeschlossenen Brainstorming-Block oder Work-Paket wird diese Datei aktualisiert. Nicht jede Zwischenidee wird sofort eingetragen.
 
 ---
 
@@ -87,6 +87,8 @@ Private und betriebliche Fälle sollen denselben Kern nutzen, aber dort differen
 - Einmal erfasste Informationen sollen an allen relevanten Stellen konsistent wiederverwendet werden.
 - Rechen- und Beratungszustände sollen klar benannt werden.
 - Die Anwendung soll nicht wie ein internes Entwickler-Dashboard wirken.
+- Bestehende Planbeträge dürfen durch nachgelagerte Umsetzungswege nicht doppelt gezählt werden.
+- Fachliche Beziehungen sollen im Datenmodell explizit sein und nicht aus Produktnamen oder UI-Zuständen rekonstruiert werden.
 
 ## 2.4 Einheitliche Begriffe
 
@@ -104,6 +106,11 @@ Die wirtschaftlichen Anlageklassen sind:
 3. Substanzwerte
 4. Alternative Anlagen
 5. Sachwerte
+
+Wichtige begriffliche Trennung:
+
+- **Kapitalbedarf** = Bedarf, der die heutige Kapital-/Zeitstruktur tatsächlich beeinflusst und einen Kapitaltopf erzeugen oder verändern kann.
+- **Sparziel** = zukünftiges Ziel eines Sparplans bzw. Vermögensaufbaus, das **nicht automatisch heutiges Kapital reserviert**, keinen Kapitaltopf erzeugt und keine Topfabdeckung verursacht.
 
 ---
 
@@ -251,11 +258,11 @@ Umgesetzt sind insbesondere:
 
 ---
 
-# 4. 🟢 Work-Paket 4A.1 – Bestandsdepot-Logik & V0.14-Fixes
+# 4. 🟢 Work-Paket 4A.1 – Bestandsdepot-Logik, Kapitaltopf-Lifecycle & V0.14-Fixes
 
 **Status: BESCHLOSSEN / WORK-READY**
 
-Dieses Paket ist bewusst klein und fachlich klar abgegrenzt. Es soll vor dem InvestmentPlan-Umbau umgesetzt werden.
+Dieses Paket ist fachlich klar abgegrenzt und soll **vor** dem InvestmentPlan-Umbau umgesetzt werden. Es enthält keine neue Depotanalyse und keine neue Spar-/Investmentplanlogik.
 
 ## 4.1 Branding-Fixes
 
@@ -312,7 +319,7 @@ Nach Ersetzen eines bestehenden Depots durch einen neuen CSV-Import können alte
 Ziel:
 
 - veraltete Holding-IDs nach Ersetzen des Depots bereinigen
-- für `Nach simulierten Verkäufen` ohnehin automatisch den vollständigen aktuellen Bestand verwenden
+- für `Nach simulierten Verkäufen` automatisch den vollständigen aktuellen Bestand verwenden
 - bei `Ausgewählte Positionen beibehalten` bestehende Auswahl nach Möglichkeit fachlich sinnvoll über stabile Merkmale, bevorzugt WKN, reconciliieren
 - neue Positionen nicht stillschweigend als bewusst „beibehalten“ interpretieren
 
@@ -365,17 +372,137 @@ Im Depot-Vermögenshaus:
 - andere Säule anklicken → anderes Detail öffnet
 - `Schließen ×` bleibt zusätzlich verfügbar
 
+## 4.7 Kapitaltopf-Lifecycle / verwaiste Zuordnungen
+
+### Bekannter Fehler
+
+Wenn ein Kapitalbedarf gelöscht wird und dadurch ein Kapitaltopf verschwindet, können im aktuellen Stand Produktzuordnungen und Umsetzungspläne weiter auf den nicht mehr sichtbaren Topf verweisen.
+
+Beobachteter Regressionstest:
+
+- vorher zusätzliche Bedarfe / Kapitaltöpfe vorhanden
+- diesen Bedarf anschließend löschen
+- Gesamtliquidität auf 350.000 € reduzieren
+- sichtbarer Topf: nur noch strategisch 350.000 €
+- trotzdem können z. B. 500.000 € als „Produkten zugeordnet“ / Topfabdeckung sowie in Vermögensstruktur und Umsetzungsweg weiterleben
+
+Solche **Geisterzuordnungen sind unzulässig**.
+
+### Verbindliche Regeln
+
+- Jede `capitalPotId` einer Allokation muss auf einen aktuell existierenden Kapitaltopf verweisen.
+- Wird der **letzte Bedarf eines Jahrestopfs** gelöscht und verschwindet der Topf dadurch vollständig, müssen betroffene Produktzuordnungen fachlich bereinigt werden.
+- Bei einer Multi-Topf-Allokation wird nur der Anteil des verschwundenen Topfs entfernt.
+- Andere weiterhin gültige Topfanteile derselben Produktposition bleiben erhalten.
+- Betroffene Umsetzungspläne / Einstiegspläne des verschwundenen konkreten Topfanteils dürfen nicht verwaist weiterbestehen.
+- Nicht automatisch nach `strategisch` verschieben. Das würde eine nicht getroffene Beratungsentscheidung erfinden.
+- Wenn ein belegter Kapitaltopf durch Löschen eines Bedarfs verschwinden würde, soll die Oberfläche vor dem Löschen transparent warnen, z. B. Anzahl und Betrag betroffener Produktzuordnungen / Umsetzungsbezüge nennen.
+- Zulässige Aktion: Bedarf und damit verbundene Topfzuordnungen bewusst löschen oder Vorgang abbrechen.
+- Wenn nach dem Löschen anderer Bedarfe **derselbe Jahrestopf weiterhin existiert**, bleiben seine Produktzuordnungen bestehen.
+- Änderungen an Liquidität, die lediglich eine bewusste Überplanung erzeugen, dürfen Produkte nicht automatisch kürzen. Überplanung bleibt sichtbar und bewusst möglich.
+- Nach jeder Änderung der Bedarfe / Topfstruktur muss eine Integritätsprüfung verhindern, dass unsichtbare Topf-IDs in Produktzuordnung, Topfabdeckung, Vermögensstruktur oder Umsetzung weitergerechnet werden.
+
+### Regressionstest
+
+Nach Entfernen eines Topfs müssen folgende Größen nur noch auf existierende Töpfe / gültige Allokationen zurückgreifen:
+
+- `Produkten zugeordnet`
+- `Topfabdeckung`
+- Vermögensstruktur / Vermögenshaus
+- Modellportfolio-/VV-Beiträge
+- Umsetzungsübersicht / InvestmentPlan-Bezüge
+
 ---
 
-# 5. 🟡 Work-Paket 4B – Einstieg & Sparpläne
+# 5. 🟢 Work-Paket 4B – Einstieg & Sparpläne
 
-**Status: IN KONZEPTION**
+**Status: BESCHLOSSEN / WORK-READY**
 
-Der heutige Bereich `Spar- und Investitionspläne` ist fachlich und UX-seitig nicht ausreichend. Insbesondere die gestaffelte Anlage wird grundlegend neu gedacht und nicht nur kosmetisch angepasst.
+Der heutige Bereich `Spar- und Investitionspläne` ist fachlich und UX-seitig nur eine Übergangslösung. 4B baut die Umsetzung einer geplanten Produktallokation fachlich neu auf und trennt sie sauber von zusätzlichem zukünftigen Sparen.
 
-## 5.1 Gestaffelter Einstieg – bereits beschlossen
+## 5.1 Grundprinzip: Produktplanung und Umsetzung sind zwei Ebenen
 
-Eine gestaffelte Anlage ist **kein zusätzliches Anlagevolumen**, sondern der Umsetzungsweg einer bereits geplanten Produktallokation.
+Eine Produktallokation beantwortet:
+
+> **Welcher Betrag soll in welches Produkt und welchen Kapitaltopf investiert werden?**
+
+Der Umsetzungsweg beantwortet:
+
+> **Wie wird genau dieser bereits geplante Betrag umgesetzt?**
+
+Ein Sparplan beantwortet dagegen:
+
+> **Welche zusätzlichen zukünftigen Beiträge sollen laufend investiert werden?**
+
+Daraus folgen drei feste Regeln:
+
+1. Ein Einstiegsplan darf das geplante Produktvolumen **nicht erhöhen**.
+2. Ein Sparplan darf den einmaligen Planungsbetrag **nicht erhöhen**.
+3. Sparplan-Ziele dürfen die heutige Kapitaltopfstruktur **nicht automatisch verändern oder abdecken**.
+
+---
+
+## 5.2 Gestaffelter Einstieg – Bezugsobjekt
+
+Ein Einstiegsplan gehört **nicht zum Produktnamen global**, sondern zu einer konkreten:
+
+> **Produktallokation × Kapitaltopf**
+
+Beispiel:
+
+- ZinsFix Index · Kapitaltopf 2034 · 50.000 €
+- ZinsFix Index · Strategisch · 100.000 €
+
+Für beide Allokationen darf ein unterschiedlicher Umsetzungsweg gelten.
+
+Beispiel:
+
+- 50.000 € im Topf 2034 → komplett sofort
+- 100.000 € strategisch → 40.000 € sofort + 60.000 € gestaffelt
+
+Der Bezug muss über stabile IDs erfolgen und darf nicht aus Produktname + Topflabel rekonstruiert werden.
+
+---
+
+## 5.3 Standardzustand: Komplett sofort
+
+Der Berater soll **nicht gezwungen werden**, für jede Produktposition aktiv einen Einstiegsplan anzulegen.
+
+Jede Produktallokation gilt standardmäßig als:
+
+> **Umsetzung: Komplett sofort**
+
+Direkt an der Produktposition beispielsweise:
+
+> ZinsFix Index  
+> Strategisch verfügbares Kapital · 100.000 €  
+> **Umsetzung: Komplett sofort · Ändern**
+
+Dafür ist kein zusätzlicher Klick erforderlich.
+
+Technisch darf `Komplett sofort` implizit aus der Produktallokation folgen, solange keine abweichende Umsetzungsentscheidung gespeichert wurde. Es ist nicht erforderlich, für jede unangetastete Position einen redundanten InvestmentPlan-Datensatz anzulegen.
+
+---
+
+## 5.4 Einstieg direkt an der Produktposition bearbeiten
+
+Der bisherige globale Button `+ Gestaffelte Anlage` ist nicht mehr der primäre Erfassungsweg und soll im Zielbild entfallen.
+
+Direkt an jeder konkreten Produktallokation wird der Umsetzungsstatus sichtbar und über `Ändern` bearbeitet.
+
+Mögliche Modi:
+
+- **Komplett sofort**
+- **Teilweise gestaffelt**
+- **Komplett gestaffelt**
+
+Bei `Teilweise gestaffelt` oder `Komplett gestaffelt` öffnet sich die Umsetzungsplanung unmittelbar bei der betreffenden Produktposition.
+
+Der Zielbetrag ist **nicht frei editierbar**. Er stammt aus der Produktallokation.
+
+---
+
+## 5.5 Staffelungslogik Prozent / EUR
 
 Beispiel:
 
@@ -388,93 +515,422 @@ Beispiel:
 
 ### Verbindliche Regeln
 
-- Eingabemodus wahlweise **Prozent** oder **EUR**
-- beide Eingabemodi beschreiben denselben gestaffelten Betrag
-- Prozentmodus skaliert bei späterer Änderung des Zielbetrags mit
-- EUR-Modus bleibt grundsätzlich als fester Betrag bestehen, soweit nicht > Zielbetrag
-- Sofortanlage wird automatisch berechnet
-- Ratenbetrag wird automatisch berechnet
-- keine widersprüchliche manuelle Eingabe von Zielbetrag, Rate und Anzahl zulassen
-- 0 % gestaffelt = alles sofort
-- 100 % gestaffelt = alles gestaffelt
-- Cent-Rundungen automatisch sauber behandeln
-- letzte Rate darf Rundungsdifferenz aufnehmen
-- geplantes Produktvolumen wird exakt einmal gezählt
-- InvestmentPlan / Raten dürfen nicht zusätzlich zum Planungsvolumen addiert werden
+- Eingabemodus wahlweise **Prozent** oder **EUR**.
+- Beide Modi beschreiben denselben gestaffelten Betrag, sie sind keine zwei unabhängigen Eingaben.
+- Sofortanlage = Zielbetrag minus gestaffelter Betrag.
+- Ratenbetrag = gestaffelter Betrag geteilt durch Anzahl Raten.
+- Rate wird automatisch berechnet und nicht unabhängig widersprüchlich manuell gepflegt.
+- 0 % gestaffelt = komplett sofort.
+- 100 % gestaffelt = komplett gestaffelt.
+- Cent-Rundungen automatisch sauber behandeln.
+- Letzte Rate darf einen Rundungsrest aufnehmen, damit die Summe exakt dem gestaffelten Betrag entspricht.
+- Geplantes Produktvolumen wird exakt einmal gezählt.
+- Raten dürfen nicht zusätzlich zum Planungsvolumen addiert werden.
 
-## 5.2 Noch offene Entscheidung A – Wo wird der Einstieg geplant?
+### Verhalten bei späterer Änderung der Produktallokation
 
-Bevorzugtes Zielbild:
+**Prozentmodus**
 
-Direkt an einer geplanten Produktposition in `Laufzeiten & Produkte`:
+Beispiel: 100.000 € Zielbetrag, 60 % gestaffelt. Zielbetrag wird auf 150.000 € erhöht.
 
-> Produktname  
-> 150.000 €  
-> **Einstieg planen**
+Erwartung:
 
-Beim Klick öffnet sich die konkrete Umsetzungsplanung inline oder in einem unmittelbar zugeordneten Detailbereich.
+- 60 % bleiben gespeichert
+- gestaffelter Betrag wird 90.000 €
+- Sofortanlage wird 60.000 €
 
-Der bisherige separate Bereich `Spar- und Investitionspläne` könnte danach primär als **Zusammenfassung aller Umsetzungswege** dienen.
+**EUR-Modus**
 
-**Noch final zu bestätigen.**
+Beispiel: 100.000 € Zielbetrag, 60.000 € gestaffelt. Zielbetrag wird auf 150.000 € erhöht.
 
-## 5.3 Noch offene Entscheidung B – Produkt über mehrere Kapitaltöpfe
+Erwartung:
+
+- 60.000 € bleiben gespeichert
+- Sofortanlage wird 90.000 €
+
+Wird der Zielbetrag im EUR-Modus unter den gespeicherten Staffelbetrag reduziert, darf die Anwendung nicht stillschweigend eine neue fachliche Entscheidung treffen.
+
+Stattdessen sichtbar warnen:
+
+> Gestaffelter Betrag übersteigt den aktuellen Zielbetrag. Bitte Einstieg anpassen.
+
+---
+
+## 5.6 Raten, Rhythmus und Start
+
+### Anzahl Raten
+
+- bei Staffelung manuell festlegen
+- positive ganze Zahl
+- Rate automatisch daraus berechnen
+
+### Rhythmus
+
+Für den Prototyp ausreichend:
+
+- monatlich
+- vierteljährlich
+- halbjährlich
+- jährlich
+
+Keine freie komplexe Intervalllogik in 4B.
+
+### Startdatum
+
+Startdatum bleibt frei änderbar.
+
+Sinnvolle Vorbelegung:
+
+- aktuelles Datum 1.–14. → nächster 15.
+- aktuelles Datum ab 15. → 1. des Folgemonats
+
+Beispiel am 04.09.2026:
+
+> Standard: 15.09.2026
+
+Die Vorbelegung gilt sinngemäß auch für neue Sparpläne.
+
+### Optionaler Hinweis
+
+Freitext für operative Hinweise kann bleiben, z. B. „nach Freigabe starten“.
+
+---
+
+## 5.7 Umsetzungsübersicht statt zweiter Produktplanung
+
+Der bisherige Bereich `Spar- und Investitionspläne` bleibt als **Umsetzungsübersicht**, ist aber nicht mehr der primäre Erfassungsort für gestaffelte Einstiege.
 
 Beispiel:
 
-- Produkt X insgesamt 150.000 €
-- 50.000 € im Kapitaltopf 2034
-- 100.000 € strategisch
+### Geplante Einstiege
 
-Offene Frage:
+**UniMarktführer · Strategisch · 150.000 €**  
+Komplett sofort
 
-- ein gemeinsamer Einstiegsplan für 150.000 €
-- oder eigener Einstiegsplan je Produkt × Kapitaltopf
+**ZinsFix Index · Strategisch · 100.000 €**  
+40.000 € sofort · 6 × 10.000 € monatlich ab 15.09.2026
 
-Bevorzugte fachliche Empfehlung:
+**ZinsFix Index · 2034 · 50.000 €**  
+Komplett sofort
 
-**pro konkrete Produktallokation / Kapitaltopf**, weil sich Umsetzungshorizont und Bedarfstermin unterscheiden können.
+### Laufende Sparpläne
 
-**Noch final zu bestätigen.**
+**UniGlobal · 500 €/Monat**  
+ab 01.10.2026 · fortlaufend  
+Ziel: optionales Sparziel
 
-## 5.4 Sparplan – bereits beschlossen
+Die Übersicht darf keine eigene unabhängige Produkt- oder Kapitaltopfzuordnung erzeugen.
 
-Ein Sparplan ist fachlich getrennt von einer bestehenden Einmalanlage.
+---
+
+## 5.8 Sparplan – fachliche Abgrenzung
+
+Ein Sparplan ist **zusätzliches zukünftiges Vermögensaufbauen** und getrennt von der aktuellen Einmalanlage.
 
 Verbindlich:
 
-- Sparplan ist zusätzliches zukünftiges Vermögensaufbauen
-- Sparplan zählt nicht zum einmaligen Planungsbetrag
-- alle Produkte gelten im Prototyp als grundsätzlich sparplanfähig
-- Produkte der aktuellen Planung zuerst anbieten
-- danach vollständigen Produktkatalog anbieten
-- Sparplansummen separat darstellen
+- Sparplan zählt nicht zum einmaligen Planungsbetrag.
+- Sparplan zählt nicht zu `Produkten zugeordnet` der heutigen Kapitaltöpfe.
+- Sparplan zählt nicht zur `Topfabdeckung`.
+- Sparplan verändert nicht automatisch Reserve, Jahrestöpfe oder strategisch verfügbares Kapital.
+- alle Produkte gelten im Prototyp als grundsätzlich sparplanfähig.
+- Sparplansummen werden separat dargestellt.
 
 Beispiel:
 
 > Einmalige Neuplanung: 1.100.000 €  
-> Zusätzliche laufende Sparpläne: 1.500 €/Monat
+> Zusätzliche Sparpläne: 1.500 €/Monat
 
-## 5.5 Noch offene Entscheidung C – Externes Sparplanprodukt
+Die heute bereits richtige Trennung, dass ein Sparplan Kapitaltöpfe, Produktzuordnung und Planungsbetrag nicht verändert, muss erhalten bleiben.
 
-Offen:
+---
 
-Soll zusätzlich zum Produktkatalog ein frei erfassbares Sparplanprodukt möglich sein, zum Beispiel über:
+## 5.9 Sparplan – Produktwahl
 
-- Produktbezeichnung
-- WKN
+Der heutige Stand beschränkt den Produktpicker auf Produkte der aktuellen Planung. Das wird erweitert.
 
-**Noch nicht entschieden.**
+Ziel:
 
-## 5.6 Spätere Vertiefung direkt aus 4B
+### Gruppe 1: Im aktuellen Plan
 
-Die Umsetzungsmaske soll perspektivisch kontextbezogene Vertiefungen öffnen können, zum Beispiel:
+- aktuelle Planprodukte zuerst
+- innerhalb der Gruppe sinnvoll priorisieren, bevorzugt nach geplantem Gesamtbetrag absteigend
 
-- „Warum gestaffelt investieren?“
-- „Entwicklung des Sparplans anzeigen“
-- „Zinseszinseffekt zeigen“
+### Gruppe 2: Weitere Lösungsbausteine
 
-Diese interaktiven Wissens-/Rechnerkomponenten werden jedoch als gemeinsames Vertiefungsframework konzipiert und nicht ungeplant in 4B hineingebaut.
+- vollständiger interner Produktkatalog
+
+Regeln:
+
+- dasselbe Produkt nicht doppelt in beiden Gruppen als separate auswählbare Dublette anbieten
+- Suchfunktion nutzen, falls vorhandene Picker-Architektur dies unterstützt
+- **kein freies externes Produkt / keine freie WKN in 4B**
+- externe Freitextprodukte erst später bei nachgewiesenem Bedarf
+
+---
+
+## 5.10 Sparplan – operative Felder
+
+Im eigentlichen Sparplan nur die operative Umsetzung speichern.
+
+### Felder
+
+- **Bezeichnung** optional
+- **Produkt**
+- **Sparrate**
+- **Rhythmus**
+- **Startdatum**
+- **Zielbezug / Sparziel** optional
+- **Hinweis** optional
+- Status grundsätzlich `fortlaufend`
+
+### Rhythmus
+
+- monatlich
+- vierteljährlich
+- halbjährlich
+- jährlich
+
+### Nicht im operativen Sparplan erzwingen
+
+- keine verpflichtende Anzahl Raten
+- kein verpflichtendes Enddatum
+- kein Kapitaltopf-Auswahlfeld
+- keine Renditeannahme
+- keine Inflationsannahme
+- keine prognostizierte Endsumme als Teil des verbindlichen Planvolumens
+
+Laufzeit, Rendite und Inflation gehören in die spätere Vertiefung / Beispielrechnung.
+
+---
+
+## 5.11 Sparziel statt neuem Kapitalbedarf
+
+### Entscheidender Grundsatz
+
+Ein langfristiges Sparziel, das **nicht aus dem heute vorhandenen Kapital reserviert werden soll**, ist **kein Kapitalbedarf**.
+
+Dafür wird der eigene Begriff / Zustand:
+
+> **Sparziel**
+
+verwendet.
+
+Ein Sparziel:
+
+- erzeugt **keinen Kapitaltopf**
+- reduziert **nicht** das strategisch verfügbare Kapital
+- verändert **nicht** die heutige Kapitaltopfstruktur
+- deckt **keinen Kapitaltopf** ab
+- erhöht **nicht** die Topfabdeckung
+- erhöht **nicht** das heutige Planungsvolumen
+- kann später als Zielgröße für Sparziel-/Zinseszinsrechner dienen
+
+### Zielbezug im Sparplan
+
+Mögliche Auswahl:
+
+- **Kein Zielbezug**
+- **Bestehendes Sparziel verknüpfen**
+- **Neues Sparziel anlegen**
+- optional: **Bestehenden echten Kapitalbedarf referenzieren**, jedoch nur als informative Verbindung, niemals als automatische Deckung durch den Sparplan
+
+### Neues Sparziel
+
+Mindestens sinnvoll:
+
+- Bezeichnung / Zweck
+- Zielbetrag
+- Zieljahr / Zieldatum
+
+Optional weitere Felder erst später.
+
+Wichtig:
+
+> Das Anlegen eines neuen Sparziels aus einem Sparplan darf **keinen neuen Kapitalbedarf in `data.needs` erzeugen** und darf daher auch keinen neuen Jahrestopf erzeugen.
+
+### Bestehender echter Kapitalbedarf als Referenz
+
+Ein Sparplan darf perspektivisch mit einem bereits vorhandenen echten Kapitalbedarf verknüpft werden, z. B. als Hinweis, dass parallel für diesen Zweck gespart wird.
+
+Auch dann gilt:
+
+- der Sparplan deckt den Bedarf nicht automatisch
+- der Sparplan verändert die heutige Topfabdeckung nicht
+- der echte Kapitalbedarf behält seine normale Wirkung auf die heutige Kapitaltopfstruktur
+- Verknüpfung ist zunächst informativ
+
+### Löschen / Ändern eines Zielbezugs
+
+- wird ein Sparziel gelöscht, bleibt der Sparplan bestehen und verliert nur seinen Zielbezug
+- wird ein verknüpfter echter Kapitalbedarf gelöscht, bleibt der Sparplan bestehen und verliert nur diese Referenz
+- Zieländerungen dürfen den operativen Sparplan nicht löschen
+
+---
+
+## 5.12 Zusammenfassung von Sparplänen
+
+Bei ausschließlich monatlichen Sparplänen beispielsweise:
+
+> Zusätzliche Sparpläne: 1.500 €/Monat
+
+Bei unterschiedlichen Rhythmen keine irreführende künstliche Monatsrate erzwingen.
+
+Sinnvoll beispielsweise:
+
+> Laufende Sparbeiträge: 18.000 €/Jahr
+
+und darunter die tatsächlichen Rhythmen, z. B.:
+
+- 1.000 €/Monat
+- 1.500 €/Quartal
+- 3.000 €/Jahr
+
+Die Jahresaggregation kann rein informativ sein. Die originären Rhythmen bleiben sichtbar.
+
+---
+
+## 5.13 Lifecycle der Umsetzung
+
+Die neue 4B-Logik muss robust auf Änderungen der zugrunde liegenden Planung reagieren.
+
+### Wird eine Produktallokation gelöscht
+
+- zugehöriger expliziter Einstiegsplan dieser konkreten Produktallokation wird ebenfalls entfernt
+- keine verwaiste Umsetzung darf weiter in der Übersicht erscheinen
+
+### Wird ein Kapitaltopf entfernt
+
+- Verhalten folgt 4A.1 Abschnitt 4.7
+- Einstiegspläne verwaister Produkt×Topf-Allokationen werden bereinigt
+
+### Wird Produktbetrag verändert
+
+- Verhalten gemäß Prozent-/EUR-Modus aus 5.5
+
+### Wird ein Sparplanprodukt aus der Einmalplanung entfernt
+
+- Sparplan bleibt bestehen, da er fachlich unabhängig von der Einmalallokation ist
+- Produkt bleibt über den Produktkatalog referenzierbar
+
+---
+
+## 5.14 Nicht Teil von 4B
+
+Nicht in dieses Paket hineinziehen:
+
+- vollständiger Durchschnittskosteneffekt-Rechner
+- Sparzielrechner mit Renditeannahme
+- Zinseszins-/Wertentwicklungsrechner
+- Inflation / Kaufkraftberechnung
+- steuerliche Sparplanberechnungen
+- externe freie WKN / Freitextprodukte
+- Depotcheck 3B
+- Risiko V2
+- Export-Endkonsolidierung
+
+4B schafft lediglich die fachlich sauberen Daten, Zustände und Verknüpfungen, auf die spätere Vertiefungen aufsetzen.
+
+---
+
+## 5.15 Regressionstestfälle für 4B
+
+### A – Standard Sofortanlage
+
+Produktallokation 100.000 € anlegen und nichts an der Umsetzung ändern.
+
+Erwartung:
+
+- sichtbarer Status `Komplett sofort`
+- Planvolumen bleibt 100.000 €
+- kein unnötiger manueller Einstiegsdatensatz erforderlich
+
+### B – 60 % gestaffelt
+
+100.000 € Zielbetrag, 60 %, 6 Raten.
+
+Erwartung:
+
+- sofort 40.000 €
+- gestaffelt 60.000 €
+- 6 × 10.000 €
+- Planvolumen weiterhin exakt 100.000 €
+
+### C – 60.000 € gestaffelt im EUR-Modus
+
+Zielbetrag anschließend auf 150.000 € erhöhen.
+
+Erwartung:
+
+- gestaffelt bleibt 60.000 €
+- sofort 90.000 €
+
+### D – Prozentmodus bei Zielbetragsänderung
+
+100.000 €, 60 % → Zielbetrag 150.000 €.
+
+Erwartung:
+
+- gestaffelt 90.000 €
+- sofort 60.000 €
+
+### E – EUR-Modus über Zielbetrag
+
+60.000 € gestaffelt, Zielbetrag danach auf 50.000 € reduzieren.
+
+Erwartung:
+
+- sichtbare Inkonsistenzwarnung
+- keine stille automatische fachliche Entscheidung
+
+### F – Gleiches Produkt in zwei Kapitaltöpfen
+
+ZinsFix Index 50.000 € in 2034 und 100.000 € strategisch.
+
+Erwartung:
+
+- zwei unabhängige Umsetzungswege
+- Änderungen an einem Einstieg beeinflussen den anderen nicht
+
+### G – Sparplan auf Planprodukt
+
+500 €/Monat auf Produkt aus aktueller Einmalplanung.
+
+Erwartung:
+
+- Planungsbetrag unverändert
+- Produktzuordnung der Kapitaltöpfe unverändert
+- Topfabdeckung unverändert
+- Sparplan separat sichtbar
+
+### H – Sparplan auf Produkt nur aus Katalog
+
+Produkt auswählen, das nicht in der Einmalplanung enthalten ist.
+
+Erwartung:
+
+- Sparplan zulässig
+- Einmalplanung bleibt unverändert
+
+### I – Sparziel
+
+Sparplan mit neuem Sparziel 100.000 € im Jahr 2038 verknüpfen.
+
+Erwartung:
+
+- kein neuer Kapitaltopf 2038
+- strategisches Kapital unverändert
+- keine Topfabdeckung durch den Sparplan
+- Zielbezug im Sparplan sichtbar
+
+### J – Zielbezug löschen
+
+Sparziel entfernen.
+
+Erwartung:
+
+- Sparplan bleibt bestehen
+- nur Zielreferenz verschwindet
 
 ---
 
@@ -634,7 +1090,7 @@ Vertiefungen sollen nicht nur statische Textseiten sein. Ziel ist ein gemeinsame
 Vertiefungen können:
 
 - vor einer konkreten Produktempfehlung kontextbezogen angeboten werden
-- aus einem konkreten Produkt / Kapitalbedarf / Sparplan geöffnet werden
+- aus einem konkreten Produkt / Kapitalbedarf / Sparplan / Sparziel geöffnet werden
 - zusätzlich über eine dauerhafte `Vertiefen`-Navigation erreichbar sein
 
 ## 8.2 Gemeinsames Seiten-/Modulformat
@@ -698,17 +1154,36 @@ Stattdessen erklären:
 
 > Bei festen regelmäßigen Anlagebeträgen werden bei niedrigeren Kursen mehr und bei höheren Kursen weniger Anteile erworben. Dies kann den durchschnittlichen Einstand beeinflussen. Eine höhere Rendite gegenüber einer Sofortanlage folgt daraus nicht automatisch.
 
+### Kontextbezug
+
+Aus einer konkreten gestaffelten Produktallokation können später automatisch übernommen werden:
+
+- Zielbetrag
+- Sofortbetrag
+- gestaffelter Betrag
+- Anzahl Raten
+- Rhythmus
+- Startdatum
+
+Die Vertiefung darf daraus Beispiel-Kursverläufe und Umsetzungsvergleiche erzeugen, ohne eine sichere Renditeaussage zu behaupten.
+
 ## 8.5 Sparplan / Zinseszins
 
-Direkt aus einem konkreten Sparplan aufrufbar.
+Direkt aus einem konkreten Sparplan oder Sparziel aufrufbar.
 
-Eingaben können aus dem Fall vorbefüllt werden:
+Operative Daten aus 4B können vorbefüllt werden:
 
-- monatliche Sparrate
-- optionales Startkapital
-- Laufzeit
+- Sparrate
+- Rhythmus
+- Startdatum
+- optional Zielbetrag / Zieljahr aus einem Sparziel
+
+Zusätzliche Annahmen in der Vertiefung:
+
+- Betrachtungsdauer
 - angenommene Rendite
 - optional Inflation
+- optional Startkapital
 
 Ausgaben:
 
@@ -718,6 +1193,9 @@ Ausgaben:
 - Zinseszinseffekt
 - optional verbleibende Kaufkraft nach Inflation
 - Verlauf über die Zeit
+- bei Sparziel optional rechnerische Lücke / Überschuss zum Zielbetrag
+
+Diese Berechnung ist eine Beispielrechnung und keine aktuelle Topfabdeckung.
 
 ## 8.6 Vermögensaufbaurechner
 
@@ -743,17 +1221,19 @@ Umgekehrte Fragestellung:
 
 - Zielbetrag
 - vorhandenes Startkapital
-- Zeitraum
+- Zeitraum / Zieljahr
 - angenommene Rendite
 - Inflation optional
 
 Ergebnis:
 
-- benötigte monatliche Sparrate
+- benötigte Sparrate
+- erwarteter Endwert bei vorhandener Sparrate
+- rechnerische Lücke / Überschuss
 
-Perspektivisch direkte Verknüpfung mit einem Beratungsbedarf:
+Der Rechner soll primär mit dem eigenen 4B-Begriff **Sparziel** arbeiten.
 
-> Bedarf 2040 · 300.000 € → `Sparziel berechnen`
+Ein vorhandener echter Kapitalbedarf kann perspektivisch als Zielgröße referenziert werden, ohne dass ein Sparplan dadurch dessen heutige Kapitaltopfabdeckung übernimmt.
 
 ## 8.8 Steuern bei Kapitalanlagen – Privatvermögen
 
@@ -860,7 +1340,8 @@ Der Export soll erst nach dem Umbau von Einstieg und Sparplänen endgültig kons
 ## 9.1 Zukünftig konsistent exportieren
 
 - Kapitaltöpfe
-- Bedarfe / Termine
+- echte Kapitalbedarfe / Termine
+- Sparziele separat und klar vom Kapitalbedarf getrennt
 - aktive Planvariante
 - ZIELPLAN / bevorzugte Variante
 - Bestandsdepot-Berücksichtigung
@@ -870,6 +1351,7 @@ Der Export soll erst nach dem Umbau von Einstieg und Sparplänen endgültig kons
 - gestaffelter Betrag
 - Anzahl / Höhe der Raten
 - zusätzliche Sparpläne separat
+- Zielbezug eines Sparplans, sofern vorhanden
 - Depotcheck / Transaktionen soweit sinnvoll
 
 ## 9.2 Branding
@@ -973,10 +1455,13 @@ Sichtbare Topfarten:
 Regeln:
 
 - keine Nulltöpfe anzeigen
-- gleicher Zieljahrgang kann mehrere Bedarfe zusammenfassen
+- gleicher Zieljahrgang kann mehrere echte Kapitalbedarfe zusammenfassen
 - Einzelbedarfe bleiben innerhalb des Topfs erhalten
 - strategischer Topf nur positiv
 - Fehlbetrag separat sichtbar
+- nur **echte Kapitalbedarfe** beeinflussen diese Zeitstruktur
+- Sparziele aus 4B gehören ausdrücklich nicht in diese Kapitaltopflogik
+- jede gespeicherte Allokation muss auf einen existierenden Kapitaltopf verweisen oder fachlich bereinigt werden
 
 ## 12.3 Bedarfstermin / Produkthorizont / Anleihefälligkeit
 
@@ -987,6 +1472,31 @@ Diese drei Größen sind fachlich verschieden und dürfen nicht gleichgesetzt we
 3. tatsächliche Fälligkeit eines Wertpapiers
 
 Bei allgemeiner Zuordnung eines Produkts zum Jahrestopf ist der früheste konkrete Bedarf innerhalb dieses Topfs für die zeitliche Plausibilisierung relevant. Bei expliziter Zuordnung zu einem einzelnen Unterbedarf kann dessen eigener Termin verwendet werden.
+
+## 12.4 Kapitalbedarf / Sparziel / Sparplan
+
+Diese Größen sind ebenfalls fachlich verschieden:
+
+### Kapitalbedarf
+
+- Teil der heutigen Vermögensplanung
+- kann Jahrestopf erzeugen
+- reduziert je nach Fall strategisch verfügbares Kapital
+- wird durch heutige Produktallokationen abgedeckt
+
+### Sparziel
+
+- zukünftiges Zielbild des Vermögensaufbaus
+- erzeugt keinen Kapitaltopf
+- reserviert kein heutiges Kapital
+- verändert keine Topfabdeckung
+
+### Sparplan
+
+- operative zukünftige Einzahlung
+- kann mit Sparziel oder informativ mit einem bestehenden Bedarf verknüpft sein
+- deckt weder Sparziel noch Kapitalbedarf automatisch als heutige Topfabdeckung
+- bleibt getrennt von der Einmalanlage
 
 ---
 
@@ -1000,8 +1510,8 @@ Typische Schwerpunkte:
 
 - Liquiditätsreserve
 - persönliche Ziele / Bedarfe
+- Sparziele / Vermögensaufbau
 - Depot
-- Vermögensaufbau
 - Vorsorge
 - Nachfolge
 - private Kapitalertragsteuer
@@ -1086,6 +1596,7 @@ Aus dem V0.14-Lauf abgeleitete Regel:
 - große Pakete grundsätzlich aus regulärem Work-Kontingent starten
 - bezahlte Credits nicht als Standardersatz für das Wochen-/5h-Kontingent verwenden
 - Credits können sinnvoll sein, wenn ein regulärer Lauf fachlich nahezu fertig und bereits persistent gesichert ist und nur noch kleiner Fix, Merge oder Deployment fehlt
+- auch 50–100 Credits können als Verlängerung sinnvoll sein, wenn der fachliche Kern bereits persistent gesichert ist
 - entscheidend ist der Fortschritt des gesicherten fachlichen Kerns, nicht eine starre Creditzahl
 
 ---
@@ -1155,6 +1666,52 @@ Erwartung:
 - PLAN = Plan A
 - ZIELPLAN = Plan B
 
+## 15.5 Kapitaltopf-Lifecycle
+
+Test:
+
+- Plan mit zusätzlichem Bedarf und belegtem Jahrestopf erzeugen
+- Produktzuordnung und ggf. Umsetzung an diesen Topf hängen
+- Bedarf anschließend löschen, sodass der Jahrestopf vollständig verschwindet
+
+Erwartung:
+
+- Warnung vor Löschung, sofern Zuordnungen betroffen
+- keine verwaiste `capitalPotId`
+- kein unsichtbarer Produktbetrag in `Produkten zugeordnet`
+- keine unsichtbare Topfabdeckung
+- keine Beiträge im Vermögenshaus aus verschwundenem Topf
+- keine verwaiste Umsetzung
+
+## 15.6 4B Einstiegsplan
+
+Referenz:
+
+- 100.000 € Produktallokation
+- 60 % gestaffelt
+- 6 Raten
+
+Erwartung:
+
+- 40.000 € sofort
+- 60.000 € gestaffelt
+- 6 × 10.000 €
+- Planungsbetrag bleibt 100.000 €
+
+## 15.7 4B Sparziel
+
+Referenz:
+
+- Sparplan 500 €/Monat
+- neues Sparziel 100.000 € in 2038
+
+Erwartung:
+
+- Sparplan separat
+- kein Kapitaltopf 2038
+- strategisches Kapital unverändert
+- keine Topfabdeckung
+
 ---
 
 # 16. Bewusst später / aktuell nicht planen
@@ -1179,14 +1736,18 @@ Durchschau bleibt ungeklärt, bis belastbare Quelle vorhanden ist.
 
 Nur nach eigenem Fachkonzept und mit aktuellen Quellen.
 
+## ⏳ Externe freie Sparplanprodukte
+
+Freie WKN / freie Produktbezeichnung für Sparpläne zunächst bewusst nicht in 4B. Erst bei tatsächlichem fachlichem Bedarf ergänzen.
+
 ---
 
 # 17. Roadmap – empfohlene Reihenfolge
 
 | Reihenfolge | Paket / Konzept | Status |
 |---:|---|---|
-| 1 | **4A.1 Bestandsdepot-Logik & V0.14-Fixes** | 🟢 Work-ready |
-| 2 | **4B Einstieg & Sparpläne** | 🟡 letzte Entscheidungen offen |
+| 1 | **4A.1 Bestandsdepot-Logik, Kapitaltopf-Lifecycle & V0.14-Fixes** | 🟢 Work-ready |
+| 2 | **4B Einstieg & Sparpläne** | 🟢 Work-ready |
 | 3 | **Depotcheck 3B Portfolioanalyse** | 🟢 nahezu Work-ready |
 | 4 | **Risiko V2** | 🔴 Fachkonzept nötig |
 | 5 | **Vertiefungsframework** | 🟡 Konzept weiter ausarbeiten |
@@ -1199,12 +1760,15 @@ Die Reihenfolge kann sich ändern, wenn ein fachlicher Block priorisiert werden 
 
 # 18. Offene Entscheidungen – nächste Brainstorming-Punkte
 
+## 4A.1
+
+Keine zentrale fachliche Entscheidung mehr offen. Paket ist Work-ready.
+
 ## 4B
 
-1. `Einstieg planen` direkt an jeder Produktallokation endgültig bestätigen
-2. gestaffelter Einstieg pro Gesamtprodukt oder pro Produkt × Kapitaltopf endgültig bestätigen
-3. freie WKN / Produktbezeichnung für Sparpläne außerhalb des Produktkatalogs ja/nein
-4. Startdatum / Frequenz / mögliche individuelle Ratenlogik nach dem Kernmodell konkretisieren
+Keine zentrale fachliche Entscheidung mehr offen. Paket ist Work-ready.
+
+Kleinere UI-Details dürfen bei der Prompt-Erstellung aus den hier festgelegten Regeln abgeleitet werden, ohne das Fachmodell erneut zu öffnen.
 
 ## Risiko V2
 
@@ -1216,7 +1780,9 @@ Die Reihenfolge kann sich ändern, wenn ein fachlicher Block priorisiert werden 
 - konkrete Triggerlogik
 - zentrale `Vertiefen`-Navigation
 - Quellen-/Datenstand-Konzept
-- Welche Rechner gehören in den ersten MVP des Vertiefungsframeworks?
+- welche Rechner gehören in den ersten MVP des Vertiefungsframeworks?
+- genaue UI für Cost-Average-/Einstiegsvertiefung
+- genaue UI für Sparziel-/Zinseszinsrechner
 - steuerliche Inhalte Privat
 - separates Fachkonzept Betrieblich / Bilanzierung
 
@@ -1232,8 +1798,14 @@ Die Reihenfolge kann sich ändern, wenn ein fachlicher Block priorisiert werden 
 
 ## 04.09.2026
 
+### Projektorganisation
+
 - Master-Spezifikation als kanonischer Produktstand eingeführt.
 - V0.14 grundsätzlich abgenommen, aber 4A.1 als separates Fixpaket definiert.
+- 4B nach gezieltem Test von gestaffelter Anlage und Sparplan fachlich abgeschlossen und auf **Work-ready** gesetzt.
+
+### 4A.1
+
 - Private-Banking-Logo muss im Header vollständig sichtbar sein.
 - PDF/Kundenübersicht muss Volksbank-pur-Logo **und** Private-Banking-Logo verwenden.
 - Bestandsdepot-Modi der Strukturplanung fachlich neu präzisiert.
@@ -1243,11 +1815,41 @@ Die Reihenfolge kann sich ändern, wenn ein fachlicher Block priorisiert werden 
 - `Ausgewählte Positionen beibehalten` verwendet eine bewusste Positionsauswahl nur für PLAN.
 - Depotcheck IST/PLAN wird von der Bestandsdepot-Steuerung der Strukturplanung entkoppelt.
 - Depotcheck-Säulendetail soll durch erneuten Klick auf dieselbe Säule geschlossen werden können.
-- Gestaffelte Anlage und Sparplan bleiben eigenes Paket 4B.
-- Sparplan-/Einstiegsvertiefungen sollen später konkrete Kundendaten in Rechnern verwenden können.
+- Neuer Fehler aufgenommen: Beim Wegfall eines Kapitaltopfs dürfen keine verwaisten Produktzuordnungen oder Umsetzungspläne weitergerechnet werden.
+- Verwaiste Topfanteile werden nicht automatisch nach strategisch verschoben.
+
+### 4B – Einstieg
+
+- Jede Produktallokation ist standardmäßig **Komplett sofort**. Der Berater muss nicht aktiv einen Einstiegsplan anlegen.
+- Umsetzungsstatus wird direkt an der konkreten Produktallokation angezeigt und über `Ändern` bearbeitet.
+- Einstiegsplan gehört zu **Produktallokation × Kapitaltopf**.
+- Gestaffelter Anteil kann alternativ in Prozent oder EUR gepflegt werden.
+- Sofortbetrag und Rate werden automatisch berechnet.
+- Prozentmodus skaliert bei Änderung des Zielbetrags, EUR-Modus bleibt grundsätzlich fix.
+- Rhythmus: monatlich, vierteljährlich, halbjährlich, jährlich.
+- Startdatum standardmäßig nächster 1. oder 15., bleibt frei änderbar.
+- Der bisherige globale Bereich wird zur Umsetzungsübersicht, nicht zur zweiten Produktplanung.
+
+### 4B – Sparplan / Sparziel
+
+- Sparplan bleibt vom heutigen Einmalvolumen, Produktzuordnung und der Topfabdeckung getrennt.
+- Produktpicker bietet Planprodukte zuerst und danach den vollständigen internen Produktkatalog.
+- Freie externe WKN / Freitextprodukte vorerst nicht.
+- Operativer Sparplan speichert Rate, Rhythmus, Start, Produkt, optionalen Hinweis und optionalen Zielbezug; keine Rendite-/Inflationsannahmen.
+- Ein langfristiges Ziel eines Sparplans wird als **Sparziel** modelliert, nicht als neuer Kapitalbedarf.
+- Ein neues Sparziel erzeugt **keinen Kapitaltopf**, reduziert kein strategisches Kapital und deckt keinen Topf ab.
+- Ein Sparplan kann perspektivisch informativ mit einem bestehenden echten Kapitalbedarf verbunden werden, übernimmt aber niemals automatisch dessen heutige Topfabdeckung.
+- Zinseszins-, Sparziel- und Cost-Average-Berechnungen bleiben spätere Vertiefungen und werden nicht in 4B vermischt.
+
+### Vertiefungen / Steuern
+
+- Sparplan-/Einstiegsvertiefungen sollen später konkrete Falldaten in Rechnern verwenden können.
 - Zinseszinsdarstellung für konkrete Sparpläne als wichtige Vertiefungsidee aufgenommen.
 - Steuervertiefungen sollen Teilfreistellungen berücksichtigen.
 - Betriebliche Steuer-/Bilanzierungslogik wird nicht aus der Privatlogik abgeleitet, sondern separat fachlich konzipiert.
+
+### Work-Ressourcen
+
 - Bezahlte Work-Credits künftig primär als Verlängerung bereits weit fortgeschrittener und gesicherter Runs, nicht als Standardstart großer Pakete.
 
 ---
