@@ -3443,15 +3443,15 @@ input[inputmode="numeric"],
 
 .print-document {
   position: relative;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .print-document::before {
   content: "";
   position: absolute;
   top: 0;
-  left: -2%;
-  width: 104%;
+  left: 0;
+  width: 100%;
   height: 8px;
   background: var(--cyan);
   transform: rotate(-0.5deg);
@@ -6335,9 +6335,10 @@ body[data-print-mode="customer"] .internal-only {
 .private-banking-mark {
   display: flex;
   align-items: center;
-  width: 126px;
-  min-height: 24px;
+  width: 94px;
+  min-height: 0;
   flex: 0 0 auto;
+  line-height: 0;
 }
 .private-banking-mark img {
   display: block;
@@ -6358,8 +6359,8 @@ body[data-print-mode="customer"] .internal-only {
   height: 24px;
 }
 .brand-logos.compact .private-banking-mark {
-  width: 90px;
-  min-height: 18px;
+  width: 67px;
+  min-height: 0;
 }
 .brand-logos.compact i {
   height: 24px;
@@ -6368,6 +6369,25 @@ body[data-print-mode="customer"] .internal-only {
   color: inherit;
 }
 .print-document .brand-logos {
+  flex: 0 0 auto;
+}
+.print-document > header,
+.print-document > header > div,
+.print-document > header > div > div {
+  min-width: 0;
+  overflow: visible;
+}
+.print-document > header > div {
+  flex: 1 1 auto;
+}
+.print-document > header > div > div {
+  flex: 0 1 auto;
+}
+.print-document > header strong,
+.print-document > header small {
+  white-space: nowrap;
+}
+.print-document > header em {
   flex: 0 0 auto;
 }
 .comparison-table b {
