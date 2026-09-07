@@ -842,7 +842,10 @@ export function reconcilePlanCapitalPots(
       const allocation = allocationById.get(entry.allocationId);
       return allocation &&
         validIds.has(entry.capitalPotId) &&
-        allocationAmountInCapitalPot(allocation, entry.capitalPotId) > 0
+        allocationAmountInCapitalPot(allocation, entry.capitalPotId) > 0 &&
+        Number(entry.stagedValue) > 0 &&
+        Number.isInteger(entry.installments) &&
+        entry.installments > 0
         ? [entry]
         : [];
     }

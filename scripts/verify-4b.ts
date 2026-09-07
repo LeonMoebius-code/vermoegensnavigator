@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
 import {
   annualSavingsContribution,
+  capitalPots,
   createCase,
   duplicateStructurePlan,
   nextImplementationDate,
   normalizeImportedCase,
   phasedEntryAmounts,
+  plannerIstHoldingValue,
+  plannerPlanHoldingValue,
+  planningShortfall,
   reconcilePlanCapitalPots,
   type PhasedEntryPlan,
   type PlannerAllocation,
@@ -96,6 +100,19 @@ const savings: SavingsPlan = {
 };
 assert.equal(annualSavingsContribution(savings), 6_000);
 
+const capitalBeforeGoal = capitalPots(base.advisory, base.plans[0].total, "2026-09-07");
+const planAmountBeforeGoal = base.plans[0].total;
+const shortfallBeforeGoal = planningShortfall(base.advisory, base.plans[0].total);
+base.savingsGoals = [{
+  id: "goal-study",
+  name: "Studium Kind",
+  targetAmount: 100_000,
+  targetYear: 2038,
+}];
+assert.equal(base.plans[0].total, planAmountBeforeGoal);
+assert.deepEqual(capitalPots(base.advisory, base.plans[0].total, "2026-09-07"), capitalBeforeGoal);
+assert.equal(planningShortfall(base.advisory, base.plans[0].total), shortfallBeforeGoal);
+
 base.plans[0].allocations[0].amount = 150_000;
 base.plans[0].allocations[0].capitalPotAmounts = {
   strategic: 100_000,
@@ -116,6 +133,26 @@ if (duplicate.investmentPlans[0].type === "phased") {
 }
 assert.notEqual(duplicate.investmentPlans[1].id, savings.id);
 
+const twoPairPlan = {
+  ...base.plans[0],
+  investmentPlans: [
+    percentEntry,
+    { ...percentEntry, id: "entry-second-pot", capitalPotId: "year-2034" as const, stagedValue: 40 },
+  ],
+};
+const reconciledPairs = reconcilePlanCapitalPots(
+  base.advisory,
+  twoPairPlan,
+  "2026-09-07",
+  base.savingsGoals,
+);
+assert.equal(reconciledPairs.investmentPlans.length, 2);
+const pairAmounts = reconciledPairs.investmentPlans
+  .filter((entry) => entry.type === "phased")
+  .map((entry) => phasedEntryAmounts(reconciledPairs, entry).stagedAmount)
+  .sort((a, b) => a - b);
+assert.deepEqual(pairAmounts, [20_000, 60_000]);
+
 const reconciled = reconcilePlanCapitalPots(
   { ...base.advisory, needs: [] },
   base.plans[0],
@@ -123,9 +160,37 @@ const reconciled = reconcilePlanCapitalPots(
   [],
 );
 assert.equal(reconciled.investmentPlans.some((entry) => entry.type === "phased"), false);
+assert.equal(reconciled.allocations[0].amount, 100_000);
+assert.deepEqual(reconciled.allocations[0].capitalPotAmounts, { strategic: 100_000 });
 const reconciledSavings = reconciled.investmentPlans.find((entry) => entry.type === "savings");
 assert.ok(reconciledSavings && reconciledSavings.type === "savings");
 assert.equal(reconciledSavings.targetRef, undefined);
+
+const allocationDeleted = reconcilePlanCapitalPots(
+  base.advisory,
+  { ...base.plans[0], allocations: [] },
+  "2026-09-07",
+  base.savingsGoals,
+);
+assert.equal(allocationDeleted.investmentPlans.some((entry) => entry.type === "phased"), false);
+assert.equal(allocationDeleted.investmentPlans.some((entry) => entry.type === "savings"), true);
+
+const holding = {
+  id: "holding-a",
+  name: "Bestand",
+  value: 100_000,
+  assetClass: "Substanzwerte" as const,
+  region: "Weltweit",
+  risk: 3,
+  plannedSale: 25_000,
+  note: "",
+};
+const depotPlan = { ...base.plans[0], depotHoldingIds: [holding.id] };
+assert.equal(plannerIstHoldingValue({ ...depotPlan, depotMode: "none" }, holding), 0);
+assert.equal(plannerIstHoldingValue({ ...depotPlan, depotMode: "compare" }, holding), 100_000);
+assert.equal(plannerPlanHoldingValue({ ...depotPlan, depotMode: "compare" }, holding), 0);
+assert.equal(plannerPlanHoldingValue({ ...depotPlan, depotMode: "retain" }, holding), 100_000);
+assert.equal(plannerPlanHoldingValue({ ...depotPlan, depotMode: "afterSales" }, holding), 75_000);
 
 const migrationBase = createCase();
 migrationBase.advisory.scope = "private";

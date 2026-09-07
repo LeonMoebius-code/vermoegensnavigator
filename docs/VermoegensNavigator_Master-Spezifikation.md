@@ -3,7 +3,7 @@
 > **Kanonischer Produkt- und Entscheidungsstand**
 >
 > Letzte fachliche Aktualisierung: **07.09.2026**
-> Aktuell veröffentlichte Version: **V0.14.1**
+> Aktuell veröffentlichte Version: **V0.15.0**
 > Codebasis: **GitHub `main`**
 > Zielumgebung: **Desktop-Prototyp**
 > Öffentliche Testversion: GitHub Pages
@@ -416,11 +416,11 @@ Nach Entfernen eines Topfs müssen folgende Größen nur noch auf existierende T
 
 ---
 
-# 5. 🟢 Work-Paket 4B – Einstieg & Sparpläne
+# 5. ✅ Work-Paket 4B – Einstieg & Sparpläne
 
-**Status: BESCHLOSSEN / WORK-READY**
+**Status: UMGESETZT**
 
-Der heutige Bereich `Spar- und Investitionspläne` ist fachlich und UX-seitig nur eine Übergangslösung. 4B baut die Umsetzung einer geplanten Produktallokation fachlich neu auf und trennt sie sauber von zusätzlichem zukünftigen Sparen.
+Veröffentlicht mit V0.15.0. Der bisherige Bereich `Spar- und Investitionspläne` wurde durch eine Umsetzungsübersicht ersetzt. Gestaffelte Einstiege werden direkt an `Produktallokation × Kapitaltopf` gesteuert. Sparpläne und fallweite Sparziele bleiben fachlich und rechnerisch von der heutigen Einmalanlage getrennt.
 
 ## 5.1 Grundprinzip: Produktplanung und Umsetzung sind zwei Ebenen
 
@@ -1440,6 +1440,8 @@ Keine zufällig aus dem Internet beschafften Fontdateien verwenden.
 
 # 12. Technische / fachliche Kernzustände
 
+Persistenzschema: **8**. Alte Schema-6- und Schema-7-Fälle werden beim Laden der aktiven Arbeitskopie über `normalizeImportedCase(...)` migriert. Historische Versionssnapshots bleiben unverändert gespeichert und werden erst bei Wiederherstellung normalisiert.
+
 ## 12.1 Planvarianten
 
 - `activePlanId` bestimmt die aktive Arbeits-/PLAN-Variante
@@ -1749,7 +1751,7 @@ Freie WKN / freie Produktbezeichnung für Sparpläne zunächst bewusst nicht in 
 | Reihenfolge | Paket / Konzept | Status |
 |---:|---|---|
 | 1 | **4A.1 Bestandsdepot-Logik, Kapitaltopf-Lifecycle & V0.14-Fixes** | ✅ Umgesetzt |
-| 2 | **4B Einstieg & Sparpläne** | 🟢 Work-ready |
+| 2 | **4B Einstieg & Sparpläne** | ✅ Umgesetzt |
 | 3 | **Depotcheck 3B Portfolioanalyse** | 🟢 nahezu Work-ready |
 | 4 | **Risiko V2** | 🔴 Fachkonzept nötig |
 | 5 | **Vertiefungsframework** | 🟡 Konzept weiter ausarbeiten |
@@ -1768,9 +1770,7 @@ Keine zentrale fachliche Entscheidung offen. Paket ist umgesetzt.
 
 ## 4B
 
-Keine zentrale fachliche Entscheidung mehr offen. Paket ist Work-ready.
-
-Kleinere UI-Details dürfen bei der Prompt-Erstellung aus den hier festgelegten Regeln abgeleitet werden, ohne das Fachmodell erneut zu öffnen.
+Keine zentrale fachliche Entscheidung offen. Paket ist umgesetzt.
 
 ## Risiko V2
 
@@ -1799,6 +1799,17 @@ Kleinere UI-Details dürfen bei der Prompt-Erstellung aus den hier festgelegten 
 # 19. Entscheidungslog
 
 ## 07.09.2026
+
+### 4B Umsetzung
+
+- Persistenzschema von 7 auf 8 angehoben. Schema-6- und Schema-7-Fälle werden weiterhin über `normalizeImportedCase(...)` normalisiert.
+- `InvestmentPlan` in `PhasedEntryPlan` und `SavingsPlan` getrennt. Gestaffelte Einstiege referenzieren die konkrete Allocation und den konkreten Kapitaltopf.
+- `Komplett sofort` ist impliziter Standard ohne zusätzlichen Datensatz. Prozent- und EUR-Staffelung, Cent-Rundung und Startdatum am nächsten 1. oder 15. sind zentral berechnet.
+- Die bestehende Kapitaltopf-Reconciliation bereinigt verwaiste PhasedEntry-Beziehungen. Sparpläne bleiben von Allocation- und Kapitaltopfänderungen unabhängig.
+- Fallweite `SavingsGoal[]` und informative Zielreferenzen auf Sparziele oder bestehende Kapitalbedarfe eingeführt. Sparziele erzeugen keine Kapitaltöpfe und verändern weder Planungsbetrag noch Topfabdeckung.
+- Plan-Duplizierung remappt Allocation-IDs und PhasedEntry-Referenzen. SavingsPlans erhalten neue IDs, fallweite SavingsGoals werden nicht dupliziert.
+- Umsetzungsübersicht, Inline-Einstiegseditor, vollständiger interner Sparplan-Produktpicker sowie Excel-/Druckexport auf das neue Modell angepasst.
+- Version V0.15.0 veröffentlicht.
 
 ### 4A.1 Umsetzung
 
