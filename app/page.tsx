@@ -38,6 +38,7 @@ import {
   allocationAmountInCapitalPot,
   allocationCapitalCoverageTotal,
   allocationCapitalPotAmounts,
+  annualSavingsContribution,
   bucketForMonths,
   capitalPotRemovalImpact,
   CapitalPotId,
@@ -52,6 +53,7 @@ import {
   depotPlanAssetAmounts,
   DepotHolding,
   defaultAdvisorId,
+  duplicateStructurePlan,
   maturityBuckets,
   monthsUntilNeed,
   ModuleState,
@@ -59,7 +61,11 @@ import {
   planAssetAmounts,
   productAssetMix,
   PlannerAllocation,
+  InvestmentFrequency,
   InvestmentPlan,
+  nextImplementationDate,
+  phasedEntryAmounts,
+  PhasedEntryPlan,
   legacyBucketAmountsForCapitalPots,
   planningShortfall,
   plannerIstHoldingValue,
@@ -69,6 +75,7 @@ import {
   reconcilePlanCapitalPots,
   strategicAmount,
   StructurePlan,
+  SavingsPlan,
   VvFilters,
   advisors,
 } from "./case-model";
@@ -185,7 +192,7 @@ const goalOptions = [
 ];
 
 const investmentFrequencies: Array<{
-  value: InvestmentPlan["frequency"];
+  value: InvestmentFrequency;
   label: string;
 }> = [
   { value: "monthly", label: "monatlich" },
@@ -194,8 +201,6 @@ const investmentFrequencies: Array<{
   { value: "annual", label: "jährlich" },
 ];
 
-const investmentPlanTotal = (entry: InvestmentPlan) =>
-  entry.installments > 0 ? entry.installmentAmount * entry.installments : 0;
 const moduleDetails: Record<string, string[]> = {
   maturity: [
     "Konkrete Bedarfe werden automatisch einem einheitlichen Laufzeitband zugeordnet.",
@@ -1042,6 +1047,7 @@ function WizardView({
           nextAdvisory,
           updatedPlans,
           current.createdAt,
+          current.savingsGoals,
         ),
         vvFilters: {
           ...current.vvFilters,
@@ -2550,6 +2556,8 @@ function PlannerView({
   const [selectedCapitalPot, setSelectedCapitalPot] =
     useState<CapitalPotId>("strategic");
   const [showDepotPanel, setShowDepotPanel] = useState(false);
+  const [editingEntryKey, setEditingEntryKey] = useState<string | null>(null);
+  const [savingsProductSearch, setSavingsProductSearch] = useState("");
   const [modelDialog, setModelDialog] = useState<{
     id: "rb2" | "rb3" | "rb4";
     amount: number;
@@ -2628,14 +2636,12 @@ function PlannerView({
       ...changes,
       updatedAt: new Date().toISOString(),
     };
-    const reconciledPlan =
-      changes.total === undefined
-        ? nextPlan
-        : reconcilePlanCapitalPots(
-            item.advisory,
-            nextPlan,
-            item.createdAt,
-          );
+    const reconciledPlan = reconcilePlanCapitalPots(
+      item.advisory,
+      nextPlan,
+      item.createdAt,
+      item.savingsGoals,
+    );
     setItem({
       ...item,
       plans: item.plans.map((entry) =>
@@ -2847,16 +2853,12 @@ function PlannerView({
     setItem({ ...item, plans: [...item.plans, next], activePlanId: next.id });
   };
   const duplicatePlan = () => {
-    const next = clone(plan);
-    next.id = uid("plan");
-    next.name = `${plan.name} – Kopie`;
-    next.preferred = false;
-    next.createdAt = new Date().toISOString();
-    next.updatedAt = next.createdAt;
-    next.allocations = next.allocations.map((allocation) => ({
-      ...allocation,
-      id: uid("allocation"),
-    }));
+    const next = reconcilePlanCapitalPots(
+      item.advisory,
+      duplicateStructurePlan(plan),
+      item.createdAt,
+      item.savingsGoals,
+    );
     setItem({ ...item, plans: [...item.plans, next], activePlanId: next.id });
   };
   const setPreferred = () =>
@@ -2872,36 +2874,23 @@ function PlannerView({
     const remaining = item.plans.filter((entry) => entry.id !== plan.id);
     setItem({ ...item, plans: remaining, activePlanId: remaining[0].id });
   };
-  const addInvestmentPlan = (type: InvestmentPlan["type"] = "phased") => {
-    const allocation = plan.allocations[0];
-    const capitalPotId =
-      allocation?.capitalPotId || fallbackCapitalPot?.id || "strategic";
-    const investmentPot = visibleCapitalPots.find(
-      (pot) => pot.id === capitalPotId,
-    );
-    const next: InvestmentPlan = {
-      id: uid("investment"),
-      name: type === "savings" ? "Neuer Sparplan" : "Gestaffelte Investition",
-      type,
-      productId: allocation?.productId || "",
-      productName: allocation?.productName || "",
-      bucketId: investmentPot?.legacyBucketId || allocation?.bucketId || "year10plus",
-      capitalPotId,
-      installmentAmount: 0,
-      installments: type === "savings" ? 12 : 3,
-      frequency: "monthly",
-      startDate: new Date().toISOString().slice(0, 10),
-      note: "",
-    };
-    updatePlan({ investmentPlans: [...(plan.investmentPlans || []), next] });
-  };
-  const updateInvestmentPlan = (
+  const updateSavingsPlan = (id: string, changes: Partial<SavingsPlan>) =>
+    updatePlan({
+      investmentPlans: (plan.investmentPlans || []).map((entry) =>
+        entry.id === id && entry.type === "savings"
+          ? { ...entry, ...changes }
+          : entry,
+      ),
+    });
+  const updatePhasedEntry = (
     id: string,
-    changes: Partial<InvestmentPlan>,
+    changes: Partial<PhasedEntryPlan>,
   ) =>
     updatePlan({
       investmentPlans: (plan.investmentPlans || []).map((entry) =>
-        entry.id === id ? { ...entry, ...changes } : entry,
+        entry.id === id && entry.type === "phased"
+          ? { ...entry, ...changes }
+          : entry,
       ),
     });
   const removeInvestmentPlan = (id: string) =>
@@ -2910,6 +2899,52 @@ function PlannerView({
         (entry) => entry.id !== id,
       ),
     });
+  const phasedEntryFor = (
+    allocationId: string,
+    capitalPotId: CapitalPotId,
+  ) =>
+    plan.investmentPlans.find(
+      (entry): entry is PhasedEntryPlan =>
+        entry.type === "phased" &&
+        entry.allocationId === allocationId &&
+        entry.capitalPotId === capitalPotId,
+    );
+  const setEntryMode = (
+    allocation: PlannerAllocation,
+    capitalPotId: CapitalPotId,
+    mode: "immediate" | "partial" | "full",
+  ) => {
+    const existing = phasedEntryFor(allocation.id, capitalPotId);
+    if (mode === "immediate") {
+      if (existing) removeInvestmentPlan(existing.id);
+      return;
+    }
+    if (existing) {
+      updatePhasedEntry(existing.id, {
+        stagedMode: mode === "full" ? "percent" : existing.stagedMode,
+        stagedValue:
+          mode === "full"
+            ? 100
+            : existing.stagedMode === "percent" && existing.stagedValue >= 100
+              ? 50
+              : existing.stagedValue,
+      });
+      return;
+    }
+    const next: PhasedEntryPlan = {
+      id: uid("investment"),
+      type: "phased",
+      allocationId: allocation.id,
+      capitalPotId,
+      stagedMode: "percent",
+      stagedValue: mode === "full" ? 100 : 50,
+      installments: 3,
+      frequency: "monthly",
+      startDate: nextImplementationDate(),
+      note: "",
+    };
+    updatePlan({ investmentPlans: [...plan.investmentPlans, next] });
+  };
 
   const applyModel = (action: "new" | "supplement" | "replace") => {
     if (!modelDialog) return;
@@ -2941,8 +2976,10 @@ function PlannerView({
       },
     );
     if (action === "new") {
-      const next = clone(plan);
-      next.id = uid("plan");
+      const next = duplicateStructurePlan(
+        plan,
+        `${model.name} – strategische Variante`,
+      );
       next.name = `${model.name} – strategische Variante`;
       next.allocations = [
         ...next.allocations.filter((entry) => entry.capitalPotId !== modelPot.id),
@@ -2950,10 +2987,17 @@ function PlannerView({
       ];
       next.modelId = model.id;
       next.modelAmount = modelDialog.amount;
-      next.preferred = false;
-      next.createdAt = new Date().toISOString();
-      next.updatedAt = next.createdAt;
-      setItem({ ...item, plans: [...item.plans, next], activePlanId: next.id });
+      const reconciledNext = reconcilePlanCapitalPots(
+        item.advisory,
+        next,
+        item.createdAt,
+        item.savingsGoals,
+      );
+      setItem({
+        ...item,
+        plans: [...item.plans, reconciledNext],
+        activePlanId: reconciledNext.id,
+      });
     }
     if (action === "supplement")
       updatePlan({
@@ -3056,6 +3100,117 @@ function PlannerView({
     (sum, allocation) => sum + (Number(allocation.capitalPotReviewAmount) || 0),
     0,
   );
+  const planProductOptions = Array.from(
+    plan.allocations.reduce(
+      (products, allocation) => {
+        const existing = products.get(allocation.productId);
+        products.set(allocation.productId, {
+          id: allocation.productId,
+          name: allocation.productName,
+          amount: (existing?.amount || 0) + allocation.amount,
+        });
+        return products;
+      },
+      new Map<string, { id: string; name: string; amount: number }>(),
+    ).values(),
+  ).sort((a, b) => b.amount - a.amount);
+  const planProductIds = new Set(planProductOptions.map((product) => product.id));
+  const otherSavingsProducts = catalogItems.filter(
+    (product) => !planProductIds.has(product.id),
+  );
+  const savingsProductQuery = savingsProductSearch.trim().toLocaleLowerCase("de-DE");
+  const matchesSavingsSearch = (product: { name: string; meta?: string }) =>
+    !savingsProductQuery ||
+    `${product.name} ${product.meta || ""}`
+      .toLocaleLowerCase("de-DE")
+      .includes(savingsProductQuery);
+  const savingsPlans = plan.investmentPlans.filter(
+    (entry): entry is SavingsPlan => entry.type === "savings",
+  );
+  const implementationPositions = plan.allocations.flatMap((allocation) =>
+    visibleCapitalPots.flatMap((pot) => {
+      const amount = allocationAmountInCapitalPot(allocation, pot.id);
+      return amount > 0 ? [{ allocation, pot, amount }] : [];
+    }),
+  );
+  const frequencyLabel = (frequency: InvestmentFrequency) =>
+    investmentFrequencies.find((entry) => entry.value === frequency)?.label ||
+    frequency;
+  const savingsTargetLabel = (entry: SavingsPlan) => {
+    if (!entry.targetRef) return "Ohne Zielbezug";
+    if (entry.targetRef.kind === "savingsGoal") {
+      const goal = item.savingsGoals.find((candidate) => candidate.id === entry.targetRef?.id);
+      return goal
+        ? `${goal.name}${goal.targetYear ? ` ${goal.targetYear}` : goal.targetDate ? ` · ${germanDate(goal.targetDate)}` : ""}`
+        : "Ohne Zielbezug";
+    }
+    return (
+      item.advisory.needs.find((need) => need.id === entry.targetRef?.id)
+        ?.purpose || "Ohne Zielbezug"
+    );
+  };
+  const addSavingsPlan = () => {
+    const product = planProductOptions[0] || catalogItems[0];
+    const next: SavingsPlan = {
+      id: uid("investment"),
+      type: "savings",
+      name: undefined,
+      productId: product?.id || "",
+      productName: product?.name || "",
+      contributionAmount: 0,
+      frequency: "monthly",
+      startDate: nextImplementationDate(),
+      note: "",
+    };
+    updatePlan({ investmentPlans: [...plan.investmentPlans, next] });
+  };
+  const createSavingsGoal = (savingsPlanId: string) => {
+    const goal = {
+      id: uid("savings-goal"),
+      name: "Neues Sparziel",
+      targetAmount: 0,
+      targetYear: new Date().getFullYear() + 5,
+      note: "",
+    };
+    setItem((current) => ({
+      ...current,
+      savingsGoals: [...current.savingsGoals, goal],
+      plans: current.plans.map((currentPlan) => ({
+        ...currentPlan,
+        investmentPlans: currentPlan.investmentPlans.map((entry) =>
+          currentPlan.id === plan.id &&
+          entry.id === savingsPlanId &&
+          entry.type === "savings"
+            ? { ...entry, targetRef: { kind: "savingsGoal" as const, id: goal.id } }
+            : entry,
+        ),
+      })),
+    }));
+  };
+  const updateSavingsGoal = (
+    goalId: string,
+    changes: Partial<AdvisoryCase["savingsGoals"][number]>,
+  ) =>
+    setItem((current) => ({
+      ...current,
+      savingsGoals: current.savingsGoals.map((goal) =>
+        goal.id === goalId ? { ...goal, ...changes } : goal,
+      ),
+    }));
+  const removeSavingsGoal = (goalId: string) =>
+    setItem((current) => {
+      const savingsGoals = current.savingsGoals.filter((goal) => goal.id !== goalId);
+      return {
+        ...current,
+        savingsGoals,
+        plans: reconcileCasePlans(
+          current.advisory,
+          current.plans,
+          current.createdAt,
+          savingsGoals,
+        ),
+      };
+    });
 
   return (
     <div className="tool-view planner-view">
@@ -3615,6 +3770,19 @@ function PlannerView({
                         const conflict =
                           itemSolution &&
                           itemSolution.minMonths > selectedPot.minMonths;
+                        const pairKey = `${allocation.id}::${selectedPot.id}`;
+                        const phasedEntry = phasedEntryFor(
+                          allocation.id,
+                          selectedPot.id,
+                        );
+                        const entryAmounts = phasedEntry
+                          ? phasedEntryAmounts(plan, phasedEntry)
+                          : null;
+                        const entryMode = !phasedEntry
+                          ? "immediate"
+                          : entryAmounts?.stagedAmount === entryAmounts?.targetAmount
+                            ? "full"
+                            : "partial";
                         return (
                           <div className={conflict ? "conflict" : ""} key={allocation.id}>
                             <span>
@@ -3658,6 +3826,199 @@ function PlannerView({
                                 ×
                               </button>
                             </div>
+                            <div className="entry-implementation">
+                              <span>
+                                <b>Umsetzung:</b>{" "}
+                                {!phasedEntry
+                                  ? "Komplett sofort"
+                                  : entryAmounts?.invalid
+                                    ? "Einstieg anpassen"
+                                    : `${euro.format(entryAmounts?.immediateAmount || 0)} sofort · ${euro.format(entryAmounts?.stagedAmount || 0)} gestaffelt`}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setEditingEntryKey((current) =>
+                                    current === pairKey ? null : pairKey,
+                                  )
+                                }
+                              >
+                                {editingEntryKey === pairKey ? "Schließen" : "Ändern"}
+                              </button>
+                            </div>
+                            {editingEntryKey === pairKey && (
+                              <div className="entry-editor">
+                                <label>
+                                  <span>Umsetzung</span>
+                                  <select
+                                    value={entryMode}
+                                    onChange={(event) =>
+                                      setEntryMode(
+                                        allocation,
+                                        selectedPot.id,
+                                        event.target.value as
+                                          | "immediate"
+                                          | "partial"
+                                          | "full",
+                                      )
+                                    }
+                                  >
+                                    <option value="immediate">Komplett sofort</option>
+                                    <option value="partial">Teilweise gestaffelt</option>
+                                    <option value="full">Komplett gestaffelt</option>
+                                  </select>
+                                </label>
+                                <label>
+                                  <span>Zielbetrag</span>
+                                  <strong>
+                                    {euro.format(
+                                      allocationAmountInCapitalPot(
+                                        allocation,
+                                        selectedPot.id,
+                                      ),
+                                    )}
+                                  </strong>
+                                </label>
+                                {phasedEntry && entryAmounts && (
+                                  <>
+                                    {entryMode === "partial" && (
+                                      <label>
+                                        <span>Gestaffelter Anteil</span>
+                                        <div className="staged-value-field">
+                                          <input
+                                            inputMode="decimal"
+                                            value={
+                                              phasedEntry.stagedValue
+                                                ? phasedEntry.stagedValue.toLocaleString("de-DE")
+                                                : ""
+                                            }
+                                            onChange={(event) => {
+                                              const stagedValue = parseAmount(event.target.value);
+                                              if (stagedValue <= 0) {
+                                                removeInvestmentPlan(phasedEntry.id);
+                                                return;
+                                              }
+                                              updatePhasedEntry(phasedEntry.id, {
+                                                stagedValue:
+                                                  phasedEntry.stagedMode === "percent"
+                                                    ? Math.min(100, stagedValue)
+                                                    : stagedValue,
+                                              });
+                                            }}
+                                          />
+                                          <select
+                                            aria-label="Staffelmodus"
+                                            value={phasedEntry.stagedMode}
+                                            onChange={(event) => {
+                                              const stagedMode = event.target.value as
+                                                | "percent"
+                                                | "amount";
+                                              updatePhasedEntry(phasedEntry.id, {
+                                                stagedMode,
+                                                stagedValue:
+                                                  stagedMode === "percent"
+                                                    ? entryAmounts.targetAmount
+                                                      ? Math.min(
+                                                          100,
+                                                          (entryAmounts.stagedAmount /
+                                                            entryAmounts.targetAmount) *
+                                                            100,
+                                                        )
+                                                      : 0
+                                                    : entryAmounts.stagedAmount,
+                                              });
+                                            }}
+                                          >
+                                            <option value="percent">%</option>
+                                            <option value="amount">€</option>
+                                          </select>
+                                        </div>
+                                      </label>
+                                    )}
+                                    <label>
+                                      <span>Sofortanlage</span>
+                                      <strong>{euro.format(entryAmounts.immediateAmount)}</strong>
+                                    </label>
+                                    <label>
+                                      <span>Gestaffelter Betrag</span>
+                                      <strong>{euro.format(entryAmounts.stagedAmount)}</strong>
+                                    </label>
+                                    <label>
+                                      <span>Anzahl Raten</span>
+                                      <input
+                                        type="number"
+                                        min="1"
+                                        step="1"
+                                        value={phasedEntry.installments}
+                                        onChange={(event) =>
+                                          updatePhasedEntry(phasedEntry.id, {
+                                            installments: Math.max(
+                                              1,
+                                              Math.trunc(Number(event.target.value) || 1),
+                                            ),
+                                          })
+                                        }
+                                      />
+                                    </label>
+                                    <label>
+                                      <span>Rate</span>
+                                      <strong>{euro.format(entryAmounts.installmentAmount)}</strong>
+                                      {entryAmounts.hasRoundingAdjustment && (
+                                        <small>
+                                          Letzte Rate {euro.format(entryAmounts.lastInstallmentAmount)}
+                                        </small>
+                                      )}
+                                    </label>
+                                    <label>
+                                      <span>Rhythmus</span>
+                                      <select
+                                        value={phasedEntry.frequency}
+                                        onChange={(event) =>
+                                          updatePhasedEntry(phasedEntry.id, {
+                                            frequency: event.target.value as InvestmentFrequency,
+                                          })
+                                        }
+                                      >
+                                        {investmentFrequencies.map((frequency) => (
+                                          <option key={frequency.value} value={frequency.value}>
+                                            {frequency.label}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </label>
+                                    <label>
+                                      <span>Erste Rate</span>
+                                      <input
+                                        type="date"
+                                        value={phasedEntry.startDate}
+                                        onChange={(event) =>
+                                          updatePhasedEntry(phasedEntry.id, {
+                                            startDate: event.target.value,
+                                          })
+                                        }
+                                      />
+                                    </label>
+                                    <label className="entry-note">
+                                      <span>Hinweis</span>
+                                      <input
+                                        value={phasedEntry.note}
+                                        placeholder="z. B. nach Freigabe starten"
+                                        onChange={(event) =>
+                                          updatePhasedEntry(phasedEntry.id, {
+                                            note: event.target.value,
+                                          })
+                                        }
+                                      />
+                                    </label>
+                                    {entryAmounts.invalid && (
+                                      <p className="entry-warning">
+                                        Der gestaffelte Betrag übersteigt den aktuellen Zielbetrag. Bitte Einstieg anpassen.
+                                      </p>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            )}
                             <label className="allocation-mode">
                               <span>Topfabdeckung</span>
                               <select
@@ -3715,91 +4076,145 @@ function PlannerView({
             <div className="panel-heading">
               <div>
                 <p className="eyebrow">UMSETZUNGSWEG</p>
-                <h2>Spar- und Investitionspläne</h2>
+                <h2>Umsetzungsübersicht</h2>
                 <p>
-                  Einmal geplante Produktbeträge können zeitlich gestaffelt
-                  umgesetzt werden. Die Raten werden nicht zusätzlich zum
-                  Planungsbetrag gezählt.
+                  Einstiege setzen die heutige Produktplanung um. Sparpläne
+                  bleiben davon getrennte, zukünftige Beiträge.
                 </p>
               </div>
               <div className="investment-plan-actions">
-                <button className="secondary" onClick={() => addInvestmentPlan("savings")}>
+                <button className="secondary" onClick={addSavingsPlan}>
                   ＋ Sparplan
-                </button>
-                <button className="secondary" onClick={() => addInvestmentPlan("phased")}>
-                  ＋ Gestaffelte Anlage
                 </button>
               </div>
             </div>
-            {(plan.investmentPlans || []).length === 0 ? (
-              <div className="investment-plan-empty">
-                Noch kein Spar- oder Investitionsplan erfasst.
+            <div className="implementation-overview">
+              <div className="implementation-section">
+                <h3>Geplante Einstiege</h3>
+                {implementationPositions.length === 0 ? (
+                  <div className="investment-plan-empty">
+                    Noch keine Produktposition einem Kapitaltopf zugeordnet.
+                  </div>
+                ) : (
+                  <div className="entry-overview-list">
+                    {implementationPositions.map(({ allocation, pot, amount }) => {
+                      const entry = phasedEntryFor(allocation.id, pot.id);
+                      const amounts = entry ? phasedEntryAmounts(plan, entry) : null;
+                      return (
+                        <article key={`${allocation.id}-${pot.id}`}>
+                          <span>
+                            <strong>{allocation.productName}</strong>
+                            <small>{pot.label} · {euro.format(amount)}</small>
+                          </span>
+                          <b className={amounts?.invalid ? "warning" : ""}>
+                            {!entry
+                              ? "Komplett sofort"
+                              : amounts?.invalid
+                                ? "Einstieg anpassen"
+                                : `${euro.format(amounts?.immediateAmount || 0)} sofort · ${entry.installments} × ${euro.format(amounts?.installmentAmount || 0)} ${frequencyLabel(entry.frequency)} ab ${germanDate(entry.startDate)}`}
+                          </b>
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="investment-plan-list">
-                {(plan.investmentPlans || []).map((entry) => (
+              <div className="implementation-section savings-section">
+                <div className="savings-section-heading">
+                  <div>
+                    <h3>Laufende Sparpläne</h3>
+                    {savingsPlans.length > 0 && (
+                      <small>
+                        {new Set(savingsPlans.map((entry) => entry.frequency)).size === 1
+                          ? `Zusätzliche Sparpläne: ${euro.format(savingsPlans.reduce((sum, entry) => sum + entry.contributionAmount, 0))}/${frequencyLabel(savingsPlans[0].frequency).replace("lich", "")}`
+                          : `Laufende Sparbeiträge: ${euro.format(savingsPlans.reduce((sum, entry) => sum + annualSavingsContribution(entry), 0))}/Jahr`}
+                      </small>
+                    )}
+                  </div>
+                </div>
+                {savingsPlans.length === 0 ? (
+                  <div className="investment-plan-empty">
+                    Noch kein laufender Sparplan erfasst.
+                  </div>
+                ) : (
+                  <div className="investment-plan-list">
+                    {savingsPlans.map((entry) => {
+                      const selectedGoal =
+                        entry.targetRef?.kind === "savingsGoal"
+                          ? item.savingsGoals.find((goal) => goal.id === entry.targetRef?.id)
+                          : undefined;
+                      return (
                   <article key={entry.id}>
                     <header>
-                      <span>{entry.type === "savings" ? "Sparplan" : "Gestaffelte Anlage"}</span>
-                      <strong>
-                        {entry.installments > 0
-                          ? euro.format(investmentPlanTotal(entry))
-                          : "fortlaufend"}
-                      </strong>
+                          <span>Sparplan</span>
+                          <strong>{euro.format(entry.contributionAmount)} · {frequencyLabel(entry.frequency)}</strong>
                       <button onClick={() => removeInvestmentPlan(entry.id)}>×</button>
                     </header>
                     <div className="investment-plan-fields">
                       <label>
                         <span>Bezeichnung</span>
                         <input
-                          value={entry.name}
+                              value={entry.name || ""}
+                              placeholder="optional"
                           onChange={(event) =>
-                            updateInvestmentPlan(entry.id, { name: event.target.value })
+                                updateSavingsPlan(entry.id, { name: event.target.value })
                           }
                         />
                       </label>
-                      <label>
+                          <label className="savings-product-picker">
                         <span>Produkt</span>
+                            <input
+                              value={savingsProductSearch}
+                              onChange={(event) => setSavingsProductSearch(event.target.value)}
+                              placeholder="Produkt oder WKN suchen"
+                              aria-label="Sparplanprodukt suchen"
+                            />
                         <select
                           value={entry.productId}
                           onChange={(event) => {
-                            const allocation = plan.allocations.find(
-                              (item) => item.productId === event.target.value,
-                            );
-                            updateInvestmentPlan(entry.id, {
+                                const product =
+                                  planProductOptions.find((item) => item.id === event.target.value) ||
+                                  catalogItems.find((item) => item.id === event.target.value);
+                                updateSavingsPlan(entry.id, {
                               productId: event.target.value,
-                              productName: allocation?.productName || "",
-                              bucketId: allocation?.bucketId || entry.bucketId,
-                              capitalPotId:
-                                allocation?.capitalPotId || entry.capitalPotId,
+                                  productName: product?.name || "",
                             });
                           }}
                         >
                           <option value="">Noch nicht festgelegt</option>
-                          {Array.from(
-                            new Map(
-                              plan.allocations.map((item) => [item.productId, item]),
-                            ).values(),
-                          ).map((item) => (
-                            <option key={item.productId} value={item.productId}>
-                              {item.productName}
-                            </option>
-                          ))}
+                              <optgroup label="Im aktuellen Plan">
+                                {planProductOptions
+                                  .filter(matchesSavingsSearch)
+                                  .map((product) => (
+                                    <option key={product.id} value={product.id}>
+                                      {product.name} · {euro.format(product.amount)} im Plan
+                                    </option>
+                                  ))}
+                              </optgroup>
+                              <optgroup label="Weitere Lösungsbausteine">
+                                {otherSavingsProducts
+                                  .filter(matchesSavingsSearch)
+                                  .map((product) => (
+                                    <option key={product.id} value={product.id}>
+                                      {product.name}
+                                    </option>
+                                  ))}
+                              </optgroup>
                         </select>
                       </label>
                       <label>
-                        <span>Rate</span>
+                            <span>Sparrate</span>
                         <div className="inline-amount">
                           <input
                             inputMode="numeric"
                             value={
-                              entry.installmentAmount
-                                ? entry.installmentAmount.toLocaleString("de-DE")
+                                  entry.contributionAmount
+                                    ? entry.contributionAmount.toLocaleString("de-DE")
                                 : ""
                             }
                             onChange={(event) =>
-                              updateInvestmentPlan(entry.id, {
-                                installmentAmount: parseAmount(event.target.value),
+                                  updateSavingsPlan(entry.id, {
+                                    contributionAmount: parseAmount(event.target.value),
                               })
                             }
                           />
@@ -3807,26 +4222,12 @@ function PlannerView({
                         </div>
                       </label>
                       <label>
-                        <span>Anzahl Raten</span>
-                        <input
-                          type="number"
-                          min="0"
-                          value={entry.installments}
-                          onChange={(event) =>
-                            updateInvestmentPlan(entry.id, {
-                              installments: Math.max(0, Number(event.target.value)),
-                            })
-                          }
-                        />
-                        <small>0 bedeutet fortlaufend</small>
-                      </label>
-                      <label>
                         <span>Rhythmus</span>
                         <select
                           value={entry.frequency}
                           onChange={(event) =>
-                            updateInvestmentPlan(entry.id, {
-                              frequency: event.target.value as InvestmentPlan["frequency"],
+                                updateSavingsPlan(entry.id, {
+                                  frequency: event.target.value as InvestmentFrequency,
                             })
                           }
                         >
@@ -3843,31 +4244,58 @@ function PlannerView({
                           type="date"
                           value={entry.startDate}
                           onChange={(event) =>
-                            updateInvestmentPlan(entry.id, { startDate: event.target.value })
+                                updateSavingsPlan(entry.id, { startDate: event.target.value })
                           }
                         />
                       </label>
                       <label>
-                        <span>Kapitaltopf</span>
+                            <span>Zielbezug</span>
                         <select
-                          value={entry.capitalPotId || fallbackCapitalPot?.id || ""}
+                              value={
+                                entry.targetRef
+                                  ? `${entry.targetRef.kind}:${entry.targetRef.id}`
+                                  : ""
+                              }
                           onChange={(event) => {
-                            const capitalPotId = event.target.value as CapitalPotId;
-                            const pot = visibleCapitalPots.find(
-                              (item) => item.id === capitalPotId,
-                            );
-                            updateInvestmentPlan(entry.id, {
-                              capitalPotId,
-                              bucketId: pot?.legacyBucketId || entry.bucketId,
-                            });
+                                if (event.target.value === "new") {
+                                  createSavingsGoal(entry.id);
+                                  return;
+                                }
+                                if (!event.target.value) {
+                                  updateSavingsPlan(entry.id, { targetRef: undefined });
+                                  return;
+                                }
+                                const [kind, id] = event.target.value.split(":");
+                                updateSavingsPlan(entry.id, {
+                                  targetRef:
+                                    kind === "need"
+                                      ? { kind: "need", id: Number(id) }
+                                      : { kind: "savingsGoal", id },
+                                });
                           }}
                         >
-                          {visibleCapitalPots.map((pot) => (
-                            <option key={pot.id} value={pot.id}>
-                              {pot.label}
+                              <option value="">Ohne Zielbezug</option>
+                              <option value="new">＋ Neues Sparziel anlegen</option>
+                              {item.savingsGoals.length > 0 && (
+                                <optgroup label="Sparziele">
+                                  {item.savingsGoals.map((goal) => (
+                                    <option key={goal.id} value={`savingsGoal:${goal.id}`}>
+                                      {goal.name}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              )}
+                              {item.advisory.needs.length > 0 && (
+                                <optgroup label="Bestehende Kapitalbedarfe">
+                                  {item.advisory.needs.map((need) => (
+                                    <option key={need.id} value={`need:${need.id}`}>
+                                      {need.purpose || "Kapitalbedarf"}
                             </option>
                           ))}
+                                </optgroup>
+                              )}
                         </select>
+                            <small>{savingsTargetLabel(entry)}</small>
                       </label>
                       <label className="investment-note">
                         <span>Hinweis</span>
@@ -3875,15 +4303,77 @@ function PlannerView({
                           value={entry.note}
                           placeholder="z. B. nach Freigabe starten"
                           onChange={(event) =>
-                            updateInvestmentPlan(entry.id, { note: event.target.value })
+                                updateSavingsPlan(entry.id, { note: event.target.value })
                           }
                         />
                       </label>
                     </div>
+                        {selectedGoal && (
+                          <div className="savings-goal-editor">
+                            <strong>Sparziel</strong>
+                            <label>
+                              <span>Name / Zweck</span>
+                              <input
+                                value={selectedGoal.name}
+                                onChange={(event) =>
+                                  updateSavingsGoal(selectedGoal.id, { name: event.target.value })
+                                }
+                              />
+                            </label>
+                            <label>
+                              <span>Zielbetrag</span>
+                              <div className="inline-amount">
+                                <input
+                                  inputMode="numeric"
+                                  value={selectedGoal.targetAmount ? selectedGoal.targetAmount.toLocaleString("de-DE") : ""}
+                                  onChange={(event) =>
+                                    updateSavingsGoal(selectedGoal.id, {
+                                      targetAmount: parseAmount(event.target.value),
+                                    })
+                                  }
+                                />
+                                <b>€</b>
+                              </div>
+                            </label>
+                            <label>
+                              <span>Zieljahr</span>
+                              <input
+                                type="number"
+                                min={new Date().getFullYear()}
+                                value={selectedGoal.targetYear || ""}
+                                onChange={(event) =>
+                                  updateSavingsGoal(selectedGoal.id, {
+                                    targetYear: event.target.value
+                                      ? Math.trunc(Number(event.target.value))
+                                      : undefined,
+                                  })
+                                }
+                              />
+                            </label>
+                            <label className="investment-note">
+                              <span>Hinweis</span>
+                              <input
+                                value={selectedGoal.note || ""}
+                                onChange={(event) =>
+                                  updateSavingsGoal(selectedGoal.id, { note: event.target.value })
+                                }
+                              />
+                            </label>
+                            <button
+                              className="text-button danger"
+                              onClick={() => removeSavingsGoal(selectedGoal.id)}
+                            >
+                              Sparziel löschen
+                            </button>
+                          </div>
+                        )}
                   </article>
-                ))}
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </section>
           <p className="tool-legal">
             Kapitaltopf und Produktzuordnung sind getrennt: Ein Zieltopf zeigt
@@ -5631,6 +6121,16 @@ function ExportCenter({
     item.createdAt,
   );
   const advisor = advisorFor(item.advisorId);
+  const exportTargetLabel = (entry: SavingsPlan): string => {
+    if (!entry.targetRef) return "";
+    if (entry.targetRef.kind === "savingsGoal") {
+      const goal = item.savingsGoals.find((candidate) => candidate.id === entry.targetRef?.id);
+      return goal
+        ? `${goal.name}${goal.targetYear ? ` ${goal.targetYear}` : goal.targetDate ? ` · ${germanDate(goal.targetDate)}` : ""}`
+        : "";
+    }
+    return item.advisory.needs.find((need) => need.id === entry.targetRef?.id)?.purpose || "";
+  };
   const print = (mode: "customer" | "internal") => {
     document.body.dataset.printMode = mode;
     window.setTimeout(() => {
@@ -5738,28 +6238,47 @@ function ExportCenter({
     XLSX.utils.book_append_sheet(
       workbook,
       XLSX.utils.json_to_sheet(
-        item.plans.flatMap((plan) =>
-          (plan.investmentPlans || []).map((entry) => ({
-            Plan: plan.name,
-            Art: entry.type === "savings" ? "Sparplan" : "Gestaffelte Anlage",
-            Bezeichnung: entry.name,
-            Produkt: entry.productName || "Noch nicht festgelegt",
-            Kapitaltopf:
-              capitalPots(item.advisory, plan.total, item.createdAt).find(
-                (pot) => pot.id === entry.capitalPotId,
-              )?.label ||
-              maturityBuckets.find((bucket) => bucket.id === entry.bucketId)?.label ||
-              "",
-            Rate: entry.installmentAmount,
-            Anzahl_Raten: entry.installments || "fortlaufend",
-            Rhythmus:
+        item.plans.flatMap<Record<string, string | number>>((plan) => {
+          const planPots = capitalPots(item.advisory, plan.total, item.createdAt);
+          return plan.investmentPlans.flatMap<Record<string, string | number>>((entry) => {
+            const rhythm =
               investmentFrequencies.find((frequency) => frequency.value === entry.frequency)
-                ?.label || entry.frequency,
-            Start: entry.startDate,
-            Gesamtbetrag: investmentPlanTotal(entry),
-            Hinweis: entry.note,
-          })),
-        ),
+                ?.label || entry.frequency;
+            if (entry.type === "savings")
+              return [{
+                Plan: plan.name,
+                Art: "Sparplan",
+                Produkt: entry.productName || "Noch nicht festgelegt",
+                Bezeichnung: entry.name || "",
+                Sparrate: entry.contributionAmount,
+                Rhythmus: rhythm,
+                Start: entry.startDate,
+                Zielbezug: exportTargetLabel(entry),
+                Hinweis: entry.note,
+              }];
+            const allocation = plan.allocations.find(
+              (candidate) => candidate.id === entry.allocationId,
+            );
+            if (!allocation) return [];
+            const amounts = phasedEntryAmounts(plan, entry);
+            return [{
+              Plan: plan.name,
+              Art: "Gestaffelter Einstieg",
+              Produkt: allocation.productName,
+              Kapitaltopf:
+                planPots.find((pot) => pot.id === entry.capitalPotId)?.label || "",
+              Zielbetrag: amounts.targetAmount,
+              Sofortbetrag: amounts.immediateAmount,
+              Gestaffelter_Betrag: amounts.stagedAmount,
+              Staffelmodus: entry.stagedMode === "percent" ? "Prozent" : "Euro",
+              Anzahl_Raten: entry.installments,
+              Ratenhöhe: amounts.installmentAmount,
+              Rhythmus: rhythm,
+              Erste_Rate: entry.startDate,
+              Hinweis: entry.note,
+            }];
+          });
+        }),
       ),
       "Investitionspläne",
     );
@@ -6187,34 +6706,43 @@ function ExportCenter({
             </div>
           </div>
         </section>
-        {(preferredPlan.investmentPlans || []).length > 0 && (
+        {preferredPlan.investmentPlans.length > 0 && (
           <section>
-            <h2>Spar- und Investitionspläne</h2>
+            <h2>Umsetzungsübersicht</h2>
             <div className="print-table product-print">
               <div>
                 <strong>Umsetzungsweg</strong>
                 <strong>Rhythmus und Start</strong>
                 <strong>Rate / Gesamt</strong>
               </div>
-              {preferredPlan.investmentPlans.map((entry) => (
-                <div key={entry.id}>
-                  <span>
-                    {entry.name}
-                    {entry.productName ? ` · ${entry.productName}` : ""}
-                  </span>
-                  <span>
-                    {investmentFrequencies.find(
-                      (frequency) => frequency.value === entry.frequency,
-                    )?.label || entry.frequency}
-                    {entry.startDate ? ` ab ${entry.startDate}` : ""}
-                  </span>
-                  <b>
-                    {euro.format(entry.installmentAmount)} / {entry.installments > 0
-                      ? euro.format(investmentPlanTotal(entry))
-                      : "fortlaufend"}
-                  </b>
-                </div>
-              ))}
+              {preferredPlan.investmentPlans.flatMap((entry) => {
+                const rhythm =
+                  investmentFrequencies.find(
+                    (frequency) => frequency.value === entry.frequency,
+                  )?.label || entry.frequency;
+                if (entry.type === "savings")
+                  return [(
+                    <div key={entry.id}>
+                      <span>
+                        {entry.name ? `${entry.name} · ` : ""}{entry.productName || "Noch nicht festgelegt"}
+                      </span>
+                      <span>{rhythm}{entry.startDate ? ` ab ${germanDate(entry.startDate)}` : ""}</span>
+                      <b>{euro.format(entry.contributionAmount)} · fortlaufend</b>
+                    </div>
+                  )];
+                const allocation = preferredPlan.allocations.find(
+                  (candidate) => candidate.id === entry.allocationId,
+                );
+                if (!allocation) return [];
+                const amounts = phasedEntryAmounts(preferredPlan, entry);
+                return [(
+                  <div key={entry.id}>
+                    <span>{allocation.productName}</span>
+                    <span>{rhythm}{entry.startDate ? ` ab ${germanDate(entry.startDate)}` : ""}</span>
+                    <b>{euro.format(amounts.immediateAmount)} sofort · {entry.installments} × {euro.format(amounts.installmentAmount)}</b>
+                  </div>
+                )];
+              })}
             </div>
           </section>
         )}
