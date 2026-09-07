@@ -39,6 +39,7 @@ import {
   allocationCapitalCoverageTotal,
   allocationCapitalPotAmounts,
   bucketForMonths,
+  capitalPotRemovalImpact,
   CapitalPotId,
   CapitalPot,
   capitalPots,
@@ -61,6 +62,11 @@ import {
   InvestmentPlan,
   legacyBucketAmountsForCapitalPots,
   planningShortfall,
+  plannerIstHoldingValue,
+  plannerPlanHoldingValue,
+  reconcileCasePlans,
+  reconcileDepotHoldingSelections,
+  reconcilePlanCapitalPots,
   strategicAmount,
   StructurePlan,
   VvFilters,
@@ -1008,16 +1014,22 @@ function WizardView({
   ) =>
     setItem((current) => {
       const nextAdvisory = { ...current.advisory, [key]: value };
-      if (key !== "liquidAssets")
-        return { ...current, advisory: nextAdvisory };
-      const liquidAssets = Number(value) || 0;
+      const liquidAssets =
+        key === "liquidAssets"
+          ? Number(value) || 0
+          : nextAdvisory.liquidAssets;
+      const updatedPlans = current.plans.map((plan) =>
+        key === "liquidAssets" && plan.capitalMode === "linked"
+          ? { ...plan, total: liquidAssets, updatedAt: new Date().toISOString() }
+          : plan,
+      );
       return {
         ...current,
         advisory: nextAdvisory,
-        plans: current.plans.map((plan) =>
-          plan.capitalMode === "linked"
-            ? { ...plan, total: liquidAssets, updatedAt: new Date().toISOString() }
-            : plan,
+        plans: reconcileCasePlans(
+          nextAdvisory,
+          updatedPlans,
+          current.createdAt,
         ),
         vvFilters: {
           ...current.vvFilters,
@@ -1047,6 +1059,26 @@ function WizardView({
         need.id === id ? { ...need, ...changes } : need,
       ),
     );
+  const removeNeed = (id: number) => {
+    const needs = data.needs.filter((need) => need.id !== id);
+    const nextAdvisory = { ...data, needs };
+    const impact = capitalPotRemovalImpact(
+      data,
+      nextAdvisory,
+      item.plans,
+      item.createdAt,
+    );
+    if (
+      (impact.allocationCount > 0 || impact.investmentPlanCount > 0) &&
+      !window.confirm(
+        `Kapitalbedarf ${impact.removedPotIds
+          .map((potId) => potId.replace("year-", ""))
+          .join(", ")} löschen?\n\nDem dadurch entfallenden Kapitaltopf sind ${impact.allocationCount} Produktzuordnung${impact.allocationCount === 1 ? "" : "en"} über ${euro.format(impact.allocationAmount)}${impact.investmentPlanCount ? ` und ${impact.investmentPlanCount} Umsetzungsbezug${impact.investmentPlanCount === 1 ? "" : "e"}` : ""} zugeordnet. Bedarf und zugehörige Topfzuordnungen löschen?`,
+      )
+    )
+      return;
+    updateData("needs", needs);
+  };
   const togglePriority = (value: string) =>
     updateData(
       "priorities",
@@ -1108,19 +1140,22 @@ function WizardView({
               data={data}
               update={updateData}
               depot={item.depot}
-              setDepot={(depot) =>
-                setItem({
-                  ...item,
+              setDepot={(depot, importMode) =>
+                setItem((current) => ({
+                  ...current,
                   advisory: {
-                    ...data,
-                    depotValue: depot.reduce(
-                      (sum, entry) => sum + entry.value,
-                      0,
-                    ),
-                    hasDepot: depot.length > 0 || data.hasDepot,
+                    ...current.advisory,
+                    depotValue: depot.reduce((sum, entry) => sum + entry.value, 0),
+                    hasDepot: depot.length > 0 || current.advisory.hasDepot,
                   },
                   depot,
-                })
+                  plans: reconcileDepotHoldingSelections(
+                    current.plans,
+                    current.depot,
+                    depot,
+                    importMode || "append",
+                  ),
+                }))
               }
               setView={setView}
             />
@@ -1132,6 +1167,7 @@ function WizardView({
               update={updateData}
               addNeed={addNeed}
               updateNeed={updateNeed}
+              removeNeed={removeNeed}
             />
           )}
           {step === 4 && (
@@ -1258,7 +1294,10 @@ function ScopeStep({
 
 function useDepotCsvImport(
   depot: DepotHolding[],
-  setDepot: (next: DepotHolding[]) => void,
+  setDepot: (
+    next: DepotHolding[],
+    importMode?: "replace" | "append",
+  ) => void,
 ) {
   const csvRef = useRef<HTMLInputElement>(null);
   const [csvPreview, setCsvPreview] = useState<{
@@ -1287,6 +1326,7 @@ function useDepotCsvImport(
       mode === "replace"
         ? csvPreview.result.rows
         : [...depot, ...csvPreview.result.rows],
+      mode,
     );
     setCsvPreview(null);
   };
@@ -1373,7 +1413,10 @@ function SituationStep({
     value: AdvisoryData[K],
   ) => void;
   depot: DepotHolding[];
-  setDepot: (depot: DepotHolding[]) => void;
+  setDepot: (
+    depot: DepotHolding[],
+    importMode?: "replace" | "append",
+  ) => void;
   setView: (view: View) => void;
 }) {
   const business = data.scope === "business" || data.scope === "combined";
@@ -1587,6 +1630,7 @@ function NeedsStep({
   update,
   addNeed,
   updateNeed,
+  removeNeed,
 }: {
   data: AdvisoryData;
   referenceDate: string;
@@ -1599,6 +1643,7 @@ function NeedsStep({
     id: number,
     changes: Partial<AdvisoryData["needs"][number]>,
   ) => void;
+  removeNeed: (id: number) => void;
 }) {
   const pots = capitalPots(data, data.liquidAssets, referenceDate);
   const total = data.needs.reduce((sum, need) => sum + need.amount, 0);
@@ -1691,12 +1736,7 @@ function NeedsStep({
               </span>
               <button
                 className="delete-button"
-                onClick={() =>
-                  update(
-                    "needs",
-                    data.needs.filter((entry) => entry.id !== need.id),
-                  )
-                }
+                onClick={() => removeNeed(need.id)}
               >
                 ×
               </button>
@@ -2547,20 +2587,15 @@ function PlannerView({
       Math.max(0, allocation.amount - allocationCapitalCoverageTotal(allocation)),
     0,
   );
+  const validDepotIds = new Set(item.depot.map((holding) => holding.id));
   const selectedDepotIds = new Set(
-    plan.depotHoldingIds.length > 0
-      ? plan.depotHoldingIds
-      : item.depot.map((holding) => holding.id),
+    plan.depotHoldingIds.filter((id) => validDepotIds.has(id)),
   );
-  const selectedDepot = item.depot.filter((holding) =>
-    selectedDepotIds.has(holding.id),
+  const selectedDepot = item.depot.filter(
+    (holding) => plannerPlanHoldingValue(plan, holding) > 0,
   );
   const includedDepotTotal = selectedDepot.reduce(
-    (sum, holding) =>
-      sum +
-      (plan.depotMode === "afterSales"
-        ? Math.max(0, holding.value - holding.plannedSale)
-        : holding.value),
+    (sum, holding) => sum + plannerPlanHoldingValue(plan, holding),
     0,
   );
   const consideredTotal =
@@ -2572,20 +2607,32 @@ function PlannerView({
     plan.depotMode === "none"
       ? "Nicht berücksichtigt"
       : plan.depotMode === "compare"
-        ? `Nur vergleichend · ${euro.format(includedDepotTotal)}`
+        ? `Nur im IST · ${euro.format(item.advisory.depotValue)}`
         : plan.depotMode === "retain"
           ? `${selectedDepot.length} ${selectedDepot.length === 1 ? "Position" : "Positionen"} ausgewählt · ${euro.format(includedDepotTotal)}`
           : `Nach simulierten Verkäufen · ${euro.format(includedDepotTotal)}`;
 
-  const updatePlan = (changes: Partial<StructurePlan>) =>
+  const updatePlan = (changes: Partial<StructurePlan>) => {
+    const nextPlan = {
+      ...plan,
+      ...changes,
+      updatedAt: new Date().toISOString(),
+    };
+    const reconciledPlan =
+      changes.total === undefined
+        ? nextPlan
+        : reconcilePlanCapitalPots(
+            item.advisory,
+            nextPlan,
+            item.createdAt,
+          );
     setItem({
       ...item,
       plans: item.plans.map((entry) =>
-        entry.id === plan.id
-          ? { ...entry, ...changes, updatedAt: new Date().toISOString() }
-          : entry,
+        entry.id === plan.id ? reconciledPlan : entry,
       ),
     });
+  };
   const coverageWithout = (excludedId?: string) =>
     Object.fromEntries(
       visibleCapitalPots.map((pot) => [
@@ -3130,17 +3177,23 @@ function PlannerView({
                 value={plan.depotMode}
                 onChange={(event) => {
                   const depotMode = event.target.value as StructurePlan["depotMode"];
+                  const initializeRetain =
+                    depotMode === "retain" &&
+                    plan.depotMode !== "retain" &&
+                    !plan.depotSelectionInitialized;
                   updatePlan({
                     depotMode,
                     depotHoldingIds:
-                      plan.depotHoldingIds.length > 0
-                        ? plan.depotHoldingIds
-                        : item.depot.map((holding) => holding.id),
+                      initializeRetain
+                        ? item.depot.map((holding) => holding.id)
+                        : [...selectedDepotIds],
+                    depotSelectionInitialized:
+                      plan.depotSelectionInitialized || depotMode === "retain",
                   });
                 }}
               >
                 <option value="none">Nicht berücksichtigen</option>
-                <option value="compare">Nur vergleichend anzeigen</option>
+                <option value="compare">Nur im IST berücksichtigen</option>
                 <option value="retain">Ausgewählte Positionen beibehalten</option>
                 <option value="afterSales">Nach simulierten Verkäufen</option>
               </select>
@@ -3152,13 +3205,13 @@ function PlannerView({
             </button>
           ) : (
             <div className="depot-planning-grid">
-              <div className="depot-position-selection">
+              {plan.depotMode === "retain" ? (
+                <div className="depot-position-selection">
                 {item.depot.map((holding) => (
                   <label key={holding.id}>
                     <input
                       type="checkbox"
                       checked={selectedDepotIds.has(holding.id)}
-                      disabled={plan.depotMode === "none"}
                       onChange={(event) =>
                         updatePlan({
                           depotHoldingIds: event.target.checked
@@ -3171,22 +3224,38 @@ function PlannerView({
                       <strong>{holding.name || "Unbenannte Position"}</strong>
                       <small>
                         {holding.assetClass}
-                        {plan.depotMode === "afterSales" && holding.plannedSale > 0
-                          ? ` · nach Verkauf ${euro.format(Math.max(0, holding.value - holding.plannedSale))}`
+                        {holding.plannedSale > 0
+                          ? ` · geplanter Verkauf ${euro.format(holding.plannedSale)}`
                           : ""}
                       </small>
                     </span>
                     <b>{euro.format(holding.value)}</b>
                   </label>
                 ))}
-              </div>
+                </div>
+              ) : (
+                <div className="depot-mode-explanation">
+                  <strong>
+                    {plan.depotMode === "none"
+                      ? "Depot bleibt außerhalb der Strukturplanung"
+                      : plan.depotMode === "compare"
+                        ? "Vollständiges Depot ausschließlich im IST"
+                        : "Vollständiger Restbestand nach simulierten Verkäufen"}
+                  </strong>
+                  <small>
+                    {plan.depotMode === "afterSales"
+                      ? "Alle Positionen werden automatisch mit ihrem verbleibenden Wert berücksichtigt."
+                      : "Eine Positionsauswahl ist in diesem Modus nicht erforderlich."}
+                  </small>
+                </div>
+              )}
               <div className="depot-planning-metrics">
                 <article>
                   <span>Neue Liquidität</span>
                   <strong>{euro.format(plan.total)}</strong>
                 </article>
                 <article>
-                  <span>Ausgewählter Bestand</span>
+                  <span>Berücksichtigter Bestand</span>
                   <strong>{euro.format(includedDepotTotal)}</strong>
                 </article>
                 <article>
@@ -4078,21 +4147,9 @@ function WealthHouse({
   const [selectedAsset, setSelectedAsset] = useState<AssetClass | null>(null);
   const targetPlan = plans.find((entry) => entry.preferred) || plan;
   const breakdown = planAssetAmounts(plan);
-  const selectedIds = new Set(
-    plan.depotHoldingIds.length > 0
-      ? plan.depotHoldingIds
-      : depot.map((entry) => entry.id),
-  );
-  const relevantDepot =
-    plan.depotMode === "none"
-      ? []
-      : depot.filter((entry) => selectedIds.has(entry.id));
   const depotBreakdown = depotAssetAmounts(
-    relevantDepot,
-    (entry) =>
-      plan.depotMode === "afterSales"
-        ? Math.max(0, entry.value - entry.plannedSale)
-        : entry.value,
+    depot,
+    (entry) => plannerPlanHoldingValue(plan, entry),
   );
   const depotAmounts = depotBreakdown.amounts;
   const includeInTotal =
@@ -4136,22 +4193,9 @@ function WealthHouse({
   };
   const snapshotFor = (selectedPlan: StructurePlan) => {
     const selectedBreakdown = planAssetAmounts(selectedPlan);
-    const selectedIds = new Set(
-      selectedPlan.depotHoldingIds.length
-        ? selectedPlan.depotHoldingIds
-        : depot.map((entry) => entry.id),
-    );
-    const includeDepot =
-      selectedPlan.depotMode === "retain" ||
-      selectedPlan.depotMode === "afterSales";
     const retainedBreakdown = depotAssetAmounts(
-      includeDepot
-        ? depot.filter((entry) => selectedIds.has(entry.id))
-        : [],
-      (entry) =>
-        selectedPlan.depotMode === "afterSales"
-          ? Math.max(0, entry.value - entry.plannedSale)
-          : entry.value,
+      depot,
+      (entry) => plannerPlanHoldingValue(selectedPlan, entry),
     );
     const amounts = Object.fromEntries(
       assetClasses.map((name) => {
@@ -4168,9 +4212,24 @@ function WealthHouse({
       unresolved: selectedBreakdown.unresolved + retainedBreakdown.unresolved,
     };
   };
+  const plannerIstDepotBreakdown = depotAssetAmounts(
+    depot,
+    (holding) => plannerIstHoldingValue(plan, holding),
+  );
   const istSnapshot = {
-    amounts: entireDepotAmounts,
-    unresolved: entireDepotBreakdown.unresolved,
+    amounts: Object.fromEntries(
+      assetClasses.map((name) => [
+        name,
+        (context === "depot"
+          ? entireDepotBreakdown.amounts[name]
+          : plannerIstDepotBreakdown.amounts[name]) +
+          (name === "Liquidität" ? currentLiquidity : 0),
+      ]),
+    ) as Record<AssetClass, number>,
+    unresolved:
+      context === "depot"
+        ? entireDepotBreakdown.unresolved
+        : plannerIstDepotBreakdown.unresolved,
   };
   const depotPlanBreakdown = depotPlanAssetAmounts(depot, plan);
   const planSnapshot =
@@ -4252,7 +4311,10 @@ function WealthHouse({
           depot,
           asset,
           "Bestandsdepot",
-          (entry) => entry.value,
+          (entry) =>
+            context === "depot"
+              ? entry.value
+              : plannerIstHoldingValue(plan, entry),
         ),
       ];
     const selectedPlan = source === "target" ? targetPlan : plan;
@@ -4305,25 +4367,18 @@ function WealthHouse({
         ),
         ...planEntries,
       ];
-    const includeDepot =
-      selectedPlan.depotMode === "retain" ||
-      selectedPlan.depotMode === "afterSales";
-    if (!includeDepot) return planEntries;
-    const ids = new Set(
-      selectedPlan.depotHoldingIds.length
-        ? selectedPlan.depotHoldingIds
-        : depot.map((entry) => entry.id),
-    );
+    if (
+      selectedPlan.depotMode !== "retain" &&
+      selectedPlan.depotMode !== "afterSales"
+    )
+      return planEntries;
     return [
       ...planEntries,
       ...holdingContributors(
-        depot.filter((entry) => ids.has(entry.id)),
+        depot,
         asset,
         "Fortbestehender Bestand",
-        (entry) =>
-          selectedPlan.depotMode === "afterSales"
-            ? Math.max(0, entry.value - entry.plannedSale)
-            : entry.value,
+        (entry) => plannerPlanHoldingValue(selectedPlan, entry),
       ).map((entry) => ({ ...entry, id: `depot-${entry.id}` })),
     ];
   };
@@ -4424,7 +4479,9 @@ function WealthHouse({
                 <button
                   key={name}
                   className={selectedAsset === name ? "active" : ""}
-                  onClick={() => setSelectedAsset(name)}
+                  onClick={() =>
+                    setSelectedAsset(selectedAsset === name ? null : name)
+                  }
                   aria-label={`${name} öffnen`}
                   style={
                     {
@@ -4473,9 +4530,9 @@ function WealthHouse({
           <div className="comparison-table">
             <div className="comparison-head">
               <span>Anlageklasse</span>
-              <span>Bestandsdepot</span>
-              <span>Neue Planung</span>
-              <span>Gesamtquote</span>
+              <span>Berücksichtigter Bestand</span>
+              <span>Neuanlage</span>
+              <span>Gesamtplan</span>
             </div>
             {assetClasses.map((name) => (
               <div key={name}>
@@ -4483,12 +4540,14 @@ function WealthHouse({
                 <span>{euro.format(depotAmounts[name])}</span>
                 <span>{euro.format(plannedAmounts[name])}</span>
                 <b>
-                  {percent.format(
-                    combinedKnown
-                      ? (combinedAmounts[name] / combinedKnown) * 100
-                      : 0,
-                  )}{" "}
-                  %
+                  {euro.format(combinedAmounts[name])}
+                  <small>
+                    Quote {percent.format(
+                      combinedKnown
+                        ? (combinedAmounts[name] / combinedKnown) * 100
+                        : 0,
+                    )} %
+                  </small>
                 </b>
               </div>
             ))}
@@ -4497,12 +4556,14 @@ function WealthHouse({
               <span>–</span>
               <span>{euro.format(breakdown.unresolved)}</span>
               <b>
-                {percent.format(
-                  breakdown.total
-                    ? (breakdown.unresolved / breakdown.total) * 100
-                    : 0,
-                )}{" "}
-                %
+                {euro.format(breakdown.unresolved)}
+                <small>
+                  Quote {percent.format(
+                    combinedKnown
+                      ? (breakdown.unresolved / combinedKnown) * 100
+                      : 0,
+                  )} %
+                </small>
               </b>
             </div>
           </div>
@@ -4549,7 +4610,7 @@ function WealthHouse({
             : plan.depotMode === "compare"
               ? "Bestandsdepot wird nur vergleichend angezeigt"
               : plan.depotMode === "afterSales"
-                ? "Ausgewählte Positionen nach simulierten Verkäufen einbezogen"
+                ? "Vollständiger Restbestand nach simulierten Verkäufen einbezogen"
                 : "Ausgewählte Positionen als fortbestehender Bestand einbezogen"}
         </span>
       </div>}
@@ -5203,7 +5264,10 @@ function DepotOptimizer({
   );
   const buys = plan.allocations.reduce((sum, entry) => sum + entry.amount, 0);
   const planTotal = depotPlanAssetAmounts(depot, plan).total;
-  const setDepotPositions = (next: DepotHolding[]) =>
+  const setDepotPositions = (
+    next: DepotHolding[],
+    importMode: "replace" | "append" = "append",
+  ) =>
     setItem({
       ...item,
       advisory: {
@@ -5212,6 +5276,12 @@ function DepotOptimizer({
         hasDepot: next.length > 0 || item.advisory.hasDepot,
       },
       depot: next,
+      plans: reconcileDepotHoldingSelections(
+        item.plans,
+        item.depot,
+        next,
+        importMode,
+      ),
     });
   const csvImport = useDepotCsvImport(depot, setDepotPositions);
   const addHolding = () =>
