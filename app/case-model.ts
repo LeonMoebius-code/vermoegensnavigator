@@ -100,6 +100,7 @@ export type StructurePlan = {
   modelAmount?: number;
   depotMode: "none" | "compare" | "retain" | "afterSales";
   depotHoldingIds: string[];
+  depotSelectionInitialized?: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -255,7 +256,7 @@ export type CustomerChecklistItem = {
 };
 
 export type AdvisoryCase = {
-  schemaVersion: 6;
+  schemaVersion: 7;
   id: string;
   status: "Entwurf" | "In Prüfung" | "Abgeschlossen";
   advisorId: AdvisorId;
@@ -319,7 +320,7 @@ export function createCase(
   const initialTotal = data.liquidAssets;
   const plan = createPlan("Plan A – Ausgangsstruktur", initialTotal);
   return {
-    schemaVersion: 6,
+    schemaVersion: 7,
     id: uid("fall"),
     status: "Entwurf",
     advisorId,
@@ -561,6 +562,180 @@ export function legacyBucketAmountsForCapitalPots(
   return result;
 }
 
+export type CapitalPotRemovalImpact = {
+  removedPotIds: CapitalPotId[];
+  allocationCount: number;
+  allocationAmount: number;
+  investmentPlanCount: number;
+};
+
+export function capitalPotRemovalImpact(
+  before: AdvisoryData,
+  after: AdvisoryData,
+  plans: StructurePlan[],
+  referenceDate: Date | string = new Date(),
+): CapitalPotRemovalImpact {
+  const removedPotIds = Array.from(
+    new Set(
+      plans.flatMap((plan) => {
+        const beforeIds = new Set(
+          capitalPots(before, plan.total, referenceDate).map((pot) => pot.id),
+        );
+        const afterIds = new Set(
+          capitalPots(after, plan.total, referenceDate).map((pot) => pot.id),
+        );
+        return [...beforeIds].filter((id) => !afterIds.has(id));
+      }),
+    ),
+  );
+  const removed = new Set(removedPotIds);
+  let allocationCount = 0;
+  let allocationAmount = 0;
+  let investmentPlanCount = 0;
+  for (const plan of plans) {
+    for (const allocation of plan.allocations) {
+      const affected = Object.entries(allocationCapitalPotAmounts(allocation))
+        .filter(([id, amount]) => removed.has(id as CapitalPotId) && Number(amount) > 0)
+        .reduce((sum, [, amount]) => sum + (Number(amount) || 0), 0);
+      if (affected > 0) {
+        allocationCount += 1;
+        allocationAmount += affected;
+      }
+    }
+    investmentPlanCount += (plan.investmentPlans || []).filter(
+      (entry) => entry.capitalPotId && removed.has(entry.capitalPotId),
+    ).length;
+  }
+  return {
+    removedPotIds,
+    allocationCount,
+    allocationAmount,
+    investmentPlanCount,
+  };
+}
+
+export function reconcilePlanCapitalPots(
+  advisory: AdvisoryData,
+  plan: StructurePlan,
+  referenceDate: Date | string = new Date(),
+): StructurePlan {
+  const pots = capitalPots(advisory, plan.total, referenceDate);
+  const validIds = new Set(pots.map((pot) => pot.id));
+  const allocations = plan.allocations.flatMap((allocation) => {
+    const previousAmounts = allocationCapitalPotAmounts(allocation);
+    const hadMappedAmounts = Object.values(previousAmounts).some(
+      (amount) => Number(amount) > 0,
+    );
+    if (!hadMappedAmounts)
+      return [{
+        ...allocation,
+        capitalPotId:
+          allocation.capitalPotId && validIds.has(allocation.capitalPotId)
+            ? allocation.capitalPotId
+            : undefined,
+        capitalPotAmounts: {},
+        bucketAmounts: {},
+      }];
+
+    const previousCoverage = Object.values(previousAmounts).reduce<number>(
+      (sum, amount) => sum + Math.max(0, Number(amount) || 0),
+      0,
+    );
+    const validAmounts = Object.fromEntries(
+      Object.entries(previousAmounts).filter(
+        ([id, amount]) =>
+          validIds.has(id as CapitalPotId) && Number(amount) > 0,
+      ),
+    ) as Partial<Record<CapitalPotId, number>>;
+    const validCoverage = Object.values(validAmounts).reduce<number>(
+      (sum, amount) => sum + (Number(amount) || 0),
+      0,
+    );
+    if (validCoverage <= 0) return [];
+
+    const unassignedBefore = Math.max(0, allocation.amount - previousCoverage);
+    const amount = validCoverage + unassignedBefore;
+    const validPotIds = Object.keys(validAmounts) as CapitalPotId[];
+    const capitalPotId =
+      allocation.capitalPotId && validAmounts[allocation.capitalPotId]
+        ? allocation.capitalPotId
+        : validPotIds[0];
+    return [{
+      ...allocation,
+      amount,
+      capitalPotId,
+      capitalPotAmounts: validAmounts,
+      bucketId:
+        pots.find((pot) => pot.id === capitalPotId)?.legacyBucketId ||
+        allocation.bucketId,
+      bucketAmounts: legacyBucketAmountsForCapitalPots(pots, validAmounts),
+    }];
+  });
+  return {
+    ...plan,
+    allocations,
+    investmentPlans: (plan.investmentPlans || []).filter(
+      (entry) => !entry.capitalPotId || validIds.has(entry.capitalPotId),
+    ),
+  };
+}
+
+export function reconcileCasePlans(
+  advisory: AdvisoryData,
+  plans: StructurePlan[],
+  referenceDate: Date | string = new Date(),
+) {
+  return plans.map((plan) =>
+    reconcilePlanCapitalPots(advisory, plan, referenceDate),
+  );
+}
+
+const normalizedHoldingWkn = (holding: DepotHolding) =>
+  (holding.wkn || "").replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+
+function uniqueHoldingMatch(
+  holding: DepotHolding,
+  nextDepot: DepotHolding[],
+) {
+  const wkn = normalizedHoldingWkn(holding);
+  const candidates = wkn
+    ? nextDepot.filter((entry) => normalizedHoldingWkn(entry) === wkn)
+    : holding.productId
+      ? nextDepot.filter((entry) => entry.productId === holding.productId)
+      : nextDepot.filter(
+          (entry) =>
+            entry.name.trim().toLocaleLowerCase("de-DE") ===
+              holding.name.trim().toLocaleLowerCase("de-DE") &&
+            (entry.securityType || "") === (holding.securityType || ""),
+        );
+  return candidates.length === 1 ? candidates[0] : undefined;
+}
+
+export function reconcileDepotHoldingSelections(
+  plans: StructurePlan[],
+  previousDepot: DepotHolding[],
+  nextDepot: DepotHolding[],
+  mode: "replace" | "append" = "replace",
+) {
+  const nextIds = new Set(nextDepot.map((holding) => holding.id));
+  const previousById = new Map(
+    previousDepot.map((holding) => [holding.id, holding]),
+  );
+  return plans.map((plan) => {
+    const mappedIds = plan.depotHoldingIds.flatMap((id) => {
+      if (nextIds.has(id)) return [id];
+      if (mode === "append") return [];
+      const previous = previousById.get(id);
+      const match = previous && uniqueHoldingMatch(previous, nextDepot);
+      return match ? [match.id] : [];
+    });
+    return {
+      ...plan,
+      depotHoldingIds: Array.from(new Set(mappedIds)),
+    };
+  });
+}
+
 export function planAssetAmounts(plan: StructurePlan) {
   const amounts = Object.fromEntries(
     assetClasses.map((name) => [name, 0]),
@@ -609,6 +784,27 @@ export function depotAssetAmounts(
   return { amounts, unresolved, total };
 }
 
+export function plannerIstHoldingValue(
+  plan: StructurePlan,
+  holding: DepotHolding,
+) {
+  return plan.depotMode === "none" ? 0 : Math.max(0, holding.value);
+}
+
+export function plannerPlanHoldingValue(
+  plan: StructurePlan,
+  holding: DepotHolding,
+) {
+  if (plan.depotMode === "afterSales")
+    return Math.max(0, holding.value - holding.plannedSale);
+  if (
+    plan.depotMode === "retain" &&
+    plan.depotHoldingIds.includes(holding.id)
+  )
+    return Math.max(0, holding.value);
+  return 0;
+}
+
 export function depotPlanAssetAmounts(
   depot: DepotHolding[],
   plan: StructurePlan,
@@ -646,8 +842,9 @@ export function normalizeImportedCase(
   if (!candidate || typeof candidate !== "object") return null;
   const item = candidate as Partial<AdvisoryCase>;
   if (!item.advisory || !Array.isArray(item.plans)) return null;
+  const sourceSchemaVersion = Number(item.schemaVersion) || 0;
   const normalized = clone(item) as AdvisoryCase;
-  normalized.schemaVersion = 6;
+  normalized.schemaVersion = 7;
   if (regenerateId) normalized.id = uid("fall-import");
   normalized.updatedAt = iso();
   normalized.versions = Array.isArray(normalized.versions)
@@ -756,7 +953,18 @@ export function normalizeImportedCase(
       };
     });
     const firstPotId = pots[0]?.id;
-    return {
+    const depotHoldingIds = Array.isArray(plan.depotHoldingIds)
+      ? plan.depotHoldingIds.filter((id) =>
+          normalized.depot.some((holding) => holding.id === id),
+        )
+      : [];
+    const migratedRetainSelection =
+      sourceSchemaVersion < 7 &&
+      plan.depotMode === "retain" &&
+      depotHoldingIds.length === 0
+        ? normalized.depot.map((holding) => holding.id)
+        : depotHoldingIds;
+    const normalizedPlan: StructurePlan = {
       ...plan,
       total,
       capitalMode:
@@ -766,9 +974,10 @@ export function normalizeImportedCase(
           ? "linked"
           : "manual"),
       depotMode: plan.depotMode || "none",
-      depotHoldingIds: Array.isArray(plan.depotHoldingIds)
-        ? plan.depotHoldingIds
-        : [],
+      depotHoldingIds: migratedRetainSelection,
+      depotSelectionInitialized:
+        Boolean(plan.depotSelectionInitialized) ||
+        (sourceSchemaVersion < 7 && plan.depotMode === "retain"),
       investmentPlans: Array.isArray(plan.investmentPlans)
         ? plan.investmentPlans.map((entry) => {
             const candidates = pots.filter(
@@ -785,6 +994,11 @@ export function normalizeImportedCase(
         : [],
       allocations,
     };
+    return reconcilePlanCapitalPots(
+      normalized.advisory,
+      normalizedPlan,
+      normalized.createdAt,
+    );
   });
   return normalized;
 }

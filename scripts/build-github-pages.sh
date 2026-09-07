@@ -37,7 +37,7 @@ for referenced_file in app.js styles.css favicon.svg og.png; do
   test -f "${output_dir}/${referenced_file}"
 done
 
-for branding_file in volksbank-pur-logo.png private-banking-logo.png; do
+for branding_file in volksbank-pur-logo.png private-banking-logo.png private-banking-logo-cropped.png; do
   test -f "${output_dir}/branding/${branding_file}"
 done
 

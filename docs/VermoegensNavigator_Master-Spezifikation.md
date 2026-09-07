@@ -2,10 +2,10 @@
 
 > **Kanonischer Produkt- und Entscheidungsstand**
 >
-> Letzte fachliche Aktualisierung: **04.09.2026**  
-> Aktuell veröffentlichte Version: **V0.14**  
-> Codebasis: **GitHub `main`**  
-> Zielumgebung: **Desktop-Prototyp**  
+> Letzte fachliche Aktualisierung: **07.09.2026**
+> Aktuell veröffentlichte Version: **V0.14.1**
+> Codebasis: **GitHub `main`**
+> Zielumgebung: **Desktop-Prototyp**
 > Öffentliche Testversion: GitHub Pages
 
 ---
@@ -258,9 +258,11 @@ Umgesetzt sind insbesondere:
 
 ---
 
-# 4. 🟢 Work-Paket 4A.1 – Bestandsdepot-Logik, Kapitaltopf-Lifecycle & V0.14-Fixes
+# 4. ✅ Work-Paket 4A.1 – Bestandsdepot-Logik, Kapitaltopf-Lifecycle & V0.14-Fixes
 
-**Status: BESCHLOSSEN / WORK-READY**
+**Status: UMGESETZT**
+
+Veröffentlicht mit V0.14.1. Die Kapitaltopf-Reconciliation bereinigt verschwundene Topfbezüge fallweit, repariert alte Schema-6-Fälle und hält gültige Anteile von Mehrtopf-Allokationen erhalten. Die vier Bestandsdepot-Modi, CSV-Neuimport-Selektionen, PLAN-Tabelle, Markenführung in Header, Fachmodul und Druckansicht sowie das Säulendetail-Toggle entsprechen dem nachfolgend dokumentierten Sollstand.
 
 Dieses Paket ist fachlich klar abgegrenzt und soll **vor** dem InvestmentPlan-Umbau umgesetzt werden. Es enthält keine neue Depotanalyse und keine neue Spar-/Investmentplanlogik.
 
@@ -1746,7 +1748,7 @@ Freie WKN / freie Produktbezeichnung für Sparpläne zunächst bewusst nicht in 
 
 | Reihenfolge | Paket / Konzept | Status |
 |---:|---|---|
-| 1 | **4A.1 Bestandsdepot-Logik, Kapitaltopf-Lifecycle & V0.14-Fixes** | 🟢 Work-ready |
+| 1 | **4A.1 Bestandsdepot-Logik, Kapitaltopf-Lifecycle & V0.14-Fixes** | ✅ Umgesetzt |
 | 2 | **4B Einstieg & Sparpläne** | 🟢 Work-ready |
 | 3 | **Depotcheck 3B Portfolioanalyse** | 🟢 nahezu Work-ready |
 | 4 | **Risiko V2** | 🔴 Fachkonzept nötig |
@@ -1762,7 +1764,7 @@ Die Reihenfolge kann sich ändern, wenn ein fachlicher Block priorisiert werden 
 
 ## 4A.1
 
-Keine zentrale fachliche Entscheidung mehr offen. Paket ist Work-ready.
+Keine zentrale fachliche Entscheidung offen. Paket ist umgesetzt.
 
 ## 4B
 
@@ -1795,6 +1797,17 @@ Kleinere UI-Details dürfen bei der Prompt-Erstellung aus den hier festgelegten 
 ---
 
 # 19. Entscheidungslog
+
+## 07.09.2026
+
+### 4A.1 Umsetzung
+
+- Kapitaltopf-Lifecycle über eine zentrale fallweite Reconciliation abgesichert.
+- Persistenzschema auf 7 erhöht, um alte `retain`-Leerlisten kompatibel in eine explizite Auswahl zu migrieren und defekte Topfbezüge zu normalisieren.
+- Bestandsdepot-Modi in Strukturplanung und Vermögenshaus fachlich vereinheitlicht, Depotcheck bleibt davon unabhängig.
+- CSV-Ersetzen reconciliiert bewusste Holding-Auswahlen eindeutig über ID bzw. bevorzugt WKN.
+- Echtes Branding in Hauptheader, Fachmodul und Kundenübersicht eingebunden.
+- Version V0.14.1 veröffentlicht.
 
 ## 04.09.2026
 
