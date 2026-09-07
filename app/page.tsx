@@ -200,6 +200,12 @@ const investmentFrequencies: Array<{
   { value: "semiannual", label: "halbjährlich" },
   { value: "annual", label: "jährlich" },
 ];
+const investmentFrequencyUnits: Record<InvestmentFrequency, string> = {
+  monthly: "Monat",
+  quarterly: "Quartal",
+  semiannual: "Halbjahr",
+  annual: "Jahr",
+};
 
 const moduleDetails: Record<string, string[]> = {
   maturity: [
@@ -302,6 +308,13 @@ const dateLabel = (value?: string) =>
     : "–";
 const parseAmount = (value: string) =>
   Number(value.replace(/[^0-9]/g, "")) || 0;
+const parseGermanDecimal = (value: string) => {
+  const cleaned = value.trim().replace(/\s/g, "");
+  const normalized = cleaned.includes(",")
+    ? cleaned.replace(/\./g, "").replace(",", ".")
+    : cleaned;
+  return Number(normalized.replace(/[^0-9.-]/g, "")) || 0;
+};
 const safeFileName = (value: string) =>
   (value || "vermoegensnavigator")
     .trim()
@@ -3893,7 +3906,10 @@ function PlannerView({
                                                 : ""
                                             }
                                             onChange={(event) => {
-                                              const stagedValue = parseAmount(event.target.value);
+                                              const stagedValue =
+                                                phasedEntry.stagedMode === "percent"
+                                                  ? parseGermanDecimal(event.target.value)
+                                                  : parseAmount(event.target.value);
                                               if (stagedValue <= 0) {
                                                 removeInvestmentPlan(phasedEntry.id);
                                                 return;
@@ -4126,7 +4142,7 @@ function PlannerView({
                     {savingsPlans.length > 0 && (
                       <small>
                         {new Set(savingsPlans.map((entry) => entry.frequency)).size === 1
-                          ? `Zusätzliche Sparpläne: ${euro.format(savingsPlans.reduce((sum, entry) => sum + entry.contributionAmount, 0))}/${frequencyLabel(savingsPlans[0].frequency).replace("lich", "")}`
+                          ? `Zusätzliche Sparpläne: ${euro.format(savingsPlans.reduce((sum, entry) => sum + entry.contributionAmount, 0))}/${investmentFrequencyUnits[savingsPlans[0].frequency]}`
                           : `Laufende Sparbeiträge: ${euro.format(savingsPlans.reduce((sum, entry) => sum + annualSavingsContribution(entry), 0))}/Jahr`}
                       </small>
                     )}
@@ -4308,6 +4324,11 @@ function PlannerView({
                         />
                       </label>
                     </div>
+                        {(!entry.productId || entry.contributionAmount <= 0) && (
+                          <p className="savings-warning">
+                            Bitte Produkt und positive Sparrate vollständig festlegen.
+                          </p>
+                        )}
                         {selectedGoal && (
                           <div className="savings-goal-editor">
                             <strong>Sparziel</strong>
