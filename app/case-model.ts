@@ -105,19 +105,51 @@ export type StructurePlan = {
   updatedAt: string;
 };
 
-export type InvestmentPlan = {
+export type InvestmentFrequency =
+  | "monthly"
+  | "quarterly"
+  | "semiannual"
+  | "annual";
+
+export type SavingsTargetRef =
+  | { kind: "savingsGoal"; id: string }
+  | { kind: "need"; id: AdvisoryData["needs"][number]["id"] };
+
+export type PhasedEntryPlan = {
   id: string;
-  name: string;
-  type: "savings" | "phased";
-  productId: string;
-  productName: string;
-  bucketId: BucketId;
-  capitalPotId?: CapitalPotId;
-  installmentAmount: number;
+  type: "phased";
+  allocationId: string;
+  capitalPotId: CapitalPotId;
+  stagedMode: "percent" | "amount";
+  stagedValue: number;
   installments: number;
-  frequency: "monthly" | "quarterly" | "semiannual" | "annual";
+  frequency: InvestmentFrequency;
   startDate: string;
   note: string;
+};
+
+export type SavingsPlan = {
+  id: string;
+  type: "savings";
+  name?: string;
+  productId: string;
+  productName: string;
+  contributionAmount: number;
+  frequency: InvestmentFrequency;
+  startDate: string;
+  targetRef?: SavingsTargetRef;
+  note: string;
+};
+
+export type InvestmentPlan = PhasedEntryPlan | SavingsPlan;
+
+export type SavingsGoal = {
+  id: string;
+  name: string;
+  targetAmount: number;
+  targetYear?: number;
+  targetDate?: string;
+  note?: string;
 };
 
 export type DepotHolding = {
@@ -256,7 +288,7 @@ export type CustomerChecklistItem = {
 };
 
 export type AdvisoryCase = {
-  schemaVersion: 7;
+  schemaVersion: 8;
   id: string;
   status: "Entwurf" | "In Prüfung" | "Abgeschlossen";
   advisorId: AdvisorId;
@@ -266,6 +298,7 @@ export type AdvisoryCase = {
   depot: DepotHolding[];
   moduleStates: Record<string, ModuleState>;
   customerChecklist: CustomerChecklistItem[];
+  savingsGoals: SavingsGoal[];
   vvFilters: VvFilters;
   selectedVvIds: string[];
   currentStep: number;
@@ -311,6 +344,37 @@ export function createPlan(name: string, total: number): StructurePlan {
   };
 }
 
+export function duplicateStructurePlan(
+  plan: StructurePlan,
+  name = `${plan.name} – Kopie`,
+): StructurePlan {
+  const now = iso();
+  const allocationIds = new Map<string, string>();
+  const allocations = plan.allocations.map((allocation) => {
+    const id = uid("allocation");
+    allocationIds.set(allocation.id, id);
+    return { ...clone(allocation), id };
+  });
+  const investmentPlans = plan.investmentPlans.flatMap<InvestmentPlan>((entry) => {
+    if (entry.type === "savings")
+      return [{ ...clone(entry), id: uid("investment") }];
+    const allocationId = allocationIds.get(entry.allocationId);
+    return allocationId
+      ? [{ ...clone(entry), id: uid("investment"), allocationId }]
+      : [];
+  });
+  return {
+    ...clone(plan),
+    id: uid("plan"),
+    name,
+    preferred: false,
+    allocations,
+    investmentPlans,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
 export function createCase(
   advisory: AdvisoryData = emptyAdvisory,
   advisorId: AdvisorId = defaultAdvisorId,
@@ -320,7 +384,7 @@ export function createCase(
   const initialTotal = data.liquidAssets;
   const plan = createPlan("Plan A – Ausgangsstruktur", initialTotal);
   return {
-    schemaVersion: 7,
+    schemaVersion: 8,
     id: uid("fall"),
     status: "Entwurf",
     advisorId,
@@ -330,6 +394,7 @@ export function createCase(
     depot: [],
     moduleStates: {},
     customerChecklist: [],
+    savingsGoals: [],
     vvFilters: blankVvFilters(initialTotal),
     selectedVvIds: [],
     currentStep: data.scope ? 2 : 1,
@@ -548,6 +613,98 @@ export function allocationCapitalCoverageTotal(allocation: PlannerAllocation) {
   );
 }
 
+const toCents = (amount: number) => Math.round((Number(amount) || 0) * 100);
+
+export type PhasedEntryAmounts = {
+  targetAmount: number;
+  stagedAmount: number;
+  immediateAmount: number;
+  installmentAmounts: number[];
+  installmentAmount: number;
+  lastInstallmentAmount: number;
+  invalid: boolean;
+  hasRoundingAdjustment: boolean;
+};
+
+export function phasedEntryAmounts(
+  plan: StructurePlan,
+  entry: PhasedEntryPlan,
+): PhasedEntryAmounts {
+  const allocation = plan.allocations.find(
+    (candidate) => candidate.id === entry.allocationId,
+  );
+  const targetCents = toCents(
+    allocation
+      ? allocationAmountInCapitalPot(allocation, entry.capitalPotId)
+      : 0,
+  );
+  const stagedCents =
+    entry.stagedMode === "percent"
+      ? Math.round(targetCents * (Number(entry.stagedValue) || 0) / 100)
+      : toCents(entry.stagedValue);
+  const installments = Math.max(0, Math.trunc(Number(entry.installments) || 0));
+  const invalid =
+    targetCents <= 0 ||
+    stagedCents <= 0 ||
+    installments < 1 ||
+    (entry.stagedMode === "percent" &&
+      (entry.stagedValue < 0 || entry.stagedValue > 100)) ||
+    (entry.stagedMode === "amount" && stagedCents > targetCents);
+  const baseCents = installments > 0 ? Math.floor(stagedCents / installments) : 0;
+  const remainder = installments > 0 ? stagedCents - baseCents * installments : 0;
+  const installmentCents = Array.from({ length: installments }, (_, index) =>
+    index === installments - 1 ? baseCents + remainder : baseCents,
+  );
+  return {
+    targetAmount: targetCents / 100,
+    stagedAmount: stagedCents / 100,
+    immediateAmount: Math.max(0, targetCents - stagedCents) / 100,
+    installmentAmounts: installmentCents.map((amount) => amount / 100),
+    installmentAmount: baseCents / 100,
+    lastInstallmentAmount:
+      (installmentCents[installmentCents.length - 1] || 0) / 100,
+    invalid,
+    hasRoundingAdjustment: remainder > 0,
+  };
+}
+
+export function nextImplementationDate(
+  referenceDate: Date | string = new Date(),
+) {
+  let date: Date;
+  if (typeof referenceDate === "string") {
+    const match = referenceDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    date = match
+      ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+      : new Date(referenceDate);
+  } else {
+    date = new Date(
+      referenceDate.getFullYear(),
+      referenceDate.getMonth(),
+      referenceDate.getDate(),
+    );
+  }
+  if (Number.isNaN(date.getTime())) date = new Date();
+  if (date.getDate() < 15) date.setDate(15);
+  else {
+    date.setMonth(date.getMonth() + 1, 1);
+  }
+  const year = String(date.getFullYear()).padStart(4, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export function annualSavingsContribution(entry: SavingsPlan) {
+  const multiplier: Record<InvestmentFrequency, number> = {
+    monthly: 12,
+    quarterly: 4,
+    semiannual: 2,
+    annual: 1,
+  };
+  return Math.max(0, Number(entry.contributionAmount) || 0) * multiplier[entry.frequency];
+}
+
 export function legacyBucketAmountsForCapitalPots(
   pots: CapitalPot[],
   amounts: Partial<Record<CapitalPotId, number>>,
@@ -603,7 +760,8 @@ export function capitalPotRemovalImpact(
       }
     }
     investmentPlanCount += (plan.investmentPlans || []).filter(
-      (entry) => entry.capitalPotId && removed.has(entry.capitalPotId),
+      (entry) =>
+        entry.type === "phased" && removed.has(entry.capitalPotId),
     ).length;
   }
   return {
@@ -618,6 +776,7 @@ export function reconcilePlanCapitalPots(
   advisory: AdvisoryData,
   plan: StructurePlan,
   referenceDate: Date | string = new Date(),
+  savingsGoals?: SavingsGoal[],
 ): StructurePlan {
   const pots = capitalPots(advisory, plan.total, referenceDate);
   const validIds = new Set(pots.map((pot) => pot.id));
@@ -671,12 +830,35 @@ export function reconcilePlanCapitalPots(
       bucketAmounts: legacyBucketAmountsForCapitalPots(pots, validAmounts),
     }];
   });
+  const allocationById = new Map(
+    allocations.map((allocation) => [allocation.id, allocation]),
+  );
+  const needIds = new Set(advisory.needs.map((need) => need.id));
+  const savingsGoalIds = savingsGoals
+    ? new Set(savingsGoals.map((goal) => goal.id))
+    : undefined;
+  const investmentPlans = (plan.investmentPlans || []).flatMap<InvestmentPlan>((entry) => {
+    if (entry.type === "phased") {
+      const allocation = allocationById.get(entry.allocationId);
+      return allocation &&
+        validIds.has(entry.capitalPotId) &&
+        allocationAmountInCapitalPot(allocation, entry.capitalPotId) > 0
+        ? [entry]
+        : [];
+    }
+    if (!entry.targetRef) return [entry];
+    const targetExists =
+      entry.targetRef.kind === "need"
+        ? needIds.has(entry.targetRef.id)
+        : savingsGoalIds
+          ? savingsGoalIds.has(entry.targetRef.id)
+          : true;
+    return targetExists ? [entry] : [{ ...entry, targetRef: undefined }];
+  });
   return {
     ...plan,
     allocations,
-    investmentPlans: (plan.investmentPlans || []).filter(
-      (entry) => !entry.capitalPotId || validIds.has(entry.capitalPotId),
-    ),
+    investmentPlans,
   };
 }
 
@@ -684,9 +866,10 @@ export function reconcileCasePlans(
   advisory: AdvisoryData,
   plans: StructurePlan[],
   referenceDate: Date | string = new Date(),
+  savingsGoals?: SavingsGoal[],
 ) {
   return plans.map((plan) =>
-    reconcilePlanCapitalPots(advisory, plan, referenceDate),
+    reconcilePlanCapitalPots(advisory, plan, referenceDate, savingsGoals),
   );
 }
 
@@ -833,6 +1016,122 @@ export function dataState() {
   );
 }
 
+type LegacyInvestmentPlan = {
+  id?: string;
+  name?: string;
+  type?: string;
+  productId?: string;
+  productName?: string;
+  bucketId?: BucketId;
+  capitalPotId?: CapitalPotId;
+  installmentAmount?: number;
+  installments?: number;
+  frequency?: InvestmentFrequency;
+  startDate?: string;
+  note?: string;
+  allocationId?: string;
+  stagedMode?: "percent" | "amount";
+  stagedValue?: number;
+  contributionAmount?: number;
+  targetRef?: SavingsTargetRef;
+};
+
+const normalizedFrequency = (value?: string): InvestmentFrequency =>
+  value === "quarterly" || value === "semiannual" || value === "annual"
+    ? value
+    : "monthly";
+
+function normalizeInvestmentPlans(
+  rawEntries: unknown,
+  allocations: PlannerAllocation[],
+  pots: CapitalPot[],
+  sourceSchemaVersion: number,
+): InvestmentPlan[] {
+  if (!Array.isArray(rawEntries)) return [];
+  return rawEntries.flatMap<InvestmentPlan>((rawEntry) => {
+    if (!rawEntry || typeof rawEntry !== "object") return [];
+    const entry = rawEntry as LegacyInvestmentPlan;
+    if (entry.type === "savings") {
+      const targetRef =
+        sourceSchemaVersion >= 8 &&
+        entry.targetRef &&
+        (entry.targetRef.kind === "need" ||
+          entry.targetRef.kind === "savingsGoal")
+          ? entry.targetRef
+          : undefined;
+      return [{
+        id: entry.id || uid("investment"),
+        type: "savings" as const,
+        name: entry.name || undefined,
+        productId: entry.productId || "",
+        productName: entry.productName || "",
+        contributionAmount: Math.max(
+          0,
+          Number(
+            sourceSchemaVersion >= 8
+              ? entry.contributionAmount
+              : entry.installmentAmount,
+          ) || 0,
+        ),
+        frequency: normalizedFrequency(entry.frequency),
+        startDate: entry.startDate || "",
+        targetRef,
+        note: entry.note || "",
+      }];
+    }
+    if (entry.type !== "phased") return [];
+    if (sourceSchemaVersion >= 8) {
+      if (!entry.allocationId || !entry.capitalPotId) return [];
+      return [{
+        id: entry.id || uid("investment"),
+        type: "phased" as const,
+        allocationId: entry.allocationId,
+        capitalPotId: entry.capitalPotId,
+        stagedMode: entry.stagedMode === "percent" ? "percent" as const : "amount" as const,
+        stagedValue: Math.max(0, Number(entry.stagedValue) || 0),
+        installments: Math.max(1, Math.trunc(Number(entry.installments) || 1)),
+        frequency: normalizedFrequency(entry.frequency),
+        startDate: entry.startDate || "",
+        note: entry.note || "",
+      }];
+    }
+    const legacyPotId =
+      entry.capitalPotId ||
+      (entry.bucketId
+        ? (() => {
+            const candidates = pots.filter(
+              (pot) => pot.legacyBucketId === entry.bucketId,
+            );
+            return candidates.length === 1 ? candidates[0].id : undefined;
+          })()
+        : undefined) ||
+      (pots.length === 1 ? pots[0].id : undefined);
+    if (!legacyPotId || !entry.productId) return [];
+    const candidates = allocations.filter(
+      (allocation) =>
+        allocation.productId === entry.productId &&
+        allocationAmountInCapitalPot(allocation, legacyPotId) > 0,
+    );
+    if (candidates.length !== 1) return [];
+    const installments = Math.max(1, Math.trunc(Number(entry.installments) || 1));
+    const stagedValue =
+      Math.max(0, Number(entry.installmentAmount) || 0) * installments;
+    if (stagedValue <= 0) return [];
+    return [{
+      id: entry.id || uid("investment"),
+      type: "phased" as const,
+      allocationId: candidates[0].id,
+      capitalPotId: legacyPotId,
+      stagedMode: "amount" as const,
+      stagedValue,
+      installments,
+      frequency: normalizedFrequency(entry.frequency),
+      startDate: entry.startDate || "",
+      note: entry.note || "",
+    }];
+  });
+}
+
 export function normalizeImportedCase(
   value: unknown,
   regenerateId = true,
@@ -844,7 +1143,7 @@ export function normalizeImportedCase(
   if (!item.advisory || !Array.isArray(item.plans)) return null;
   const sourceSchemaVersion = Number(item.schemaVersion) || 0;
   const normalized = clone(item) as AdvisoryCase;
-  normalized.schemaVersion = 7;
+  normalized.schemaVersion = 8;
   if (regenerateId) normalized.id = uid("fall-import");
   normalized.updatedAt = iso();
   normalized.versions = Array.isArray(normalized.versions)
@@ -869,6 +1168,18 @@ export function normalizeImportedCase(
   normalized.moduleStates = normalized.moduleStates || {};
   normalized.customerChecklist = Array.isArray(normalized.customerChecklist)
     ? normalized.customerChecklist
+    : [];
+  normalized.savingsGoals = Array.isArray(normalized.savingsGoals)
+    ? normalized.savingsGoals.map((goal) => ({
+        id: goal.id || uid("savings-goal"),
+        name: goal.name || "Sparziel",
+        targetAmount: Math.max(0, Number(goal.targetAmount) || 0),
+        targetYear: goal.targetYear
+          ? Math.trunc(Number(goal.targetYear))
+          : undefined,
+        targetDate: goal.targetDate || undefined,
+        note: goal.note || undefined,
+      }))
     : [];
   normalized.advisorId = advisors.some(
     (advisor) => advisor.id === normalized.advisorId,
@@ -952,7 +1263,6 @@ export function normalizeImportedCase(
           : undefined,
       };
     });
-    const firstPotId = pots[0]?.id;
     const depotHoldingIds = Array.isArray(plan.depotHoldingIds)
       ? plan.depotHoldingIds.filter((id) =>
           normalized.depot.some((holding) => holding.id === id),
@@ -978,26 +1288,19 @@ export function normalizeImportedCase(
       depotSelectionInitialized:
         Boolean(plan.depotSelectionInitialized) ||
         (sourceSchemaVersion < 7 && plan.depotMode === "retain"),
-      investmentPlans: Array.isArray(plan.investmentPlans)
-        ? plan.investmentPlans.map((entry) => {
-            const candidates = pots.filter(
-              (pot) => pot.legacyBucketId === entry.bucketId,
-            );
-            return {
-              ...entry,
-              capitalPotId:
-                entry.capitalPotId ||
-                (candidates.length === 1 ? candidates[0].id : undefined) ||
-                (pots.length === 1 ? firstPotId : undefined),
-            };
-          })
-        : [],
+      investmentPlans: normalizeInvestmentPlans(
+        plan.investmentPlans,
+        allocations,
+        pots,
+        sourceSchemaVersion,
+      ),
       allocations,
     };
     return reconcilePlanCapitalPots(
       normalized.advisory,
       normalizedPlan,
       normalized.createdAt,
+      normalized.savingsGoals,
     );
   });
   return normalized;
