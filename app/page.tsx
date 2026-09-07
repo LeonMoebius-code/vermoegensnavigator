@@ -339,6 +339,24 @@ function download(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+function BrandLogos({ compact = false }: { compact?: boolean }) {
+  return (
+    <span
+      className={compact ? "brand-logos compact" : "brand-logos"}
+      aria-label="Volksbank pur Private Banking"
+    >
+      <img src="branding/volksbank-pur-logo.png" alt="Volksbank pur" />
+      <i aria-hidden="true" />
+      <span className="private-banking-mark">
+        <img
+          src="branding/private-banking-logo-cropped.png"
+          alt="Private Banking"
+        />
+      </span>
+    </span>
+  );
+}
+
 function AmountField({
   label,
   value,
@@ -685,13 +703,7 @@ export default function Home() {
     <main className="app-shell">
       <header className="topbar">
         <button className="brand" onClick={() => setView("home")}>
-          <span className="brand-logos" aria-label="Volksbank pur Private Banking">
-            <img src="branding/volksbank-pur-logo.png" alt="Volksbank pur" />
-            <i aria-hidden="true" />
-            <span className="private-banking-mark">
-              <img src="branding/private-banking-logo.png" alt="Private Banking" />
-            </span>
-          </span>
+          <BrandLogos />
           <strong>VermögensNavigator</strong>
         </button>
         <div className="topbar-actions">
@@ -771,7 +783,7 @@ export default function Home() {
         </nav>
         <div className="sidebar-foot">
           <p>
-            <strong>Prototyp V0.14</strong>
+            <strong>Prototyp V0.14.1</strong>
             <br />
             Browser-lokal, keine revisionssichere Speicherung.
           </p>
@@ -2184,9 +2196,7 @@ function ModuleWorkspace({
         aria-label={`${moduleConfig.title} Vertiefung`}
       >
         <header>
-          <div className="brand-placeholder" aria-label="Logoplatzhalter">
-            Logo
-          </div>
+          <BrandLogos compact />
           <div>
             <p className="eyebrow">FACHMODUL</p>
             <h2>{moduleConfig.title}</h2>
@@ -3100,9 +3110,11 @@ function PlannerView({
           <span>Gesamtbetrachtung</span>
           <strong>{euro.format(consideredTotal)}</strong>
           <small>
-            {plan.depotMode === "retain" || plan.depotMode === "afterSales"
-              ? "inklusive ausgewähltem Depot"
-              : "nur neue Planung"}
+            {plan.depotMode === "retain"
+              ? "inklusive ausgewähltem Bestand"
+              : plan.depotMode === "afterSales"
+                ? "inklusive Restbestand nach Verkäufen"
+                : "nur Neuanlage"}
           </small>
         </article>
       </div>
@@ -3166,9 +3178,9 @@ function PlannerView({
               <p className="eyebrow">BESTANDSDEPOT BERÜCKSICHTIGEN</p>
               <h2>Bestand bleibt von neuer Produktanlage getrennt</h2>
               <p>
-                Die 500.000 Euro neue Liquidität werden nicht um bestehende
-                Positionen erhöht. Der Bestand wird als zusätzliche Ebene in
-                Vergleich und Gesamtstruktur geführt.
+                Neue Liquidität und vorhandene Positionen bleiben rechnerisch
+                getrennt. Der gewählte Modus bestimmt, ob der Bestand nur im
+                IST oder zusätzlich im PLAN berücksichtigt wird.
               </p>
             </div>
             <label>
@@ -3263,8 +3275,10 @@ function PlannerView({
                   <strong>{euro.format(consideredTotal)}</strong>
                   <small>
                     {plan.depotMode === "compare"
-                      ? "Bestand wird nur gegenübergestellt"
-                      : "Bestand plus neue Planung"}
+                      ? "Bestand wird ausschließlich im IST gezeigt"
+                      : plan.depotMode === "none"
+                        ? "nur Neuanlage"
+                        : "Bestand plus Neuanlage"}
                   </small>
                 </article>
               </div>
@@ -5998,9 +6012,7 @@ function ExportCenter({
       <article className="print-document">
         <header>
           <div>
-            <span className="brand-placeholder" aria-label="Logoplatzhalter">
-              Logo
-            </span>
+            <BrandLogos compact />
             <div>
               <strong>VermögensNavigator</strong>
               <small>
