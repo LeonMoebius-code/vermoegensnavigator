@@ -3,7 +3,7 @@
 > **Kanonischer Produkt- und Entscheidungsstand**
 >
 > Letzte fachliche Aktualisierung: **08.09.2026**
-> Aktuell veröffentlichte Version: **V0.16.0**
+> Aktuell veröffentlichte Version: **V0.16.1**
 > Codebasis: **GitHub `main`**
 > Zielumgebung: **Desktop-Prototyp**
 > Öffentliche Testversion: GitHub Pages
@@ -420,7 +420,7 @@ Nach Entfernen eines Topfs müssen folgende Größen nur noch auf existierende T
 
 **Status: UMGESETZT**
 
-Veröffentlicht mit V0.15.0. Der bisherige Bereich `Spar- und Investitionspläne` wurde durch eine Umsetzungsübersicht ersetzt. Gestaffelte Einstiege werden direkt an `Produktallokation × Kapitaltopf` gesteuert. Sparpläne und fallweite Sparziele bleiben fachlich und rechnerisch von der heutigen Einmalanlage getrennt.
+Veröffentlicht mit V0.15.0. Der bisherige Bereich `Spar- und Investitionspläne` wurde durch eine Umsetzungsübersicht ersetzt. Gestaffelte Einstiege werden direkt an `Produktallokation × Kapitaltopf` gesteuert. Sparpläne und fallweite Sparziele bleiben fachlich und rechnerisch von der heutigen Einmalanlage getrennt. V0.16.1 ergänzt die zeitliche Grenze von Staffelungen an Jahres-Kapitaltöpfen, die sichtbare letzte Rate, einen deadlinegerechten 12-Raten-Default, stabile numerische Eingabeentwürfe, eindeutige Kopienamen und eine klarere Sparziel-Zusammenfassung.
 
 ## 5.1 Grundprinzip: Produktplanung und Umsetzung sind zwei Ebenen
 
@@ -940,7 +940,7 @@ Erwartung:
 
 **Status: UMGESETZT**
 
-Veröffentlicht mit V0.16.0. Die Analyse wird ohne neue Persistenz aus dem durch V0.13 geschaffenen Depotdatenbestand und den Allokationen des aktiven Strukturplans abgeleitet. Das Persistenzschema bleibt 8.
+Veröffentlicht mit V0.16.0. Die Analyse wird ohne neue Persistenz aus dem durch V0.13 geschaffenen Depotdatenbestand und den Allokationen des aktiven Strukturplans abgeleitet. Das Persistenzschema bleibt 8. V0.16.1 erkennt zusätzlich den realen CSV-Quellwert `Festverzinsliche` konservativ als direkte Festzinsanleihe; Fonds-, Floater- und Stufenzinsklassifikationen bleiben vorrangig beziehungsweise getrennt.
 
 Der Depotcheck besitzt fünf funktionierende Unterbereiche:
 
@@ -1805,6 +1805,14 @@ Keine zentrale fachliche Entscheidung offen. Paket ist umgesetzt.
 # 19. Entscheidungslog
 
 ## 08.09.2026
+
+### V0.16.1 Sichtprüfungsnachtrag 4B + Depotcheck 3B
+
+- Gestaffelte Einstiege in Jahres-Kapitaltöpfen werden gegen den frühesten konkreten Bedarfstermin oder die aus `minMonths` abgeleitete zeitliche Grenze geprüft; erste und letzte Rate bleiben sichtbar und ungültige Zeitpläne werden nicht automatisch verändert.
+- Neue Staffelungen starten grundsätzlich mit zwölf Monatsraten, bei engen Jahresgrenzen mit der größten noch gültigen Ratenzahl. Leere Zwischenzustände der Raten- und Staffelwerte bleiben reine UI-Entwürfe und verändern das letzte gültige Modell nicht.
+- Duplikate von Planvarianten erhalten fallweit eindeutige Bezeichnungen `Kopie`, `Kopie 2`, `Kopie 3` ohne verkettete Kopienamen. Sparpläne zeigen Sparziele mit Zielbetrag und -termin sowie die Abgrenzung zum heutigen Kapitaltopf sichtbar an.
+- Der Depotcheck klassifiziert den CSV-Enum `Festverzinsliche` als direkte Festzinsanleihe. Ein synthetischer 11-Positionen-Regressionsbestand sichert Produktartenabdeckung, Rentenquote, Fälligkeitsleiter, YTM-/Duration-Coverage, DV01 und Zinsszenarien ab.
+- Persistenzschema bleibt 8; Version V0.16.1 veröffentlicht.
 
 ### Depotcheck 3B Umsetzung
 

@@ -1,12 +1,20 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   annualSavingsContribution,
+  addLocalMonthsClamped,
+  capitalPotDeadline,
   capitalPots,
   createCase,
+  defaultPhasedEntryInstallments,
   duplicateStructurePlan,
   nextImplementationDate,
+  nextPlanCopyName,
   normalizeImportedCase,
+  parsePhasedEntryNumericDraft,
   phasedEntryAmounts,
+  phasedEntryLastDate,
+  phasedEntryScheduleValidation,
   plannerIstHoldingValue,
   plannerPlanHoldingValue,
   planningShortfall,
@@ -86,6 +94,36 @@ assert.equal(rounded.hasRoundingAdjustment, true);
 
 assert.equal(nextImplementationDate("2026-09-07"), "2026-09-15");
 assert.equal(nextImplementationDate("2026-09-20"), "2026-10-01");
+
+assert.equal(phasedEntryLastDate({ startDate: "2026-09-15", installments: 12, frequency: "monthly" }), "2027-08-15");
+assert.equal(phasedEntryLastDate({ startDate: "2026-09-15", installments: 4, frequency: "quarterly" }), "2027-06-15");
+assert.equal(phasedEntryLastDate({ startDate: "2026-09-15", installments: 3, frequency: "semiannual" }), "2027-09-15");
+assert.equal(phasedEntryLastDate({ startDate: "2026-09-15", installments: 2, frequency: "annual" }), "2027-09-15");
+assert.equal(addLocalMonthsClamped("2027-01-31", 1), "2027-02-28");
+assert.equal(addLocalMonthsClamped("2028-01-31", 1), "2028-02-29");
+
+const exactDeadlinePot = capitalPots({ ...base.advisory, needs: [{ id: 2, purpose: "Termin", amount: 1, years: 1, dueDate: "2027-08-15" }] }, 1, "2026-09-01")[0];
+assert.equal(capitalPotDeadline(exactDeadlinePot, "2026-09-01"), "2027-08-15");
+assert.equal(phasedEntryScheduleValidation({ startDate: "2026-09-15", installments: 12, frequency: "monthly" }, exactDeadlinePot, "2026-09-01").valid, true);
+assert.equal(phasedEntryScheduleValidation({ startDate: "2026-09-15", installments: 13, frequency: "monthly" }, exactDeadlinePot, "2026-09-01").valid, false);
+assert.equal(phasedEntryScheduleValidation({ startDate: "2027-08-15", installments: 1, frequency: "monthly" }, exactDeadlinePot, "2026-09-01").valid, true);
+const narrowPot = capitalPots({ ...base.advisory, needs: [{ id: 3, purpose: "Nah", amount: 1, years: 1, dueDate: "2027-02-01" }] }, 1, "2026-09-01")[0];
+assert.equal(defaultPhasedEntryInstallments(narrowPot, "2026-09-15", "2026-09-01"), 5);
+const strategicPot = capitalPots({ ...base.advisory, needs: [] }, 100, "2026-09-01")[0];
+assert.equal(capitalPotDeadline(strategicPot, "2026-09-01"), null);
+assert.equal(defaultPhasedEntryInstallments(strategicPot, "2026-09-15", "2026-09-01"), 12);
+const relativeDeadlinePot = capitalPots({ ...base.advisory, needs: [{ id: 4, purpose: "Relativ", amount: 1, years: 2 }] }, 1, "2026-09-01")[0];
+assert.equal(capitalPotDeadline(relativeDeadlinePot, "2026-09-01"), "2028-09-01");
+
+assert.deepEqual(parsePhasedEntryNumericDraft("", "installments"), { status: "empty" });
+assert.deepEqual(parsePhasedEntryNumericDraft("6", "installments"), { status: "valid", value: 6 });
+assert.equal(parsePhasedEntryNumericDraft("0", "installments").status, "invalid");
+assert.deepEqual(parsePhasedEntryNumericDraft("60,5", "percent"), { status: "valid", value: 60.5 });
+assert.deepEqual(parsePhasedEntryNumericDraft("60.000", "amount"), { status: "valid", value: 60_000 });
+
+assert.equal(nextPlanCopyName("Plan A – Ausgangsstruktur", ["Plan A – Ausgangsstruktur"]), "Plan A – Ausgangsstruktur – Kopie");
+assert.equal(nextPlanCopyName("Plan A – Ausgangsstruktur", ["Plan A – Ausgangsstruktur", "Plan A – Ausgangsstruktur – Kopie"]), "Plan A – Ausgangsstruktur – Kopie 2");
+assert.equal(nextPlanCopyName("Plan A – Ausgangsstruktur – Kopie 2", ["Plan A – Ausgangsstruktur", "Plan A – Ausgangsstruktur – Kopie", "Plan A – Ausgangsstruktur – Kopie 2"]), "Plan A – Ausgangsstruktur – Kopie 3");
 
 const savings: SavingsPlan = {
   id: "savings-a",
@@ -264,5 +302,11 @@ const migratedSchemaSix = normalizeImportedCase(schemaSix, false);
 assert.ok(migratedSchemaSix);
 assert.equal(migratedSchemaSix.schemaVersion, 8);
 assert.equal(migratedSchemaSix.plans[0].depotSelectionInitialized, true);
+
+const plannerSource = readFileSync("app/page.tsx", "utf8");
+assert.match(plannerSource, /entryDrafts\[pairKey\]\?\.installments/);
+assert.match(plannerSource, /Letzte Rate/);
+assert.match(plannerSource, /Sparziel: \$\{goal\.name\}/);
+assert.match(plannerSource, /Sie reservieren kein heute vorhandenes Kapital und erzeugen keinen Kapitaltopf/);
 
 console.log("4B model verification passed");

@@ -56,6 +56,8 @@ function classifyText(text: string, confidence: "source" | "derived"):
     return { main: "Renten", sub: "Geldmarktfonds", direct: false, confidence };
   if (isFund && includesAny(text, ["renten", "anleihe", "bond", "credit"]))
     return { main: "Renten", sub: "Rentenfonds", direct: false, confidence };
+  if (isFund && text.includes("festverzins"))
+    return { main: "Renten", sub: "Rentenfonds", direct: false, confidence };
   if (isFund && includesAny(text, ["aktien", "equity", "share"]))
     return { main: "Aktien", sub: "Aktienfonds / Aktien-ETF", direct: false, confidence };
   if (includesAny(text, ["mischfonds", "multi-asset", "multi asset", "balanced fund"]))
@@ -76,6 +78,8 @@ function classifyText(text: string, confidence: "source" | "derived"):
     return { main: "Renten", sub: "Floater", direct: true, bondKind: "floater", confidence };
   if (includesAny(text, ["stufenzins", "step-up", "step up"]))
     return { main: "Renten", sub: "Stufenzinsanleihen", direct: true, bondKind: "step-up", confidence };
+  if (!isFund && text.includes("festverzins"))
+    return { main: "Renten", sub: "Festverzinsliche Anleihen", direct: true, bondKind: "fixed", confidence };
   if (!isFund && includesAny(text, ["schuldverschreibung", "anleihe", "bond", "rentenwert", "obligation"]))
     return { main: "Renten", sub: "Festverzinsliche Anleihen", direct: true, bondKind: "fixed", confidence };
   if (!isFund && includesAny(text, ["aktie", "equity", "share"]))

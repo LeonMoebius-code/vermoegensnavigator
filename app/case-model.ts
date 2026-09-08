@@ -375,6 +375,16 @@ export function duplicateStructurePlan(
   };
 }
 
+export function nextPlanCopyName(sourceName: string, existingNames: string[]) {
+  const baseName = sourceName.replace(/(?:\s+–\s+Kopie(?:\s+\d+)?)+$/i, "").trim();
+  const used = new Set(existingNames.map((name) => name.trim()));
+  const first = `${baseName} – Kopie`;
+  if (!used.has(first)) return first;
+  let index = 2;
+  while (used.has(`${baseName} – Kopie ${index}`)) index += 1;
+  return `${baseName} – Kopie ${index}`;
+}
+
 export function createCase(
   advisory: AdvisoryData = emptyAdvisory,
   advisorId: AdvisorId = defaultAdvisorId,
@@ -666,6 +676,124 @@ export function phasedEntryAmounts(
     invalid,
     hasRoundingAdjustment: remainder > 0,
   };
+}
+
+const localDateParts = (value: Date | string) => {
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null;
+    return {
+      year: value.getFullYear(),
+      month: value.getMonth() + 1,
+      day: value.getDate(),
+    };
+  }
+  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const check = new Date(year, month - 1, day, 12);
+  if (
+    check.getFullYear() !== year ||
+    check.getMonth() !== month - 1 ||
+    check.getDate() !== day
+  ) return null;
+  return { year, month, day };
+};
+
+const localDateString = (year: number, month: number, day: number) =>
+  `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+
+export function addLocalMonthsClamped(value: Date | string, months: number) {
+  const parts = localDateParts(value);
+  if (!parts || !Number.isFinite(months)) return null;
+  const target = new Date(parts.year, parts.month - 1 + Math.trunc(months), 1, 12);
+  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0, 12).getDate();
+  return localDateString(
+    target.getFullYear(),
+    target.getMonth() + 1,
+    Math.min(parts.day, lastDay),
+  );
+}
+
+const frequencyMonths: Record<InvestmentFrequency, number> = {
+  monthly: 1,
+  quarterly: 3,
+  semiannual: 6,
+  annual: 12,
+};
+
+export function phasedEntryLastDate(entry: Pick<PhasedEntryPlan, "startDate" | "installments" | "frequency">) {
+  const installments = Math.trunc(Number(entry.installments));
+  if (installments < 1) return null;
+  return addLocalMonthsClamped(
+    entry.startDate,
+    (installments - 1) * frequencyMonths[entry.frequency],
+  );
+}
+
+export function capitalPotDeadline(
+  pot: CapitalPot,
+  referenceDate: Date | string = new Date(),
+) {
+  if (pot.kind !== "year") return null;
+  if (pot.earliestDueDate && localDateParts(pot.earliestDueDate))
+    return pot.earliestDueDate.slice(0, 10);
+  return addLocalMonthsClamped(referenceDate, pot.minMonths);
+}
+
+export type PhasedEntryScheduleValidation = {
+  valid: boolean;
+  lastDate: string | null;
+  deadline: string | null;
+};
+
+export function phasedEntryScheduleValidation(
+  entry: Pick<PhasedEntryPlan, "startDate" | "installments" | "frequency">,
+  pot: CapitalPot,
+  referenceDate: Date | string = new Date(),
+): PhasedEntryScheduleValidation {
+  const lastDate = phasedEntryLastDate(entry);
+  const deadline = capitalPotDeadline(pot, referenceDate);
+  return {
+    lastDate,
+    deadline,
+    valid: Boolean(lastDate) && (!deadline || lastDate! <= deadline),
+  };
+}
+
+export function defaultPhasedEntryInstallments(
+  pot: CapitalPot,
+  startDate: string,
+  referenceDate: Date | string = new Date(),
+  preferred = 12,
+) {
+  const maximum = Math.max(1, Math.trunc(preferred));
+  for (let installments = maximum; installments >= 1; installments -= 1) {
+    if (phasedEntryScheduleValidation(
+      { startDate, installments, frequency: "monthly" },
+      pot,
+      referenceDate,
+    ).valid) return installments;
+  }
+  return 1;
+}
+
+export type PhasedEntryDraftKind = "installments" | "percent" | "amount";
+export function parsePhasedEntryNumericDraft(raw: string, kind: PhasedEntryDraftKind) {
+  const trimmed = raw.trim();
+  if (!trimmed) return { status: "empty" as const };
+  const normalized = trimmed.replace(/\s/g, "").replace(/\./g, "").replace(",", ".");
+  if (!/^-?\d+(?:\.\d+)?$/.test(normalized)) return { status: "invalid" as const };
+  const value = Number(normalized);
+  const valid = Number.isFinite(value) && (
+    kind === "installments"
+      ? Number.isInteger(value) && value >= 1
+      : kind === "percent"
+        ? value >= 0 && value <= 100
+        : value >= 0
+  );
+  return valid ? { status: "valid" as const, value } : { status: "invalid" as const };
 }
 
 export function nextImplementationDate(

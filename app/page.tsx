@@ -41,6 +41,7 @@ import {
   annualSavingsContribution,
   bucketForMonths,
   capitalPotRemovalImpact,
+  defaultPhasedEntryInstallments,
   CapitalPotId,
   CapitalPot,
   capitalPots,
@@ -64,7 +65,10 @@ import {
   InvestmentFrequency,
   InvestmentPlan,
   nextImplementationDate,
+  nextPlanCopyName,
+  parsePhasedEntryNumericDraft,
   phasedEntryAmounts,
+  phasedEntryScheduleValidation,
   PhasedEntryPlan,
   legacyBucketAmountsForCapitalPots,
   planningShortfall,
@@ -815,7 +819,7 @@ export default function Home() {
         </nav>
         <div className="sidebar-foot">
           <p>
-            <strong>Prototyp V0.16.0</strong>
+            <strong>Prototyp V0.16.1</strong>
             <br />
             Browser-lokal, keine revisionssichere Speicherung.
           </p>
@@ -2584,6 +2588,9 @@ function PlannerView({
     useState<CapitalPotId>("strategic");
   const [showDepotPanel, setShowDepotPanel] = useState(false);
   const [editingEntryKey, setEditingEntryKey] = useState<string | null>(null);
+  const [entryDrafts, setEntryDrafts] = useState<
+    Record<string, { stagedValue?: string; installments?: string }>
+  >({});
   const [savingsProductSearch, setSavingsProductSearch] = useState("");
   const [modelDialog, setModelDialog] = useState<{
     id: "rb2" | "rb3" | "rb4";
@@ -2882,7 +2889,10 @@ function PlannerView({
   const duplicatePlan = () => {
     const next = reconcilePlanCapitalPots(
       item.advisory,
-      duplicateStructurePlan(plan),
+      duplicateStructurePlan(
+        plan,
+        nextPlanCopyName(plan.name, item.plans.map((entry) => entry.name)),
+      ),
       item.createdAt,
       item.savingsGoals,
     );
@@ -2936,6 +2946,29 @@ function PlannerView({
         entry.allocationId === allocationId &&
         entry.capitalPotId === capitalPotId,
     );
+  const updateEntryDraft = (
+    pairKey: string,
+    field: "stagedValue" | "installments",
+    value: string,
+  ) =>
+    setEntryDrafts((current) => ({
+      ...current,
+      [pairKey]: { ...current[pairKey], [field]: value },
+    }));
+  const clearEntryDraft = (
+    pairKey: string,
+    field: "stagedValue" | "installments",
+  ) =>
+    setEntryDrafts((current) => {
+      const nextPair = { ...current[pairKey] };
+      delete nextPair[field];
+      if (Object.keys(nextPair).length === 0) {
+        const next = { ...current };
+        delete next[pairKey];
+        return next;
+      }
+      return { ...current, [pairKey]: nextPair };
+    });
   const setEntryMode = (
     allocation: PlannerAllocation,
     capitalPotId: CapitalPotId,
@@ -2947,6 +2980,11 @@ function PlannerView({
       return;
     }
     if (existing) {
+      setEntryDrafts((current) => {
+        const next = { ...current };
+        delete next[`${allocation.id}::${capitalPotId}`];
+        return next;
+      });
       updatePhasedEntry(existing.id, {
         stagedMode: mode === "full" ? "percent" : existing.stagedMode,
         stagedValue:
@@ -2958,6 +2996,9 @@ function PlannerView({
       });
       return;
     }
+    const pot = visibleCapitalPots.find((candidate) => candidate.id === capitalPotId);
+    if (!pot) return;
+    const startDate = nextImplementationDate();
     const next: PhasedEntryPlan = {
       id: uid("investment"),
       type: "phased",
@@ -2965,9 +3006,13 @@ function PlannerView({
       capitalPotId,
       stagedMode: "percent",
       stagedValue: mode === "full" ? 100 : 50,
-      installments: 3,
+      installments: defaultPhasedEntryInstallments(
+        pot,
+        startDate,
+        item.createdAt,
+      ),
       frequency: "monthly",
-      startDate: nextImplementationDate(),
+      startDate,
       note: "",
     };
     updatePlan({ investmentPlans: [...plan.investmentPlans, next] });
@@ -3163,18 +3208,18 @@ function PlannerView({
   const frequencyLabel = (frequency: InvestmentFrequency) =>
     investmentFrequencies.find((entry) => entry.value === frequency)?.label ||
     frequency;
-  const savingsTargetLabel = (entry: SavingsPlan) => {
+  const savingsTargetSummary = (entry: SavingsPlan) => {
     if (!entry.targetRef) return "Ohne Zielbezug";
     if (entry.targetRef.kind === "savingsGoal") {
       const goal = item.savingsGoals.find((candidate) => candidate.id === entry.targetRef?.id);
       return goal
-        ? `${goal.name}${goal.targetYear ? ` ${goal.targetYear}` : goal.targetDate ? ` · ${germanDate(goal.targetDate)}` : ""}`
+        ? `Sparziel: ${goal.name} · ${euro.format(goal.targetAmount)}${goal.targetDate ? ` bis ${germanDate(goal.targetDate)}` : goal.targetYear ? ` bis ${goal.targetYear}` : ""}`
         : "Ohne Zielbezug";
     }
-    return (
-      item.advisory.needs.find((need) => need.id === entry.targetRef?.id)
-        ?.purpose || "Ohne Zielbezug"
-    );
+    const need = item.advisory.needs.find((candidate) => candidate.id === entry.targetRef?.id);
+    return need
+      ? `Zielbezug: ${need.purpose || "Kapitalbedarf"} · bestehender Kapitalbedarf`
+      : "Ohne Zielbezug";
   };
   const addSavingsPlan = () => {
     const product = planProductOptions[0] || catalogItems[0];
@@ -3805,6 +3850,16 @@ function PlannerView({
                         const entryAmounts = phasedEntry
                           ? phasedEntryAmounts(plan, phasedEntry)
                           : null;
+                        const entrySchedule = phasedEntry
+                          ? phasedEntryScheduleValidation(
+                              phasedEntry,
+                              selectedPot,
+                              item.createdAt,
+                            )
+                          : null;
+                        const entryNeedsAdjustment = Boolean(
+                          entryAmounts?.invalid || (entrySchedule && !entrySchedule.valid),
+                        );
                         const entryMode = !phasedEntry
                           ? "immediate"
                           : entryAmounts?.stagedAmount === entryAmounts?.targetAmount
@@ -3858,7 +3913,7 @@ function PlannerView({
                                 <b>Umsetzung:</b>{" "}
                                 {!phasedEntry
                                   ? "Komplett sofort"
-                                  : entryAmounts?.invalid
+                                  : entryNeedsAdjustment
                                     ? "Einstieg anpassen"
                                     : `${euro.format(entryAmounts?.immediateAmount || 0)} sofort · ${euro.format(entryAmounts?.stagedAmount || 0)} gestaffelt`}
                               </span>
@@ -3915,31 +3970,37 @@ function PlannerView({
                                           <input
                                             inputMode="decimal"
                                             value={
-                                              phasedEntry.stagedValue
+                                              entryDrafts[pairKey]?.stagedValue ??
+                                              (phasedEntry.stagedValue
                                                 ? phasedEntry.stagedValue.toLocaleString("de-DE")
-                                                : ""
+                                                : "")
                                             }
                                             onChange={(event) => {
-                                              const stagedValue =
-                                                phasedEntry.stagedMode === "percent"
-                                                  ? parseGermanDecimal(event.target.value)
-                                                  : parseAmount(event.target.value);
-                                              if (stagedValue <= 0) {
+                                              const raw = event.target.value;
+                                              updateEntryDraft(pairKey, "stagedValue", raw);
+                                              const parsed = parsePhasedEntryNumericDraft(
+                                                raw,
+                                                phasedEntry.stagedMode,
+                                              );
+                                              if (parsed.status !== "valid") return;
+                                              if (parsed.value === 0) {
                                                 removeInvestmentPlan(phasedEntry.id);
                                                 return;
                                               }
                                               updatePhasedEntry(phasedEntry.id, {
-                                                stagedValue:
-                                                  phasedEntry.stagedMode === "percent"
-                                                    ? Math.min(100, stagedValue)
-                                                    : stagedValue,
+                                                stagedValue: parsed.value,
                                               });
+                                            }}
+                                            onBlur={() => clearEntryDraft(pairKey, "stagedValue")}
+                                            onKeyDown={(event) => {
+                                              if (event.key === "Enter") event.currentTarget.blur();
                                             }}
                                           />
                                           <select
                                             aria-label="Staffelmodus"
                                             value={phasedEntry.stagedMode}
                                             onChange={(event) => {
+                                              clearEntryDraft(pairKey, "stagedValue");
                                               const stagedMode = event.target.value as
                                                 | "percent"
                                                 | "amount";
@@ -3979,15 +4040,26 @@ function PlannerView({
                                         type="number"
                                         min="1"
                                         step="1"
-                                        value={phasedEntry.installments}
-                                        onChange={(event) =>
-                                          updatePhasedEntry(phasedEntry.id, {
-                                            installments: Math.max(
-                                              1,
-                                              Math.trunc(Number(event.target.value) || 1),
-                                            ),
-                                          })
+                                        value={
+                                          entryDrafts[pairKey]?.installments ??
+                                          String(phasedEntry.installments)
                                         }
+                                        onChange={(event) => {
+                                          const raw = event.target.value;
+                                          updateEntryDraft(pairKey, "installments", raw);
+                                          const parsed = parsePhasedEntryNumericDraft(
+                                            raw,
+                                            "installments",
+                                          );
+                                          if (parsed.status === "valid")
+                                            updatePhasedEntry(phasedEntry.id, {
+                                              installments: parsed.value,
+                                            });
+                                        }}
+                                        onBlur={() => clearEntryDraft(pairKey, "installments")}
+                                        onKeyDown={(event) => {
+                                          if (event.key === "Enter") event.currentTarget.blur();
+                                        }}
                                       />
                                     </label>
                                     <label>
@@ -4028,6 +4100,24 @@ function PlannerView({
                                         }
                                       />
                                     </label>
+                                    <label>
+                                      <span>Letzte Rate</span>
+                                      <strong>
+                                        {entrySchedule?.lastDate
+                                          ? germanDate(entrySchedule.lastDate)
+                                          : "Bitte Eingaben prüfen"}
+                                      </strong>
+                                    </label>
+                                    {selectedPot.kind === "year" && (
+                                      <label>
+                                        <span>Zeitliche Grenze</span>
+                                        <strong>
+                                          {entrySchedule?.deadline
+                                            ? germanDate(entrySchedule.deadline)
+                                            : "Bitte Bedarfstermin prüfen"}
+                                        </strong>
+                                      </label>
+                                    )}
                                     <label className="entry-note">
                                       <span>Hinweis</span>
                                       <input
@@ -4043,6 +4133,13 @@ function PlannerView({
                                     {entryAmounts.invalid && (
                                       <p className="entry-warning">
                                         Der gestaffelte Betrag übersteigt den aktuellen Zielbetrag. Bitte Einstieg anpassen.
+                                      </p>
+                                    )}
+                                    {entrySchedule && !entrySchedule.valid && (
+                                      <p className="entry-warning">
+                                        {entrySchedule.lastDate && entrySchedule.deadline
+                                          ? `Die letzte Rate am ${germanDate(entrySchedule.lastDate)} liegt nach dem maßgeblichen Bedarfstermin des Kapitaltopfs. Bitte Anzahl Raten, Rhythmus oder Start anpassen.`
+                                          : "Der zeitliche Ablauf ist nicht plausibel. Bitte Anzahl Raten, Rhythmus oder Start anpassen."}
                                       </p>
                                     )}
                                   </>
@@ -4130,18 +4227,24 @@ function PlannerView({
                     {implementationPositions.map(({ allocation, pot, amount }) => {
                       const entry = phasedEntryFor(allocation.id, pot.id);
                       const amounts = entry ? phasedEntryAmounts(plan, entry) : null;
+                      const schedule = entry
+                        ? phasedEntryScheduleValidation(entry, pot, item.createdAt)
+                        : null;
+                      const needsAdjustment = Boolean(
+                        amounts?.invalid || (schedule && !schedule.valid),
+                      );
                       return (
                         <article key={`${allocation.id}-${pot.id}`}>
                           <span>
                             <strong>{allocation.productName}</strong>
                             <small>{pot.label} · {euro.format(amount)}</small>
                           </span>
-                          <b className={amounts?.invalid ? "warning" : ""}>
+                          <b className={needsAdjustment ? "warning" : ""}>
                             {!entry
                               ? "Komplett sofort"
-                              : amounts?.invalid
+                              : needsAdjustment
                                 ? "Einstieg anpassen"
-                                : `${euro.format(amounts?.immediateAmount || 0)} sofort · ${entry.installments} × ${euro.format(amounts?.installmentAmount || 0)} ${frequencyLabel(entry.frequency)} ab ${germanDate(entry.startDate)}`}
+                                : `${euro.format(amounts?.immediateAmount || 0)} sofort · ${entry.installments} × ${euro.format(amounts?.installmentAmount || 0)} ${frequencyLabel(entry.frequency)} ab ${germanDate(entry.startDate)}${schedule?.lastDate ? ` · letzte Rate ${germanDate(schedule.lastDate)}` : ""}`}
                           </b>
                         </article>
                       );
@@ -4325,7 +4428,9 @@ function PlannerView({
                                 </optgroup>
                               )}
                         </select>
-                            <small>{savingsTargetLabel(entry)}</small>
+                            <small>
+                              Sparziele beschreiben den zukünftigen Vermögensaufbau durch laufende Beiträge. Sie reservieren kein heute vorhandenes Kapital und erzeugen keinen Kapitaltopf.
+                            </small>
                       </label>
                       <label className="investment-note">
                         <span>Hinweis</span>
@@ -4338,6 +4443,11 @@ function PlannerView({
                         />
                       </label>
                     </div>
+                        {entry.targetRef && (
+                          <p className="savings-target-summary">
+                            {savingsTargetSummary(entry)}
+                          </p>
+                        )}
                         {(!entry.productId || entry.contributionAmount <= 0) && (
                           <p className="savings-warning">
                             Bitte Produkt und positive Sparrate vollständig festlegen.
@@ -6464,12 +6574,14 @@ function ExportCenter({
             );
             if (!allocation) return [];
             const amounts = phasedEntryAmounts(plan, entry);
+            const pot = planPots.find((candidate) => candidate.id === entry.capitalPotId);
+            if (!pot) return [];
+            const schedule = phasedEntryScheduleValidation(entry, pot, item.createdAt);
             return [{
               Plan: plan.name,
               Art: "Gestaffelter Einstieg",
               Produkt: allocation.productName,
-              Kapitaltopf:
-                planPots.find((pot) => pot.id === entry.capitalPotId)?.label || "",
+              Kapitaltopf: pot.label,
               Zielbetrag: amounts.targetAmount,
               Sofortbetrag: amounts.immediateAmount,
               Gestaffelter_Betrag: amounts.stagedAmount,
@@ -6478,6 +6590,11 @@ function ExportCenter({
               Ratenhöhe: amounts.installmentAmount,
               Rhythmus: rhythm,
               Erste_Rate: entry.startDate,
+              Letzte_Rate: schedule.lastDate || "",
+              Plausibilität:
+                amounts.invalid || !schedule.valid
+                  ? "Einstieg anpassen"
+                  : "Plausibel",
               Hinweis: entry.note,
             }];
           });
@@ -6938,11 +7055,20 @@ function ExportCenter({
                 );
                 if (!allocation) return [];
                 const amounts = phasedEntryAmounts(preferredPlan, entry);
+                const pot = exportPots.find((candidate) => candidate.id === entry.capitalPotId);
+                if (!pot) return [];
+                const schedule = phasedEntryScheduleValidation(entry, pot, item.createdAt);
                 return [(
                   <div key={entry.id}>
                     <span>{allocation.productName}</span>
-                    <span>{rhythm}{entry.startDate ? ` ab ${germanDate(entry.startDate)}` : ""}</span>
-                    <b>{euro.format(amounts.immediateAmount)} sofort · {entry.installments} × {euro.format(amounts.installmentAmount)}</b>
+                    <span>
+                      {rhythm}{entry.startDate ? ` ab ${germanDate(entry.startDate)}` : ""}
+                      {schedule.lastDate ? ` · letzte Rate ${germanDate(schedule.lastDate)}` : ""}
+                    </span>
+                    <b>
+                      {euro.format(amounts.immediateAmount)} sofort · {entry.installments} × {euro.format(amounts.installmentAmount)}
+                      {amounts.invalid || !schedule.valid ? " · Einstieg anpassen" : ""}
+                    </b>
                   </div>
                 )];
               })}
