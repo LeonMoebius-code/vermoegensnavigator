@@ -9,6 +9,7 @@
     "build": "bash scripts/build-github-pages.sh",
     "build:github": "bash scripts/build-github-pages.sh",
     "typecheck": "tsc -p tsconfig.github.json --noEmit",
+    "test:3b": "esbuild scripts/verify-3b.ts --bundle --platform=node --format=esm --outfile=/tmp/vermoegensnavigator-verify-3b.mjs && node /tmp/vermoegensnavigator-verify-3b.mjs",
     "test:4b": "esbuild scripts/verify-4b.ts --bundle --platform=node --format=esm --outfile=/tmp/vermoegensnavigator-verify-4b.mjs && node /tmp/vermoegensnavigator-verify-4b.mjs",
     "test": "npm run typecheck && npm run build"
   },
