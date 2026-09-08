@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   annualSavingsContribution,
   addLocalMonthsClamped,
@@ -111,6 +112,8 @@ assert.equal(defaultPhasedEntryInstallments(narrowPot, "2026-09-15", "2026-09-01
 const strategicPot = capitalPots({ ...base.advisory, needs: [] }, 100, "2026-09-01")[0];
 assert.equal(capitalPotDeadline(strategicPot, "2026-09-01"), null);
 assert.equal(defaultPhasedEntryInstallments(strategicPot, "2026-09-15", "2026-09-01"), 12);
+const relativeDeadlinePot = capitalPots({ ...base.advisory, needs: [{ id: 4, purpose: "Relativ", amount: 1, years: 2 }] }, 1, "2026-09-01")[0];
+assert.equal(capitalPotDeadline(relativeDeadlinePot, "2026-09-01"), "2028-09-01");
 
 assert.deepEqual(parsePhasedEntryNumericDraft("", "installments"), { status: "empty" });
 assert.deepEqual(parsePhasedEntryNumericDraft("6", "installments"), { status: "valid", value: 6 });
@@ -299,5 +302,11 @@ const migratedSchemaSix = normalizeImportedCase(schemaSix, false);
 assert.ok(migratedSchemaSix);
 assert.equal(migratedSchemaSix.schemaVersion, 8);
 assert.equal(migratedSchemaSix.plans[0].depotSelectionInitialized, true);
+
+const plannerSource = readFileSync("app/page.tsx", "utf8");
+assert.match(plannerSource, /entryDrafts\[pairKey\]\?\.installments/);
+assert.match(plannerSource, /Letzte Rate/);
+assert.match(plannerSource, /Sparziel: \$\{goal\.name\}/);
+assert.match(plannerSource, /Sie reservieren kein heute vorhandenes Kapital und erzeugen keinen Kapitaltopf/);
 
 console.log("4B model verification passed");

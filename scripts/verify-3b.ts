@@ -117,4 +117,10 @@ assert.equal(referenceBonds.rows.find((row) => row.position.name === "Stufenzins
 assert.equal(referenceBonds.rows.find((row) => row.position.name === "Rentenfonds")?.ytm, null);
 close(countryAnalysis(referencePositions, "direct").total, 291_692.54 + 96_389.60, 0.01);
 
-console.log("Depotcheck-3B-Analyseengine inklusive realitätsnahem Bond-Regressionstest erfolgreich.");
+console.log(
+  "Depotcheck-3B-Analyseengine inklusive realitätsnahem Bond-Regressionstest erfolgreich:",
+  `Produktarten-Coverage ${(referenceTypes.coverage * 100).toFixed(1)} %,`,
+  `YTM-/Duration-Coverage ${(referenceBonds.calculableCoverage * 100).toFixed(1)} %,`,
+  `Modified Duration ${referenceBonds.portfolioModified?.toFixed(2)},`,
+  `DV01 ${referenceBonds.portfolioDv01.toFixed(2)} €.`,
+);
