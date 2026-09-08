@@ -41,6 +41,7 @@ import {
   annualSavingsContribution,
   bucketForMonths,
   capitalPotRemovalImpact,
+  defaultPhasedEntryInstallments,
   CapitalPotId,
   CapitalPot,
   capitalPots,
@@ -64,6 +65,8 @@ import {
   InvestmentFrequency,
   InvestmentPlan,
   nextImplementationDate,
+  nextPlanCopyName,
+  parsePhasedEntryNumericDraft,
   phasedEntryAmounts,
   PhasedEntryPlan,
   legacyBucketAmountsForCapitalPots,
@@ -2584,6 +2587,9 @@ function PlannerView({
     useState<CapitalPotId>("strategic");
   const [showDepotPanel, setShowDepotPanel] = useState(false);
   const [editingEntryKey, setEditingEntryKey] = useState<string | null>(null);
+  const [entryDrafts, setEntryDrafts] = useState<
+    Record<string, { stagedValue?: string; installments?: string }>
+  >({});
   const [savingsProductSearch, setSavingsProductSearch] = useState("");
   const [modelDialog, setModelDialog] = useState<{
     id: "rb2" | "rb3" | "rb4";
@@ -2882,7 +2888,10 @@ function PlannerView({
   const duplicatePlan = () => {
     const next = reconcilePlanCapitalPots(
       item.advisory,
-      duplicateStructurePlan(plan),
+      duplicateStructurePlan(
+        plan,
+        nextPlanCopyName(plan.name, item.plans.map((entry) => entry.name)),
+      ),
       item.createdAt,
       item.savingsGoals,
     );
@@ -2936,6 +2945,29 @@ function PlannerView({
         entry.allocationId === allocationId &&
         entry.capitalPotId === capitalPotId,
     );
+  const updateEntryDraft = (
+    pairKey: string,
+    field: "stagedValue" | "installments",
+    value: string,
+  ) =>
+    setEntryDrafts((current) => ({
+      ...current,
+      [pairKey]: { ...current[pairKey], [field]: value },
+    }));
+  const clearEntryDraft = (
+    pairKey: string,
+    field: "stagedValue" | "installments",
+  ) =>
+    setEntryDrafts((current) => {
+      const nextPair = { ...current[pairKey] };
+      delete nextPair[field];
+      if (Object.keys(nextPair).length === 0) {
+        const next = { ...current };
+        delete next[pairKey];
+        return next;
+      }
+      return { ...current, [pairKey]: nextPair };
+    });
   const setEntryMode = (
     allocation: PlannerAllocation,
     capitalPotId: CapitalPotId,
@@ -2947,6 +2979,11 @@ function PlannerView({
       return;
     }
     if (existing) {
+      setEntryDrafts((current) => {
+        const next = { ...current };
+        delete next[`${allocation.id}::${capitalPotId}`];
+        return next;
+      });
       updatePhasedEntry(existing.id, {
         stagedMode: mode === "full" ? "percent" : existing.stagedMode,
         stagedValue:
@@ -2958,6 +2995,9 @@ function PlannerView({
       });
       return;
     }
+    const pot = visibleCapitalPots.find((candidate) => candidate.id === capitalPotId);
+    if (!pot) return;
+    const startDate = nextImplementationDate();
     const next: PhasedEntryPlan = {
       id: uid("investment"),
       type: "phased",
@@ -2965,9 +3005,13 @@ function PlannerView({
       capitalPotId,
       stagedMode: "percent",
       stagedValue: mode === "full" ? 100 : 50,
-      installments: 3,
+      installments: defaultPhasedEntryInstallments(
+        pot,
+        startDate,
+        item.createdAt,
+      ),
       frequency: "monthly",
-      startDate: nextImplementationDate(),
+      startDate,
       note: "",
     };
     updatePlan({ investmentPlans: [...plan.investmentPlans, next] });
@@ -3915,31 +3959,37 @@ function PlannerView({
                                           <input
                                             inputMode="decimal"
                                             value={
-                                              phasedEntry.stagedValue
+                                              entryDrafts[pairKey]?.stagedValue ??
+                                              (phasedEntry.stagedValue
                                                 ? phasedEntry.stagedValue.toLocaleString("de-DE")
-                                                : ""
+                                                : "")
                                             }
                                             onChange={(event) => {
-                                              const stagedValue =
-                                                phasedEntry.stagedMode === "percent"
-                                                  ? parseGermanDecimal(event.target.value)
-                                                  : parseAmount(event.target.value);
-                                              if (stagedValue <= 0) {
+                                              const raw = event.target.value;
+                                              updateEntryDraft(pairKey, "stagedValue", raw);
+                                              const parsed = parsePhasedEntryNumericDraft(
+                                                raw,
+                                                phasedEntry.stagedMode,
+                                              );
+                                              if (parsed.status !== "valid") return;
+                                              if (parsed.value === 0) {
                                                 removeInvestmentPlan(phasedEntry.id);
                                                 return;
                                               }
                                               updatePhasedEntry(phasedEntry.id, {
-                                                stagedValue:
-                                                  phasedEntry.stagedMode === "percent"
-                                                    ? Math.min(100, stagedValue)
-                                                    : stagedValue,
+                                                stagedValue: parsed.value,
                                               });
+                                            }}
+                                            onBlur={() => clearEntryDraft(pairKey, "stagedValue")}
+                                            onKeyDown={(event) => {
+                                              if (event.key === "Enter") event.currentTarget.blur();
                                             }}
                                           />
                                           <select
                                             aria-label="Staffelmodus"
                                             value={phasedEntry.stagedMode}
                                             onChange={(event) => {
+                                              clearEntryDraft(pairKey, "stagedValue");
                                               const stagedMode = event.target.value as
                                                 | "percent"
                                                 | "amount";
@@ -3979,15 +4029,26 @@ function PlannerView({
                                         type="number"
                                         min="1"
                                         step="1"
-                                        value={phasedEntry.installments}
-                                        onChange={(event) =>
-                                          updatePhasedEntry(phasedEntry.id, {
-                                            installments: Math.max(
-                                              1,
-                                              Math.trunc(Number(event.target.value) || 1),
-                                            ),
-                                          })
+                                        value={
+                                          entryDrafts[pairKey]?.installments ??
+                                          String(phasedEntry.installments)
                                         }
+                                        onChange={(event) => {
+                                          const raw = event.target.value;
+                                          updateEntryDraft(pairKey, "installments", raw);
+                                          const parsed = parsePhasedEntryNumericDraft(
+                                            raw,
+                                            "installments",
+                                          );
+                                          if (parsed.status === "valid")
+                                            updatePhasedEntry(phasedEntry.id, {
+                                              installments: parsed.value,
+                                            });
+                                        }}
+                                        onBlur={() => clearEntryDraft(pairKey, "installments")}
+                                        onKeyDown={(event) => {
+                                          if (event.key === "Enter") event.currentTarget.blur();
+                                        }}
                                       />
                                     </label>
                                     <label>
