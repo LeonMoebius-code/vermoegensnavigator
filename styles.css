@@ -3057,6 +3057,15 @@ h4 {
   color: #9a553f;
   font-size: 7px;
 }
+.savings-target-summary {
+  margin: 8px 0 0;
+  border-left: 3px solid #168993;
+  background: #edf7f7;
+  padding: 7px 9px;
+  color: #284c58;
+  font-size: 8px;
+  font-weight: 800;
+}
 @media (max-width: 1000px) {
   .implementation-overview {
     grid-template-columns: 1fr;
