@@ -2,8 +2,8 @@
 
 > **Kanonischer Produkt- und Entscheidungsstand**
 >
-> Letzte fachliche Aktualisierung: **07.09.2026**
-> Aktuell veröffentlichte Version: **V0.15.0**
+> Letzte fachliche Aktualisierung: **08.09.2026**
+> Aktuell veröffentlichte Version: **V0.16.0**
 > Codebasis: **GitHub `main`**
 > Zielumgebung: **Desktop-Prototyp**
 > Öffentliche Testversion: GitHub Pages
@@ -936,13 +936,13 @@ Erwartung:
 
 ---
 
-# 6. 🟢 Depotcheck 3B – Portfolioanalyse
+# 6. ✅ Depotcheck 3B – Portfolioanalyse
 
-**Status: fachlich weitgehend beschlossen / nahezu WORK-READY**
+**Status: UMGESETZT**
 
-Der durch V0.13 geschaffene Depotdatenbestand bildet die Grundlage.
+Veröffentlicht mit V0.16.0. Die Analyse wird ohne neue Persistenz aus dem durch V0.13 geschaffenen Depotdatenbestand und den Allokationen des aktiven Strukturplans abgeleitet. Das Persistenzschema bleibt 8.
 
-Zukünftige Depotcheck-Unterbereiche:
+Der Depotcheck besitzt fünf funktionierende Unterbereiche:
 
 1. Bestand & Transaktionen
 2. Vermögenshaus
@@ -958,11 +958,11 @@ Zukünftige Depotcheck-Unterbereiche:
 - Top-3-Konzentration
 - Top-5-Konzentration
 - größte Positionen
-- geeignete Balken-/Donutdarstellung
+- horizontale Rangbalken für die größten Positionen
 
 ### Produktarten hierarchisch
 
-Gewünscht ist eine Haupt-/Unterkategorienlogik.
+Die Klassifikation wird konservativ und hierarchisch aus Wertpapiertyp, Anlagemedium und Anlagesegment sowie – bei geplanten Käufen – aus einer bekannten internen Produktkategorie abgeleitet. Der Produktname allein erzeugt keine Zuordnung.
 
 Beispiel:
 
@@ -988,8 +988,8 @@ Weitere Kategorien auf Basis von Anlagesegment, Anlagemedium und Wertpapiertyp.
 
 - direkte Produkt-/Emittentenländer aus vorhandenen Codes verwenden
 - nicht mit wirtschaftlicher Fonds-Länderallokation verwechseln
-- Fonds ohne Lookthrough separat / Sonstige
-- sinnvoll sind Ansichten **inklusive Sonstige/Fonds** und **nur direkt zuordenbare Positionen**
+- Fonds ohne Lookthrough separat / nicht zugeordnet
+- getrennte Ansichten für **Direktwerte** und **Gesamtdepot**
 
 ### Währungen
 
@@ -1007,18 +1007,20 @@ Für Portfolioanalysen sind grundsätzlich nur zwei wirtschaftliche Zustände re
 
 Kein zusätzlicher Analysezustand `Nach Verkäufen`.
 
+PLAN wird aus dem physischen Restbestand nach simulierten Verkäufen und den Allokationen des aktiven Strukturplans gebildet. PhasedEntryPlans, SavingsPlans und SavingsGoals werden nicht als zusätzliche Depotkäufe gezählt.
+
 ## 6.3 Zins & Laufzeiten
 
 Primär für geeignete direkte Rentenpositionen.
 
-Mögliche Kennzahlen:
+Umgesetzte Kennzahlen:
 
 - Nominal
 - Coupon / Zinssatz
 - Fälligkeit
 - Restlaufzeit
 - Fälligkeitsleiter
-- Current Yield
+- laufende Verzinsung auf aktuellen Kurs
 - modellierte Yield to Maturity bei geeigneten Festzinsanleihen
 - Macaulay Duration
 - Modified Duration
@@ -1031,6 +1033,8 @@ Mögliche Kennzahlen:
 - Floater, Stufenzinsstrukturen oder Sonderbedingungen nicht fälschlich mit Standard-Festzinsformeln behandeln
 - Coverage-Quote anzeigen: welcher Anteil des Rentenbestands ist tatsächlich berechenbar?
 - tatsächliche Anleihefälligkeit, empfohlener Produktanlagehorizont und Kundenbedarfstermin bleiben getrennte Größen
+
+Die modellierte YTM verwendet einen vereinfachten, für YTM und Duration identischen jährlichen Cashflow-Zeitplan, Rückzahlung zu 100 und den aktuellen Kurs als Clean-Preis. Steuern, Kosten, Ausfall, exakte Coupontermine und Stückzinstageszählung werden nicht modelliert. Floater, Stufenzinsanleihen ohne Couponpfad, Fonds, fällige Positionen und unplausible Datensätze bleiben mit Ausschlussgrund außerhalb des berechenbaren Subsets. DV01 und die vier Zinsszenarien beruhen auf der Modified-Duration-Näherung.
 
 ## 6.4 Einstand & Ergebnis
 
@@ -1048,6 +1052,10 @@ Vorhandene CSV-Daten ermöglichen unter anderem:
 Diese Daten sind **keine echte Gesamtperformance**.
 
 Ohne vollständige Zahlungsströme, Käufe, Verkäufe, Ausschüttungen und zeitgewichtete Berechnung darf keine vollständige Depotperformance behauptet werden.
+
+## 6.5 Coverage-Prinzip
+
+Alle Teilanalysen weisen ihre Datenabdeckung marktwertbezogen auf dem jeweils relevanten Nenner aus. Fehlende Daten bleiben als `Nicht zugeordnet`, `ohne Lookthrough` oder mit konkretem Ausschlussgrund sichtbar. Dies gilt insbesondere für Produktarten, Branchen, Produkt-/Emittentenländer, Produktwährungen, Fälligkeiten, YTM/Duration und Einstands-/Ergebnisdaten.
 
 ---
 
@@ -1752,7 +1760,7 @@ Freie WKN / freie Produktbezeichnung für Sparpläne zunächst bewusst nicht in 
 |---:|---|---|
 | 1 | **4A.1 Bestandsdepot-Logik, Kapitaltopf-Lifecycle & V0.14-Fixes** | ✅ Umgesetzt |
 | 2 | **4B Einstieg & Sparpläne** | ✅ Umgesetzt |
-| 3 | **Depotcheck 3B Portfolioanalyse** | 🟢 nahezu Work-ready |
+| 3 | **Depotcheck 3B Portfolioanalyse** | ✅ Umgesetzt |
 | 4 | **Risiko V2** | 🔴 Fachkonzept nötig |
 | 5 | **Vertiefungsframework** | 🟡 Konzept weiter ausarbeiten |
 | 6 | **Ergebnis & Export konsolidieren** | 🟡 nach 4B vollständig testen |
@@ -1790,13 +1798,22 @@ Keine zentrale fachliche Entscheidung offen. Paket ist umgesetzt.
 
 ## Depotcheck 3B
 
-- exakte Visualisierungen je Analyse
-- finale Produkttyp-Kategorisierung aus den CSV-Enums
-- robuste mathematische Abgrenzung berechenbarer Rentenwerte
+Keine zentrale fachliche Entscheidung offen. Paket ist umgesetzt.
 
 ---
 
 # 19. Entscheidungslog
+
+## 08.09.2026
+
+### Depotcheck 3B Umsetzung
+
+- Depotcheck auf fünf funktionierende Bereiche erweitert: Bestand & Transaktionen, Vermögenshaus, Diversifikation, Zins & Laufzeiten sowie Einstand & Ergebnis.
+- Reine Analyseengine für IST/PLAN, konservative Produktartenklassifikation, Konzentration, Branchen, Produkt-/Emittentenländer, Produktwährungen und marktwertbezogene Datenabdeckung eingeführt.
+- PLAN verwendet den Restbestand nach simulierten Verkäufen plus aktive Planallokationen genau einmal; 4B-Umsetzungs- und Sparplandaten erzeugen keine zusätzlichen Käufe.
+- Direkte Rentenwerte, Fonds und Sonderstrukturen fachlich getrennt. Fälligkeitsleiter, laufende Verzinsung, modellierte YTM, Macaulay/Modified Duration, DV01 und lineare Zinsszenarien werden nur auf plausiblen Datensätzen berechnet.
+- Einstand & Ergebnis zeigt ausschließlich importierte unrealisierte Kursdaten und wird ausdrücklich nicht als vollständige Depotperformance ausgewiesen.
+- Persistenzschema bleibt 8; Version V0.16.0 veröffentlicht.
 
 ## 07.09.2026
 
