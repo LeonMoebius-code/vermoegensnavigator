@@ -49,6 +49,8 @@ const includesAny = (text: string, terms: string[]) =>
 
 function classifyText(text: string, confidence: "source" | "derived"):
   ProductClassification | null {
+  if (text === "geldmarkt")
+    return { main: "Renten", sub: "Geldmarktfonds", direct: false, confidence };
   const isFund = includesAny(text, ["fonds", "fund", "etf", "sicav"]);
   if (isFund && includesAny(text, ["geldmarkt", "money market"]))
     return { main: "Renten", sub: "Geldmarktfonds", direct: false, confidence };
@@ -70,7 +72,7 @@ function classifyText(text: string, confidence: "source" | "derived"):
     return { main: "Alternative Anlagen", sub: "Sonstige Alternative Anlagen", direct: false, confidence };
   if (includesAny(text, ["tagesgeld", "termingeld", "kontoguthaben", "sparkonto", "girokonto"]))
     return { main: "Liquidität", sub: "Kontoguthaben / Tagesgeld / Termingeld", direct: true, confidence };
-  if (includesAny(text, ["floater", "floating", "variabel verzinslich", "variabelverzinslich"]))
+  if (includesAny(text, ["floater", "floating", "variabel", "variabel verzinslich", "variabelverzinslich"]))
     return { main: "Renten", sub: "Floater", direct: true, bondKind: "floater", confidence };
   if (includesAny(text, ["stufenzins", "step-up", "step up"]))
     return { main: "Renten", sub: "Stufenzinsanleihen", direct: true, bondKind: "step-up", confidence };
@@ -233,7 +235,7 @@ const localDate = (value: string): Date | null => {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) return null;
   const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12);
-  return Number.isNaN(date.getTime()) ? null : date;
+  return Number.isNaN(date.getTime()) || date.getFullYear() !== Number(match[1]) || date.getMonth() !== Number(match[2]) - 1 || date.getDate() !== Number(match[3]) ? null : date;
 };
 
 export function valuationDateFor(positions: DepotAnalysisPosition[], fallback = new Date()) {

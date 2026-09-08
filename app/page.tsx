@@ -81,6 +81,20 @@ import {
 } from "./case-model";
 import { DepotCsvResult, parseDepotCsv } from "./depot-csv";
 import { depotCountryName } from "./depot-country-codes";
+import {
+  AnalysisState,
+  bondPortfolioAnalysis,
+  buildDepotAnalysisPositions,
+  concentrationMetrics,
+  countryAnalysis,
+  currencyAnalysis,
+  DepotAnalysisPosition,
+  DistributionItem,
+  entryResultAnalysis,
+  industryAnalysis,
+  ProductMainCategory,
+  productTypeAnalysis,
+} from "./depot-analysis";
 
 type View = "home" | "cases" | "wizard" | "planner" | "depot" | "export";
 
@@ -5766,6 +5780,169 @@ function DepotHoldingDetails({ holding }: { holding: DepotHolding }) {
   );
 }
 
+const analysisColors = ["#0d4f7a", "#ed7102", "#477fa7", "#7e96aa", "#2b6b64", "#c89b42", "#8491a0", "#b85c4b"];
+
+function AnalysisToggle<T extends string>({ value, options, onChange, label }: {
+  value: T;
+  options: Array<{ value: T; label: string }>;
+  onChange: (value: T) => void;
+  label: string;
+}) {
+  return <div className="analysis-toggle" role="group" aria-label={label}>
+    {options.map((option) => <button key={option.value} className={value === option.value ? "active" : ""} onClick={() => onChange(option.value)}>{option.label}</button>)}
+  </div>;
+}
+
+function CoverageLine({ value, label = "Datenabdeckung" }: { value: number; label?: string }) {
+  return <div className="coverage-line">
+    <span>{label}</span><b>{percent.format(value * 100)} %</b>
+    <i><em style={{ width: `${Math.max(0, Math.min(100, value * 100))}%` }} /></i>
+  </div>;
+}
+
+function AnalysisBars({ items, limit, signed = false }: { items: DistributionItem[]; limit?: number; signed?: boolean }) {
+  const visible = typeof limit === "number" ? items.slice(0, limit) : items;
+  const maximum = Math.max(1, ...visible.map((item) => Math.abs(item.value)));
+  return <div className={`analysis-bars ${signed ? "signed" : ""}`}>
+    {visible.map((item) => <div className={`analysis-bar ${item.value < 0 ? "is-negative" : ""}`} key={item.label}>
+      <span title={item.label}>{item.label}</span>
+      <i><em className={item.value < 0 ? "negative" : ""} style={{ width: `${Math.abs(item.value) / maximum * 100}%` }} /></i>
+      <b>{signed ? (item.value >= 0 ? "+" : "") + depotDecimal.format(item.value) : `${percent.format(item.share * 100)} %`}</b>
+    </div>)}
+  </div>;
+}
+
+function AnalysisDonut({ items }: { items: DistributionItem[] }) {
+  let cursor = 0;
+  const stops = items.map((item, index) => {
+    const start = cursor;
+    cursor += item.share * 100;
+    return `${analysisColors[index % analysisColors.length]} ${start}% ${cursor}%`;
+  });
+  return <div className="analysis-donut-wrap">
+    <div className="analysis-donut" style={{ background: `conic-gradient(${stops.join(", ")})` }} aria-label="Verteilung als Ringdiagramm"><span>100 %</span></div>
+    <div className="analysis-legend">{items.map((item, index) => <span key={item.label}><i style={{ background: analysisColors[index % analysisColors.length] }} /><b>{item.label}</b><em>{percent.format(item.share * 100)} %</em></span>)}</div>
+  </div>;
+}
+
+function AnalysisEmpty({ children }: { children: ReactNode }) {
+  return <div className="analysis-empty">{children}</div>;
+}
+
+function DiversificationAnalysis({ depot, plan }: { depot: DepotHolding[]; plan: StructurePlan }) {
+  const [state, setState] = useState<AnalysisState>("ist");
+  const [industryView, setIndustryView] = useState<"equities" | "total">("equities");
+  const [countryView, setCountryView] = useState<"direct" | "total">("direct");
+  const positions = buildDepotAnalysisPositions(depot, plan, state);
+  if (!positions.length) return <section className="panel analysis-panel"><div className="analysis-heading"><div><p className="eyebrow">PORTFOLIOANALYSE</p><h2>Diversifikation</h2></div><AnalysisToggle value={state} onChange={setState} label="Analysezustand" options={[{ value: "ist", label: "IST" }, { value: "plan", label: "PLAN" }]} /></div><AnalysisEmpty>Für diese Analyse sind noch keine Depotpositionen vorhanden.</AnalysisEmpty></section>;
+  const concentration = concentrationMetrics(positions);
+  const products = productTypeAnalysis(positions);
+  const industries = industryAnalysis(positions, industryView);
+  const countries = countryAnalysis(positions, countryView);
+  const currencies = currencyAnalysis(positions);
+  const positionBars = concentration.positions.map((position) => ({ label: position.name, value: position.value, share: concentration.total ? position.value / concentration.total : 0 }));
+  return <section className="panel analysis-panel">
+    <div className="analysis-heading"><div><p className="eyebrow">PORTFOLIOANALYSE</p><h2>Diversifikation</h2></div><AnalysisToggle value={state} onChange={setState} label="Analysezustand" options={[{ value: "ist", label: "IST" }, { value: "plan", label: "PLAN" }]} /></div>
+    <p className="analysis-context">{state === "ist" ? "Aktueller physischer Depotbestand" : "Bestand nach simulierten Verkäufen plus geplante Käufe des aktiven Strukturplans"}</p>
+    <div className="analysis-section">
+      <h3>Positionen / Konzentration</h3>
+      <div className="analysis-kpis five">
+        <article><span>Depotwert</span><b>{euro.format(concentration.total)}</b></article>
+        <article><span>Positionen</span><b>{concentration.count}</b></article>
+        <article><span>Größte Position</span><b>{concentration.largest ? `${percent.format(concentration.largest.value / concentration.total * 100)} %` : "–"}</b><small>{concentration.largest?.name}</small></article>
+        <article><span>{concentration.count < 3 ? `Top ${concentration.count}` : "Top 3"}</span><b>{percent.format(concentration.top3 * 100)} %</b></article>
+        <article><span>{concentration.count < 5 ? `Top ${concentration.count}` : "Top 5"}</span><b>{percent.format(concentration.top5 * 100)} %</b></article>
+      </div>
+      <AnalysisBars items={positionBars} limit={10} />
+      <p className="analysis-note">Die {Math.min(3, concentration.count)} größten Positionen machen {percent.format(concentration.top3 * 100)} % des analysierten Depotwerts aus.</p>
+    </div>
+    <div className="analysis-section">
+      <h3>Produktarten</h3>
+      <CoverageLine value={products.coverage} />
+      {products.main.length <= 7 ? <AnalysisDonut items={products.main} /> : <AnalysisBars items={products.main} />}
+      <div className="product-hierarchy">{products.main.map((main) => <div key={main.label}><strong>{main.label}<b>{percent.format(main.share * 100)} %</b></strong>{products.sub.get(main.label as ProductMainCategory)?.map((sub) => <span key={sub.label}>{sub.label}<b>{percent.format(sub.value / products.total * 100)} %</b></span>)}</div>)}</div>
+    </div>
+    <div className="analysis-grid">
+      <div className="analysis-section">
+        <div className="analysis-subheading"><h3>Branchen</h3><AnalysisToggle value={industryView} onChange={setIndustryView} label="Branchenansicht" options={[{ value: "equities", label: "Aktienbestand" }, { value: "total", label: "Gesamtdepot" }]} /></div>
+        <CoverageLine value={industries.coverage} label="Brancheninformation im direkten Aktienbestand" />
+        {!industries.equityValue || (industryView === "equities" && industries.coverage === 0) ? <AnalysisEmpty>Für den direkten Aktienbestand liegen keine belastbaren Brancheninformationen vor.</AnalysisEmpty> : industries.distribution.length <= 7 ? <AnalysisDonut items={industries.distribution} /> : <AnalysisBars items={industries.distribution} />}
+      </div>
+      <div className="analysis-section">
+        <div className="analysis-subheading"><h3>Produkt-/Emittentenland</h3><AnalysisToggle value={countryView} onChange={setCountryView} label="Länderansicht" options={[{ value: "direct", label: "Direktwerte" }, { value: "total", label: "Gesamtdepot" }]} /></div>
+        <CoverageLine value={countries.coverage} />
+        <AnalysisBars items={countries.distribution} />
+        {countryView === "total" && <p className="analysis-note">Bei Fonds und Sammelprodukten beschreibt das angezeigte Land das Produkt-/Domizilland und keine wirtschaftliche Länderallokation.</p>}
+      </div>
+    </div>
+    <div className="analysis-section">
+      <h3>Produktwährung</h3>
+      <CoverageLine value={currencies.coverage} />
+      {currencies.distribution.length <= 7 ? <AnalysisDonut items={currencies.distribution} /> : <AnalysisBars items={currencies.distribution} />}
+      <p className="analysis-note">Produktwährung ist nicht gleich wirtschaftliches Währungsrisiko. Insbesondere Fonds können wirtschaftlich in mehreren Währungen investiert sein.</p>
+    </div>
+  </section>;
+}
+
+function BondAnalysis({ depot, plan }: { depot: DepotHolding[]; plan: StructurePlan }) {
+  const [state, setState] = useState<AnalysisState>("ist");
+  const positions = buildDepotAnalysisPositions(depot, plan, state);
+  if (!positions.length) return <section className="panel analysis-panel"><div className="analysis-heading"><div><p className="eyebrow">RENTENPORTFOLIO</p><h2>Zins &amp; Laufzeiten</h2></div><AnalysisToggle value={state} onChange={setState} label="Analysezustand" options={[{ value: "ist", label: "IST" }, { value: "plan", label: "PLAN" }]} /></div><AnalysisEmpty>Für diese Analyse sind noch keine Depotpositionen vorhanden.</AnalysisEmpty></section>;
+  const analysis = bondPortfolioAnalysis(positions);
+  const directRows = analysis.rows.filter((row) => row.position.classification.direct);
+  if (!directRows.length) return <section className="panel analysis-panel"><div className="analysis-heading"><h2>Zins &amp; Laufzeiten</h2><AnalysisToggle value={state} onChange={setState} label="Analysezustand" options={[{ value: "ist", label: "IST" }, { value: "plan", label: "PLAN" }]} /></div><AnalysisEmpty>Im Depot sind keine direkten Rentenwerte für eine Laufzeitenanalyse vorhanden.</AnalysisEmpty></section>;
+  const totalValue = positions.reduce((sum, position) => sum + position.value, 0);
+  const ladderMax = Math.max(1, ...analysis.ladder.map((item) => item.nominal));
+  return <section className="panel analysis-panel">
+    <div className="analysis-heading"><div><p className="eyebrow">RENTENPORTFOLIO</p><h2>Zins &amp; Laufzeiten</h2></div><AnalysisToggle value={state} onChange={setState} label="Analysezustand" options={[{ value: "ist", label: "IST" }, { value: "plan", label: "PLAN" }]} /></div>
+    <p className="analysis-context">Bewertungsstichtag der Portfolioaggregation: {analysis.valuationDate.toLocaleDateString("de-DE")}. Abweichende Positionsstichtage können bestehen.</p>
+    <div className="analysis-kpis four">
+      <article><span>Direkte Rentenwerte</span><b>{euro.format(analysis.directValue)}</b><small>{totalValue ? percent.format(analysis.directValue / totalValue * 100) : "0"} % des Depots</small></article>
+      <article><span>Mit gültiger Fälligkeit</span><b>{percent.format(analysis.maturityCoverage * 100)} %</b><small>der direkten Rentenwerte</small></article>
+      <article><span>YTM/Duration berechenbar</span><b>{percent.format(analysis.calculableCoverage * 100)} %</b><small>der direkten Rentenwerte</small></article>
+      <article><span>Portfolio-DV01</span><b>{analysis.calculableValue ? euro.format(analysis.portfolioDv01) : "–"}</b><small>berechenbarer Teilbestand</small></article>
+    </div>
+    <div className="analysis-section">
+      <h3>Fälligkeitsleiter</h3>
+      {!analysis.ladder.length ? <AnalysisEmpty>Für die direkten Rentenwerte liegen keine gültigen Fälligkeits- und Nominaldaten vor.</AnalysisEmpty> : <div className="maturity-ladder">{analysis.ladder.map((item) => <div key={item.year}><b>{item.year}</b><i><em style={{ width: `${item.nominal / ladderMax * 100}%` }} /></i><strong>{depotDecimal.format(item.nominal)} nominal</strong><small>{item.count} {item.count === 1 ? "Position" : "Positionen"} · Marktwert {euro.format(item.marketValue)}</small></div>)}</div>}
+    </div>
+    <div className="analysis-section">
+      <h3>Direkte Rentenpositionen</h3>
+      <div className="analysis-table-wrap"><table className="analysis-table"><thead><tr><th>Position</th><th>Typ</th><th>Nominal</th><th>Coupon</th><th>Fälligkeit</th><th>Restlaufzeit</th><th>Kurs</th><th>Laufende Verzinsung auf aktuellen Kurs</th><th>Modellierte YTM</th><th>Macaulay Duration</th><th>Modified Duration</th><th>DV01</th></tr></thead><tbody>{directRows.map((row) => <tr key={row.position.id}><td><b>{row.position.name}</b>{row.exclusionReason && <small>{row.exclusionReason}</small>}</td><td>{row.position.classification.sub}</td><td>{Number.isFinite(row.position.nominalOrUnits) ? depotDecimal.format(Number(row.position.nominalOrUnits)) : "–"}</td><td>{Number.isFinite(row.position.coupon) ? `${depotDecimal.format(Number(row.position.coupon))} %` : "–"}</td><td>{formatDepotDate(row.position.maturity) || "–"}</td><td>{row.remainingYears === null ? "–" : row.remainingYears <= 0 ? "fällig / Daten prüfen" : `${depotDecimal.format(row.remainingYears)} Jahre`}</td><td>{Number.isFinite(row.position.currentPrice) ? depotDecimal.format(Number(row.position.currentPrice)) : "–"}</td><td>{row.currentYield === null ? "–" : `${depotDecimal.format(row.currentYield * 100)} %`}</td><td>{row.ytm === null ? "–" : `${depotDecimal.format(row.ytm * 100)} %`}</td><td>{row.macaulay === null ? "–" : `${depotDecimal.format(row.macaulay)} Jahre`}</td><td>{row.modified === null ? "–" : `${depotDecimal.format(row.modified)} Jahre`}</td><td>{row.dv01 === null ? "–" : euro.format(row.dv01)}</td></tr>)}</tbody></table></div>
+    </div>
+    <div className="analysis-grid">
+      <div className="analysis-section"><h3>Portfolio-Sensitivität</h3><div className="sensitivity-value"><span>Marktwertgewichtete Modified Duration</span><b>{analysis.portfolioModified === null ? "–" : `${depotDecimal.format(analysis.portfolioModified)} Jahre`}</b></div><p className="analysis-note">DV01 ist der näherungsweise Wertgewinn/-verlust des berechenbaren Rentenbestands bei einer parallelen Renditeänderung um einen Basispunkt.</p></div>
+      <div className="analysis-section"><h3>Zinsszenarien</h3><div className="scenario-list">{analysis.scenarios.map((scenario) => <span key={scenario.deltaYield}><b>Rendite {scenario.deltaYield > 0 ? "+" : ""}{depotDecimal.format(scenario.deltaYield * 100)} %-Pkt.</b><em className={scenario.effect < 0 ? "negative" : "positive"}>{scenario.effect >= 0 ? "+" : ""}{euro.format(scenario.effect)}</em></span>)}</div><p className="analysis-note">Lineare Durationsnäherung. Größere Zinsbewegungen, Spreadänderungen, Bonitätsänderungen und nichtlineare Effekte werden nicht vollständig abgebildet.</p></div>
+    </div>
+    <div className="analysis-section"><h3>Annahmen und ausgeschlossene Positionen</h3><p className="analysis-note">Modellierte YTM: Rückzahlung zu 100, jährliche Couponzahlung, aktueller Kurs als Clean-Preis in % des Nominals, keine Steuern, Transaktionskosten, Ausfälle oder exakte Stückzinstageszählung; vereinfachter Cashflow-Zeitplan anhand der Restlaufzeit.</p><div className="exclusion-list">{analysis.rows.filter((row) => row.exclusionReason).map((row) => <span key={row.position.id}><b>{row.position.name}</b>{row.exclusionReason}</span>)}</div></div>
+  </section>;
+}
+
+function EntryResultAnalysis({ depot }: { depot: DepotHolding[] }) {
+  const [metric, setMetric] = useState<"amount" | "percent">("amount");
+  if (!depot.length) return <section className="panel analysis-panel"><AnalysisEmpty>Für diese Analyse sind noch keine Depotpositionen vorhanden.</AnalysisEmpty></section>;
+  const analysis = entryResultAnalysis(depot);
+  if (!analysis.rows.length) return <section className="panel analysis-panel"><div className="analysis-heading"><div><p className="eyebrow">IST-BESTAND</p><h2>Unrealisierte Kursentwicklung ggü. Einstand</h2></div></div><AnalysisEmpty>Für die vorhandenen Positionen liegen keine ausreichenden Einstands-/Ergebnisdaten vor.</AnalysisEmpty></section>;
+  const resultBars = analysis.rows
+    .filter((position) => Number.isFinite(metric === "amount" ? position.gainLossAmount : position.gainLossPercent))
+    .map((position) => ({ label: position.name, value: Number(metric === "amount" ? position.gainLossAmount : position.gainLossPercent), share: 0 }))
+    .sort((a, b) => b.value - a.value);
+  return <section className="panel analysis-panel">
+    <div className="analysis-heading"><div><p className="eyebrow">IST-BESTAND</p><h2>Unrealisierte Kursentwicklung ggü. Einstand</h2></div><AnalysisToggle value={metric} onChange={setMetric} label="Ergebniskennzahl" options={[{ value: "amount", label: "EUR" }, { value: "percent", label: "%" }]} /></div>
+    <p className="analysis-context">Importierte Kursdaten des aktuellen Bestands. Keine Depotperformance oder Gesamtrendite.</p>
+    <div className="analysis-kpis four result-kpis">
+      <article><span>Marktwert mit Ergebnisdaten</span><b>{euro.format(analysis.coveredValue)}</b><small>Datenabdeckung {percent.format(analysis.coverage * 100)} %</small></article>
+      <article><span>Summe der importierten unrealisierten Kursgewinne/-verluste</span><b className={analysis.gainLossAmount < 0 ? "negative" : "positive"}>{euro.format(analysis.gainLossAmount)}</b></article>
+      <article><span>Positionen im Plus / Minus</span><b>{analysis.winners} / {analysis.losers}</b></article>
+      <article><span>Beste / schwächste Position</span><b>{analysis.best ? `${depotDecimal.format(Number(analysis.best.gainLossPercent))} %` : "–"} / {analysis.worst ? `${depotDecimal.format(Number(analysis.worst.gainLossPercent))} %` : "–"}</b><small>{analysis.best?.name || "–"} / {analysis.worst?.name || "–"}</small></article>
+    </div>
+    <CoverageLine value={analysis.coverage} label="Ergebnisdaten bezogen auf den Gesamtdepotwert" />
+    <div className="analysis-section"><h3>Positionsergebnisse {metric === "amount" ? "in EUR" : "in %"}</h3><AnalysisBars items={resultBars} signed /></div>
+    <div className="analysis-section"><h3>Einstands- und Ergebnisdaten</h3><div className="analysis-table-wrap"><table className="analysis-table result-table"><thead><tr><th>Position</th><th>Letzter Kauf</th><th>Ø Einstand</th><th>Aktueller Kurs</th><th>G/V EUR</th><th>G/V %</th></tr></thead><tbody>{analysis.rows.map((position) => <tr key={position.id}><td><b>{position.name}</b></td><td>{formatDepotDate(position.lastPurchaseDate) || "–"}</td><td>{Number.isFinite(position.averageEntryPrice) ? depotDecimal.format(Number(position.averageEntryPrice)) : "–"}</td><td>{Number.isFinite(position.currentPrice) ? depotDecimal.format(Number(position.currentPrice)) : "–"}</td><td className={Number(position.gainLossAmount) < 0 ? "negative" : "positive"}>{Number.isFinite(position.gainLossAmount) ? euro.format(Number(position.gainLossAmount)) : "–"}</td><td className={Number(position.gainLossPercent) < 0 ? "negative" : "positive"}>{Number.isFinite(position.gainLossPercent) ? `${depotDecimal.format(Number(position.gainLossPercent))} %` : "–"}</td></tr>)}</tbody></table></div></div>
+    <p className="analysis-note">Nicht berücksichtigt sind unter anderem Ausschüttungen, Dividenden, Coupons, realisierte Ergebnisse, vollständige Zu- und Abflüsse, Steuern und eine vollständige Transaktionshistorie.</p>
+  </section>;
+}
+
 function DepotOptimizer({
   item,
   setItem,
@@ -5779,7 +5956,7 @@ function DepotOptimizer({
   saveCase: (version?: boolean) => void;
   setView: (view: View) => void;
 }) {
-  const [section, setSection] = useState<"positions" | "house">("positions");
+  const [section, setSection] = useState<"positions" | "house" | "diversification" | "bonds" | "results">("positions");
   const [expandedHoldingId, setExpandedHoldingId] = useState<string | null>(null);
   const depot = item.depot;
   const total = depot.reduce((sum, entry) => sum + entry.value, 0);
@@ -5919,17 +6096,18 @@ function DepotOptimizer({
           <small>begrenzt auf den aktuellen Positionswert</small>
         </article>
       </div>}
-      {depot.length > 0 && (
-        <div className="depot-section-tabs" role="tablist" aria-label="Depotcheck-Bereiche">
+      <div className="depot-section-tabs" role="tablist" aria-label="Depotcheck-Bereiche">
           <button className={section === "positions" ? "active" : ""} onClick={() => setSection("positions")} role="tab" aria-selected={section === "positions"}>
             Bestand &amp; Transaktionen
           </button>
           <button className={section === "house" ? "active" : ""} onClick={() => setSection("house")} role="tab" aria-selected={section === "house"}>
             Vermögenshaus
           </button>
+          <button className={section === "diversification" ? "active" : ""} onClick={() => setSection("diversification")} role="tab" aria-selected={section === "diversification"}>Diversifikation</button>
+          <button className={section === "bonds" ? "active" : ""} onClick={() => setSection("bonds")} role="tab" aria-selected={section === "bonds"}>Zins &amp; Laufzeiten</button>
+          <button className={section === "results" ? "active" : ""} onClick={() => setSection("results")} role="tab" aria-selected={section === "results"}>Einstand &amp; Ergebnis</button>
         </div>
-      )}
-      {(depot.length === 0 || section === "positions") && <section className="depot-entry panel">
+      {section === "positions" && <section className="depot-entry panel">
         <div className="panel-heading">
           <div>
             <p className="eyebrow">IST-BESTAND</p>
@@ -6111,6 +6289,10 @@ function DepotOptimizer({
           <WealthHouse plan={plan} plans={[plan]} depot={depot} context="depot" />
         </section>
       )}
+      {section === "house" && depot.length === 0 && <section className="panel analysis-panel"><AnalysisEmpty>Für diese Analyse sind noch keine Depotpositionen vorhanden.</AnalysisEmpty></section>}
+      {section === "diversification" && <DiversificationAnalysis depot={depot} plan={plan} />}
+      {section === "bonds" && <BondAnalysis depot={depot} plan={plan} />}
+      {section === "results" && <EntryResultAnalysis depot={depot} />}
       <p className="tool-legal">
         Die Simulation ermittelt ausschließlich rechnerische Auswirkungen. Sie
         berücksichtigt weder Kurse noch Steuern, Spreads, Kosten, Stückelungen,
