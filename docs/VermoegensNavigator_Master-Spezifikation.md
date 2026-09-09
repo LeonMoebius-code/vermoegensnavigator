@@ -2,8 +2,8 @@
 
 > **Kanonischer Produkt- und Entscheidungsstand**
 >
-> Letzte fachliche Aktualisierung: **08.09.2026**
-> Aktuell veröffentlichte Version: **V0.16.1**
+> Letzte fachliche Aktualisierung: **09.09.2026**
+> Aktuell veröffentlichte Version: **V0.17.0**
 > Codebasis: **GitHub `main`**
 > Zielumgebung: **Desktop-Prototyp**
 > Öffentliche Testversion: GitHub Pages
@@ -1059,33 +1059,37 @@ Alle Teilanalysen weisen ihre Datenabdeckung marktwertbezogen auf dem jeweils re
 
 ---
 
-# 7. 🔴 Risiko V2
+# 7. ✅ Risiko V2
 
-**Status: FACHLICH OFFEN**
+**Status: ✅ UMGESETZT**
 
-Die aktuelle Risikoorientierung nutzt weiterhin eine zu einfache aggregierte Logik. Die UX der Klickstrecke kann bleiben, das Fachmodell soll später neu entwickelt werden.
+Veröffentlicht mit V0.17.0. Die sichtbare Risikoorientierung verwendet fünf Profile von **Konservativ** bis **Hoch spekulativ**. Jede Profilkarte ist direkt auswählbar und zeigt eine ausdrücklich illustrative Minus-/Plus-Bandbreite. Die Auswahl wird mit ihrer Quelle `default`, `manual`, `assessment` oder `legacy` nachvollziehbar gespeichert.
 
-## 7.1 Zukünftig getrennte Dimensionen
+## 7.1 Geführte Ermittlung
 
-Mindestens unterscheiden:
+Die kompakte Ermittlungsstrecke besteht aus:
 
-- **Risikowille**
-- **finanzielle Risikotragfähigkeit**
-- **Anlagehorizont**
-- **Kenntnisse / Erfahrungen**
+1. vollständig anklickbarem magischem Dreieck für Sicherheit, Liquidität und Renditechance
+2. vier Szenarien A bis D
+3. drei Fragen zum Risikowillen
+4. drei Fragen zur finanziellen Verlusttragfähigkeit
+5. transparenter Ergebnisdarstellung
 
-Diese Größen dürfen nicht einfach gleichgewichtet gemittelt werden.
+Der Dreieckspunkt wird baryzentrisch gewichtet. Der Risikowille ergibt sich aus 25 % Dreieck, 25 % Szenario und 50 % Verhaltensfragen. Nicht einheitliche Willensangaben bleiben als neutraler Konsistenzhinweis sichtbar.
 
-## 7.2 Noch zu konzipieren
+## 7.2 Verlusttragfähigkeit und Orientierungsrahmen
 
-- welche Dimension bestimmt welches Limit?
-- mögliche Caps durch fehlende Tragfähigkeit
-- Umgang mit Konflikten, z. B. hohe Risikobereitschaft bei niedriger finanzieller Tragfähigkeit
-- Rolle von Horizont und Liquiditätsbedarfen
-- Rolle von Kenntnissen / Erfahrungen
-- manuelle fachliche Bestätigung
-- dokumentierte Abweichungsbegründung
-- Visualisierung des Ergebnisses
+Die finanzielle Verlusttragfähigkeit folgt einer konservativen Weakest-Link-Logik aus Zielwirkung, Kapitalabhängigkeit und Ausgleichsmöglichkeiten. Der ermittelte Orientierungsrahmen ist das Minimum aus Risikowille und Verlusttragfähigkeit. Begrenzungen und deutliche Konflikte werden sichtbar benannt.
+
+Eine manuell gewählte oder aus einem Altfall übernommene Risikostufe wird durch die Ermittlung nicht überschrieben. Abweichungen zur Empfehlung oder Verlusttragfähigkeit erscheinen transparent ohne Begründungspflicht. Bei einem neuen Fall ohne bewusste Auswahl wird eine vollständig abgeschlossene Ermittlung übernommen und als Quelle `assessment` gespeichert.
+
+## 7.3 Getrennte Beratungsdimensionen
+
+Anlagehorizont sowie Kenntnisse und Erfahrungen bleiben sichtbar, fließen aber nicht in den Risikoscore ein. Der Horizont wird weiterhin an der konkreten Beziehung Produkt × Kapitaltopf geprüft. Die Tragfähigkeitsfragen verwenden je nach privatem, betrieblichem oder kombiniertem Kontext passende Formulierungen.
+
+## 7.4 Datenmodell und Migration
+
+Schema 9 ergänzt `riskSelectionSource` und `riskAssessmentV2`. Schema-8-Fälle behalten ihre gespeicherte Risikostufe mit Quelle `legacy`. Übernehmbare Antworten zu Verlustreaktion, vorübergehender Wertminderung und Zielwirkung werden konservativ vorbefüllt. Dreieck, Szenario und alle weiteren Antworten bleiben offen, deshalb wird keine vollständige V2-Empfehlung erfunden. Historische Versionssnapshots werden nicht rückwirkend verändert.
 
 ---
 
@@ -1448,7 +1452,7 @@ Keine zufällig aus dem Internet beschafften Fontdateien verwenden.
 
 # 12. Technische / fachliche Kernzustände
 
-Persistenzschema: **8**. Alte Schema-6- und Schema-7-Fälle werden beim Laden der aktiven Arbeitskopie über `normalizeImportedCase(...)` migriert. Historische Versionssnapshots bleiben unverändert gespeichert und werden erst bei Wiederherstellung normalisiert.
+Persistenzschema: **9**. Alte Schema-6-, Schema-7- und Schema-8-Fälle werden beim Laden der aktiven Arbeitskopie über `normalizeImportedCase(...)` migriert. Historische Versionssnapshots bleiben unverändert gespeichert und werden erst bei Wiederherstellung normalisiert.
 
 ## 12.1 Planvarianten
 
@@ -1761,7 +1765,7 @@ Freie WKN / freie Produktbezeichnung für Sparpläne zunächst bewusst nicht in 
 | 1 | **4A.1 Bestandsdepot-Logik, Kapitaltopf-Lifecycle & V0.14-Fixes** | ✅ Umgesetzt |
 | 2 | **4B Einstieg & Sparpläne** | ✅ Umgesetzt |
 | 3 | **Depotcheck 3B Portfolioanalyse** | ✅ Umgesetzt |
-| 4 | **Risiko V2** | 🔴 Fachkonzept nötig |
+| 4 | **Risiko V2** | ✅ Umgesetzt |
 | 5 | **Vertiefungsframework** | 🟡 Konzept weiter ausarbeiten |
 | 6 | **Ergebnis & Export konsolidieren** | 🟡 nach 4B vollständig testen |
 | 7 | finaler Gesamt-UX-/Regressionsblock | ⏳ später |
@@ -1782,8 +1786,7 @@ Keine zentrale fachliche Entscheidung offen. Paket ist umgesetzt.
 
 ## Risiko V2
 
-- Bewertungslogik der getrennten Risikodimensionen
-- Caps / Konflikte / Override
+Keine zentrale fachliche Entscheidung offen. Paket ist umgesetzt.
 
 ## Vertiefungen
 
@@ -1803,6 +1806,16 @@ Keine zentrale fachliche Entscheidung offen. Paket ist umgesetzt.
 ---
 
 # 19. Entscheidungslog
+
+## 09.09.2026
+
+### Risiko V2
+
+- Fünf direkt auswählbare Risikoprofile mit illustrativen Bandbreiten und einer geführten Fünf-Schritt-Ermittlung eingeführt.
+- Risikowille aus Dreieck, Szenario und drei Verhaltensfragen berechnet. Verlusttragfähigkeit separat als Weakest Link geführt und als harte Obergrenze des automatischen Orientierungsrahmens verwendet.
+- Direkte und migrierte Auswahlen bleiben erhalten. Konflikte und Abweichungen werden ohne Begründungspflicht transparent dargestellt.
+- Anlagehorizont sowie Kenntnisse und Erfahrungen bleiben eigenständige Beratungsdimensionen und werden nicht mehr in den Risikoscore eingerechnet.
+- Persistenzschema von 8 auf 9 erhöht und konservative Migration über `normalizeImportedCase(...)` ergänzt. Version V0.17.0 veröffentlicht.
 
 ## 08.09.2026
 

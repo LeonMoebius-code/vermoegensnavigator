@@ -1,6 +1,6 @@
 {
   "name": "vermoegensnavigator",
-  "version": "0.16.1",
+  "version": "0.17.0",
   "private": true,
   "engines": {
     "node": ">=20.0.0"
@@ -11,6 +11,7 @@
     "typecheck": "tsc -p tsconfig.github.json --noEmit",
     "test:3b": "esbuild scripts/verify-3b.ts --bundle --platform=node --format=esm --outfile=/tmp/vermoegensnavigator-verify-3b.mjs && node /tmp/vermoegensnavigator-verify-3b.mjs",
     "test:4b": "esbuild scripts/verify-4b.ts --bundle --platform=node --format=esm --outfile=/tmp/vermoegensnavigator-verify-4b.mjs && node /tmp/vermoegensnavigator-verify-4b.mjs",
+    "test:risk-v2": "esbuild scripts/verify-risk-v2.ts --bundle --platform=node --format=esm --outfile=/tmp/vermoegensnavigator-verify-risk-v2.mjs && node /tmp/vermoegensnavigator-verify-risk-v2.mjs",
     "test": "npm run typecheck && npm run build"
   },
   "dependencies": {

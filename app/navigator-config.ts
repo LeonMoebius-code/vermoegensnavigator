@@ -9,11 +9,54 @@ export type Need = {
   dueDate?: string;
 };
 
-export type RiskAssessment = {
+export type LegacyRiskAssessment = {
   lossReaction: RiskLevel | null;
   temporaryLoss: RiskLevel | null;
   financialCapacity: RiskLevel | null;
 };
+/** @deprecated Nur noch als Migrationsbrücke für Schema-8-Fälle. */
+export type RiskAssessment = LegacyRiskAssessment;
+
+export type RiskSelectionSource = "default" | "manual" | "assessment" | "legacy";
+export type RiskScenario = "A" | "B" | "C" | "D";
+
+export type RiskAssessmentV2 = {
+  triangle?: {
+    security: number;
+    liquidity: number;
+    returnChance: number;
+    score: number;
+  };
+  scenario: RiskScenario | null;
+  willingness: {
+    lossReaction: RiskLevel | null;
+    temporaryLoss: RiskLevel | null;
+    riskReturnPriority: RiskLevel | null;
+  };
+  capacity: {
+    goalImpact: RiskLevel | null;
+    capitalDependence: RiskLevel | null;
+    lossBuffer: RiskLevel | null;
+  };
+  riskWillingness?: RiskLevel;
+  lossCapacity?: RiskLevel;
+  recommendedRisk?: RiskLevel;
+  completedAt?: string;
+};
+
+export const emptyRiskAssessmentV2 = (): RiskAssessmentV2 => ({
+  scenario: null,
+  willingness: {
+    lossReaction: null,
+    temporaryLoss: null,
+    riskReturnPriority: null,
+  },
+  capacity: {
+    goalImpact: null,
+    capitalDependence: null,
+    lossBuffer: null,
+  },
+});
 
 export type AdvisoryData = {
   caseName: string;
@@ -28,7 +71,10 @@ export type AdvisoryData = {
   goal: string;
   horizon: number;
   risk: RiskLevel;
-  riskAssessment: RiskAssessment;
+  riskSelectionSource: RiskSelectionSource;
+  riskAssessmentV2: RiskAssessmentV2;
+  /** Nur für die verlustfreie Migration historischer Fälle. */
+  riskAssessment?: LegacyRiskAssessment;
   experience: string;
   priorities: string[];
   modules: string[];
@@ -48,11 +94,8 @@ export const emptyAdvisory: AdvisoryData = {
   goal: "Ausgewogenes Verhältnis",
   horizon: 8,
   risk: 3,
-  riskAssessment: {
-    lossReaction: null,
-    temporaryLoss: null,
-    financialCapacity: null,
-  },
+  riskSelectionSource: "default",
+  riskAssessmentV2: emptyRiskAssessmentV2(),
   experience: "Grundkenntnisse",
   priorities: ["Werterhalt", "Flexibilität"],
   modules: ["maturity", "market"],
