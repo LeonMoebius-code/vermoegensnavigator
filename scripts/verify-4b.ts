@@ -275,7 +275,7 @@ legacy.plans[0].investmentPlans = [
 ];
 const migrated = normalizeImportedCase(legacy, false);
 assert.ok(migrated);
-assert.equal(migrated.schemaVersion, 8);
+assert.equal(migrated.schemaVersion, 9);
 assert.deepEqual(migrated.savingsGoals, []);
 const migratedSaving = migrated.plans[0].investmentPlans.find((entry) => entry.type === "savings");
 assert.ok(migratedSaving && migratedSaving.type === "savings");
@@ -300,7 +300,7 @@ schemaSix.plans[0].depotMode = "retain";
 schemaSix.plans[0].depotHoldingIds = [];
 const migratedSchemaSix = normalizeImportedCase(schemaSix, false);
 assert.ok(migratedSchemaSix);
-assert.equal(migratedSchemaSix.schemaVersion, 8);
+assert.equal(migratedSchemaSix.schemaVersion, 9);
 assert.equal(migratedSchemaSix.plans[0].depotSelectionInitialized, true);
 
 const plannerSource = readFileSync("app/page.tsx", "utf8");

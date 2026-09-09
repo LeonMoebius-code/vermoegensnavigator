@@ -1,4 +1,13 @@
-import { AdvisoryData, emptyAdvisory } from "./navigator-config";
+import {
+  AdvisoryData,
+  emptyAdvisory,
+  emptyRiskAssessmentV2,
+  LegacyRiskAssessment,
+  RiskAssessmentV2,
+  RiskLevel,
+  RiskSelectionSource,
+} from "./navigator-config";
+import { completeRiskAssessment, triangleRiskScore } from "./risk-orientation";
 import {
   AssetClass,
   AssetMix,
@@ -288,7 +297,7 @@ export type CustomerChecklistItem = {
 };
 
 export type AdvisoryCase = {
-  schemaVersion: 8;
+  schemaVersion: 9;
   id: string;
   status: "Entwurf" | "In Prüfung" | "Abgeschlossen";
   advisorId: AdvisorId;
@@ -394,7 +403,7 @@ export function createCase(
   const initialTotal = data.liquidAssets;
   const plan = createPlan("Plan A – Ausgangsstruktur", initialTotal);
   return {
-    schemaVersion: 8,
+    schemaVersion: 9,
     id: uid("fall"),
     status: "Entwurf",
     advisorId,
@@ -1263,6 +1272,103 @@ function normalizeInvestmentPlans(
   });
 }
 
+const normalizedRiskLevel = (value: unknown): RiskLevel | null => {
+  const numeric = Number(value);
+  return Number.isInteger(numeric) && numeric >= 1 && numeric <= 5
+    ? (numeric as RiskLevel)
+    : null;
+};
+
+function normalizeRiskAssessmentV2(value: unknown): RiskAssessmentV2 {
+  const empty = emptyRiskAssessmentV2();
+  if (!value || typeof value !== "object") return empty;
+  const source = value as Partial<RiskAssessmentV2>;
+  const triangle = source.triangle;
+  let normalizedTriangle: RiskAssessmentV2["triangle"];
+  if (triangle) {
+    const weights = {
+      security: Number(triangle.security),
+      liquidity: Number(triangle.liquidity),
+      returnChance: Number(triangle.returnChance),
+    };
+    const total = weights.security + weights.liquidity + weights.returnChance;
+    if (
+      Object.values(weights).every((entry) => Number.isFinite(entry) && entry >= 0) &&
+      total > 0
+    ) {
+      const normalizedWeights = {
+        security: weights.security / total,
+        liquidity: weights.liquidity / total,
+        returnChance: weights.returnChance / total,
+      };
+      normalizedTriangle = {
+        ...normalizedWeights,
+        score: triangleRiskScore(normalizedWeights),
+      };
+    }
+  }
+  const assessment: RiskAssessmentV2 = {
+    triangle: normalizedTriangle,
+    scenario:
+      source.scenario === "A" ||
+      source.scenario === "B" ||
+      source.scenario === "C" ||
+      source.scenario === "D"
+        ? source.scenario
+        : null,
+    willingness: {
+      lossReaction: normalizedRiskLevel(source.willingness?.lossReaction),
+      temporaryLoss: normalizedRiskLevel(source.willingness?.temporaryLoss),
+      riskReturnPriority: normalizedRiskLevel(source.willingness?.riskReturnPriority),
+    },
+    capacity: {
+      goalImpact: normalizedRiskLevel(source.capacity?.goalImpact),
+      capitalDependence: normalizedRiskLevel(source.capacity?.capitalDependence),
+      lossBuffer: normalizedRiskLevel(source.capacity?.lossBuffer),
+    },
+  };
+  const completed = completeRiskAssessment(assessment, source.completedAt);
+  return completed.recommendedRisk ? completed : assessment;
+}
+
+function migrateRiskAssessment(
+  advisory: AdvisoryData,
+  sourceSchemaVersion: number,
+): AdvisoryData {
+  const legacy = advisory.riskAssessment as LegacyRiskAssessment | undefined;
+  const source = advisory.riskSelectionSource as RiskSelectionSource | undefined;
+  const risk = normalizedRiskLevel(advisory.risk) || 3;
+  if (sourceSchemaVersion < 9) {
+    return {
+      ...advisory,
+      risk,
+      riskSelectionSource: "legacy",
+      riskAssessmentV2: {
+        ...emptyRiskAssessmentV2(),
+        willingness: {
+          lossReaction: normalizedRiskLevel(legacy?.lossReaction),
+          temporaryLoss: normalizedRiskLevel(legacy?.temporaryLoss),
+          riskReturnPriority: null,
+        },
+        capacity: {
+          goalImpact: normalizedRiskLevel(legacy?.financialCapacity),
+          capitalDependence: null,
+          lossBuffer: null,
+        },
+      },
+    };
+  }
+  return {
+    ...advisory,
+    risk,
+    riskSelectionSource:
+      source === "default" || source === "manual" || source === "assessment" || source === "legacy"
+        ? source
+        : "legacy",
+    riskAssessmentV2: normalizeRiskAssessmentV2(advisory.riskAssessmentV2),
+  };
+}
+
 export function normalizeImportedCase(
   value: unknown,
   regenerateId = true,
@@ -1274,7 +1380,7 @@ export function normalizeImportedCase(
   if (!item.advisory || !Array.isArray(item.plans)) return null;
   const sourceSchemaVersion = Number(item.schemaVersion) || 0;
   const normalized = clone(item) as AdvisoryCase;
-  normalized.schemaVersion = 8;
+  normalized.schemaVersion = 9;
   if (regenerateId) normalized.id = uid("fall-import");
   normalized.updatedAt = iso();
   normalized.versions = Array.isArray(normalized.versions)
@@ -1326,11 +1432,10 @@ export function normalizeImportedCase(
     sustainable:
       normalized.vvFilters?.sustainable === "Ja" ? "Ja" : "Keine Präferenz",
   };
-  normalized.advisory.riskAssessment = normalized.advisory.riskAssessment || {
-    lossReaction: null,
-    temporaryLoss: null,
-    financialCapacity: null,
-  };
+  normalized.advisory = migrateRiskAssessment(
+    normalized.advisory,
+    sourceSchemaVersion,
+  );
   normalized.plans = normalized.plans.map((plan) => {
     const total =
       !plan.capitalMode &&
