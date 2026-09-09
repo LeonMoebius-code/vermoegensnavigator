@@ -166,7 +166,7 @@ export function applyCompletedRiskAssessment(
 ): { risk: RiskLevel; source: RiskSelectionSource; assessment: RiskAssessmentV2 } {
   const completed = completeRiskAssessment(assessment);
   if (!completed.recommendedRisk) return { risk: currentRisk, source, assessment: completed };
-  if (source === "default") {
+  if (source === "default" || source === "assessment") {
     return { risk: completed.recommendedRisk, source: "assessment", assessment: completed };
   }
   return { risk: currentRisk, source, assessment: completed };

@@ -6504,6 +6504,187 @@ body[data-print-mode="customer"] .internal-only {
   border-top: 1px solid var(--line);
   padding: 16px 24px;
 }
+.risk-profile-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 16px;
+}
+.risk-profile-grid > button,
+.risk-scenario-grid > button {
+  border: 1px solid #cbd8e4;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--navy);
+  padding: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.risk-profile-grid > button:hover,
+.risk-profile-grid > button.selected,
+.risk-scenario-grid > button:hover,
+.risk-scenario-grid > button.selected {
+  border-color: var(--navy-2);
+  background: #edf5fb;
+}
+.risk-profile-grid > button.selected,
+.risk-scenario-grid > button.selected {
+  box-shadow: inset 0 4px var(--navy-2);
+}
+.risk-profile-grid span,
+.risk-profile-grid strong,
+.risk-profile-grid p {
+  display: block;
+}
+.risk-profile-grid span {
+  color: #66758a;
+  font-size: 8px;
+  font-weight: 800;
+}
+.risk-profile-grid strong {
+  min-height: 31px;
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.2;
+}
+.risk-profile-grid p {
+  min-height: 27px;
+  margin: 5px 0 10px;
+  color: #617187;
+  font-size: 8px;
+  line-height: 1.35;
+}
+.risk-band {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 5px;
+  color: #718096;
+  font-size: 8px;
+}
+.risk-band > span { color: #a83232; }
+.risk-band > strong { color: #23724c; font-size: inherit; }
+.risk-band > i {
+  height: 5px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #d46a6a 0 48%, #dce5ed 48% 52%, #4f9b75 52% 100%);
+}
+.risk-band > small {
+  grid-column: 1 / -1;
+  color: #8a96a6;
+  font-size: 7px;
+  text-align: right;
+}
+.risk-assessment-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 13px;
+  border-top: 1px solid #d6e1eb;
+  padding-top: 12px;
+  color: var(--navy);
+  font-size: 9px;
+}
+.risk-assessment-summary small { color: #68778b; }
+.risk-v2-dialog {
+  width: min(980px, 100%);
+  max-height: calc(100vh - 42px);
+  overflow: auto;
+}
+.risk-v2-progress {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  padding: 14px 24px 0;
+}
+.risk-v2-progress i {
+  height: 4px;
+  border-radius: 999px;
+  background: #dce5ed;
+}
+.risk-v2-progress i.active { background: var(--navy-2); }
+.risk-v2-progress span {
+  grid-column: 1 / -1;
+  color: #6d7b8e;
+  font-size: 8px;
+  text-align: right;
+}
+.risk-v2-body { min-height: 430px; padding: 16px 24px 24px; }
+.risk-triangle-step { text-align: center; }
+.risk-triangle-step > p {
+  max-width: 650px;
+  margin: 0 auto 8px;
+  color: #596b80;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.risk-triangle-step svg {
+  display: block;
+  width: min(560px, 100%);
+  margin: 0 auto;
+  cursor: crosshair;
+}
+.risk-triangle-step polygon {
+  fill: #edf5fb;
+  stroke: var(--navy-2);
+  stroke-width: 3;
+}
+.risk-triangle-step text { fill: var(--navy); font-size: 13px; font-weight: 800; }
+.risk-triangle-step circle { fill: var(--orange); stroke: #fff; stroke-width: 4; }
+.risk-triangle-step > strong { color: var(--navy); font-size: 13px; }
+.risk-scenario-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 11px;
+}
+.risk-scenario-grid > button > span,
+.risk-scenario-grid > button > strong { display: block; }
+.risk-scenario-grid > button > span { color: var(--navy-2); font-size: 8px; font-weight: 800; }
+.risk-scenario-grid > button > strong { margin-top: 3px; font-size: 13px; }
+.risk-scenario-grid > button > p { min-height: 49px; margin: 7px 0 12px; color: #617187; font-size: 10px; line-height: 1.45; }
+.risk-v2-questions { display: grid; gap: 16px; }
+.risk-v2-questions section > p { margin: 0 0 8px; color: var(--navy); font-size: 12px; font-weight: 800; }
+.risk-v2-questions section > div { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 7px; }
+.risk-v2-questions button {
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  align-items: center;
+  gap: 7px;
+  min-height: 52px;
+  border: 1px solid #ccd9e5;
+  border-radius: 7px;
+  background: #fff;
+  padding: 7px;
+  color: var(--navy);
+  text-align: left;
+  cursor: pointer;
+}
+.risk-v2-questions button:hover,
+.risk-v2-questions button.selected { border-color: var(--navy-2); background: #edf5fb; }
+.risk-v2-questions button.selected { box-shadow: inset 3px 0 var(--navy-2); }
+.risk-v2-questions button b { display: grid; place-items: center; width: 23px; height: 23px; border-radius: 50%; background: #e1ebf4; font-size: 9px; }
+.risk-v2-questions button.selected b { background: var(--navy-2); color: #fff; }
+.risk-v2-questions button span { font-size: 8px; line-height: 1.3; }
+.risk-result-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.risk-result-grid article { border: 1px solid #d2dee9; border-radius: 8px; padding: 13px; background: #f8fafc; }
+.risk-result-grid article.recommended { border-color: var(--navy-2); background: #edf5fb; }
+.risk-result-grid span,
+.risk-result-grid strong,
+.risk-result-grid small { display: block; }
+.risk-result-grid span { color: #68788b; font-size: 8px; }
+.risk-result-grid strong { margin-top: 4px; color: var(--navy); font-size: 14px; }
+.risk-result-grid small { margin-top: 5px; color: #68788b; font-size: 8px; }
+.risk-notice,
+.risk-warning { margin: 10px 0 0; border-radius: 6px; padding: 9px 11px; font-size: 9px; line-height: 1.4; }
+.risk-notice { background: #eef4f8; color: #475f76; }
+.risk-warning { background: #fff1e6; color: #8a410a; }
+.risk-separate-context { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 13px; }
+.risk-separate-context p { margin: 0; border-top: 1px solid #d5e0e9; padding-top: 9px; }
+.risk-separate-context span,
+.risk-separate-context strong { display: block; }
+.risk-separate-context span { color: #6a788a; font-size: 8px; }
+.risk-separate-context strong { margin-top: 3px; color: var(--navy); font-size: 10px; }
+.print-risk-note { color: #8a410a; font-size: 9px; }
 
 /* V0.12: dynamische Kapitaltöpfe und Zeitstruktur. */
 .capital-pot-workspace {

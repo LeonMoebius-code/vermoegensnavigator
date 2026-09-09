@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { createCase, normalizeImportedCase } from "../app/case-model";
 import {
   emptyAdvisory,
@@ -102,6 +103,9 @@ assert.equal(manual.source, "manual");
 const legacySelection = applyCompletedRiskAssessment(4, "legacy", completeAssessment());
 assert.equal(legacySelection.risk, 4);
 assert.equal(legacySelection.source, "legacy");
+const reassessed = applyCompletedRiskAssessment(4, "assessment", completeAssessment());
+assert.equal(reassessed.risk, 3);
+assert.equal(reassessed.source, "assessment");
 assert.equal(riskSelectionDeviation(4, completeRiskAssessment(completeAssessment())), "notice");
 assert.equal(riskSelectionDeviation(5, capped), "warning");
 
@@ -149,5 +153,14 @@ assert.deepEqual(
     { title: "Hoch spekulativ", downside: -35, upside: 55 },
   ],
 );
+
+const pageSource = readFileSync("app/page.tsx", "utf8");
+assert.match(pageSource, /Risikoorientierung ermitteln/);
+assert.match(pageSource, /Magisches Dreieck/);
+assert.match(pageSource, /Gewählte Risikoorientierung/);
+assert.match(pageSource, /Ermittelter Orientierungsrahmen/);
+assert.match(pageSource, /Wird je Kapitaltopf geprüft/);
+assert.doesNotMatch(pageSource, /Manuell festlegen/);
+for (const profile of Object.values(riskProfiles)) assert.match(pageSource + JSON.stringify(riskProfiles), new RegExp(profile.title));
 
 console.log("Risiko V2: Modell, Engine und Migration erfolgreich geprüft.");

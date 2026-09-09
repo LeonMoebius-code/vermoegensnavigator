@@ -74,7 +74,7 @@ export type AdvisoryData = {
   riskSelectionSource: RiskSelectionSource;
   riskAssessmentV2: RiskAssessmentV2;
   /** Nur für die verlustfreie Migration historischer Fälle. */
-  riskAssessment: LegacyRiskAssessment;
+  riskAssessment?: LegacyRiskAssessment;
   experience: string;
   priorities: string[];
   modules: string[];
@@ -96,11 +96,6 @@ export const emptyAdvisory: AdvisoryData = {
   risk: 3,
   riskSelectionSource: "default",
   riskAssessmentV2: emptyRiskAssessmentV2(),
-  riskAssessment: {
-    lossReaction: null,
-    temporaryLoss: null,
-    financialCapacity: null,
-  },
   experience: "Grundkenntnisse",
   priorities: ["Werterhalt", "Flexibilität"],
   modules: ["maturity", "market"],

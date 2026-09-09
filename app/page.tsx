@@ -18,11 +18,23 @@ import {
   modules,
   percent,
   priorityOptions,
-  RiskAssessment,
+  RiskAssessmentV2,
   RiskLevel,
   scenarios,
   Scope,
 } from "./navigator-config";
+import {
+  applyCompletedRiskAssessment,
+  completeRiskAssessment,
+  limitingCapacityFactors,
+  riskConflictLevel,
+  riskProfiles,
+  riskScenarioScores,
+  riskSelectionDeviation,
+  triangleRiskScore,
+  triangleWeightsFromPoint,
+  willingnessConsistencyGap,
+} from "./risk-orientation";
 import {
   assetClasses,
   AssetClass,
@@ -120,85 +132,7 @@ const steps = [
   ["Ergebnis", "Struktur und nächste Schritte"],
 ] as const;
 
-const riskText: Record<RiskLevel, { title: string; text: string }> = {
-  1: {
-    title: "Sehr defensiv",
-    text: "Kapitalerhalt hat Vorrang; Schwankungen sollen sehr gering bleiben.",
-  },
-  2: {
-    title: "Defensiv",
-    text: "Begrenzte Schwankungen werden für einen moderaten Ertrag akzeptiert.",
-  },
-  3: {
-    title: "Ausgewogen",
-    text: "Ertrag und Stabilität werden gleichgewichtet.",
-  },
-  4: {
-    title: "Wachstumsorientiert",
-    text: "Deutliche zwischenzeitliche Verluste werden für höhere Chancen akzeptiert.",
-  },
-  5: {
-    title: "Offensiv",
-    text: "Langfristiges Wachstum steht trotz hoher Schwankungen im Vordergrund.",
-  },
-};
-
-const riskQuestions: Array<{
-  key: keyof RiskAssessment;
-  title: string;
-  options: string[];
-}> = [
-  {
-    key: "lossReaction",
-    title: "Wie würden Sie bei einem deutlichen zwischenzeitlichen Verlust reagieren?",
-    options: [
-      "Sofort verkaufen",
-      "Risiko deutlich reduzieren",
-      "Zunächst abwarten",
-      "Strategie beibehalten",
-      "Nachkauf bewusst prüfen",
-    ],
-  },
-  {
-    key: "temporaryLoss",
-    title: "Welche vorübergehende Wertminderung erscheint noch tragbar?",
-    options: ["Bis 5 %", "Bis 10 %", "Bis 15 %", "Bis 25 %", "Mehr als 25 %"],
-  },
-  {
-    key: "financialCapacity",
-    title: "Welche Auswirkung hätte ein Verlust auf geplante Ausgaben?",
-    options: [
-      "Ziele wären gefährdet",
-      "Deutliche Einschränkungen",
-      "Teilweise Anpassungen",
-      "Kaum Einschränkungen",
-      "Keine Einschränkungen",
-    ],
-  },
-];
-
-function riskOrientation(data: AdvisoryData, assessment = data.riskAssessment) {
-  const answers = Object.values(assessment);
-  if (answers.some((value) => value === null)) return null;
-  const horizon =
-    data.horizon <= 2 ? 1 : data.horizon <= 4 ? 2 : data.horizon <= 7 ? 3 : data.horizon <= 12 ? 4 : 5;
-  const experience = data.experience.startsWith("Keine")
-    ? 1
-    : data.experience === "Grundkenntnisse"
-      ? 2
-      : data.experience === "Erweiterte Kenntnisse"
-        ? 3
-        : 4;
-  const raw = Math.round(
-    (Number(assessment.lossReaction) +
-      Number(assessment.temporaryLoss) +
-      Number(assessment.financialCapacity) +
-      horizon +
-      experience) /
-      5,
-  );
-  return Math.max(1, Math.min(5, raw)) as RiskLevel;
-}
+const riskText = riskProfiles;
 
 const goalOptions = [
   "Liquidität rentierlich strukturieren",
@@ -1806,130 +1740,179 @@ function NeedsStep({
   );
 }
 
-function RiskOrientationDialog({
-  data,
-  update,
-  onClose,
+const riskScenarios = [
+  { id: "A" as const, title: "Geringe Verluste", text: "Ich möchte nur geringe Verluste akzeptieren und nehme dafür auch eine eher geringe Rendite in Kauf." },
+  { id: "B" as const, title: "Moderates Wachstum", text: "Ich bin bereit, mäßige Verluste zu akzeptieren, um mein Vermögen langfristig moderat, aber stetig wachsen zu lassen." },
+  { id: "C" as const, title: "Vermögenswachstum", text: "Vermögenswachstum ist mir wichtig, daher nehme ich auch höhere Schwankungen und mögliche Kapitalverluste in Kauf." },
+  { id: "D" as const, title: "Rendite im Vordergrund", text: "Meine Renditeziele stehen klar im Vordergrund, daher nehme ich auch erhebliche Schwankungen und mögliche Kapitalverluste in Kauf." },
+];
+
+const willingnessQuestions: Array<{
+  key: keyof RiskAssessmentV2["willingness"];
+  title: string;
+  options: string[];
+}> = [
+  { key: "lossReaction", title: "Wie würden Sie bei einem deutlichen zwischenzeitlichen Verlust reagieren?", options: ["Sofort verkaufen", "Risiko deutlich reduzieren", "Zunächst abwarten", "Strategie beibehalten", "Nachkauf bewusst prüfen"] },
+  { key: "temporaryLoss", title: "Welche vorübergehende Wertminderung erscheint Ihnen noch tragbar?", options: ["Bis etwa 5 %", "Bis etwa 10 %", "Bis etwa 20 %", "Bis etwa 35 %", "Mehr als 35 %, sehr hohe Verluste sind bewusst"] },
+  { key: "riskReturnPriority", title: "Welche Aussage beschreibt Ihr Anlageziel am besten?", options: ["Substanzerhaltung und geringe Schwankungen", "Mehr Rendite bei begrenzten Schwankungen", "Renditechancen und Schwankungen ausgewogen", "Höhere Renditechancen sind wichtiger", "Höchste Chancen trotz erheblicher Verluste"] },
+];
+
+function RiskBand({ level, compact = false }: { level: RiskLevel; compact?: boolean }) {
+  const profile = riskProfiles[level];
+  return (
+    <div className={`risk-band${compact ? " compact" : ""}`} aria-label={`Illustrative Bandbreite ${profile.downside} bis plus ${profile.upside} Prozent`}>
+      <span style={{ "--risk-band-loss": `${Math.abs(profile.downside)}%` } as CSSProperties}>{profile.downside} %</span>
+      <i aria-hidden="true" />
+      <strong>+{profile.upside} %</strong>
+      <small>illustrativ</small>
+    </div>
+  );
+}
+
+function RiskAnswerGroup({
+  questions,
+  values,
+  onAnswer,
 }: {
+  questions: Array<{ key: string; title: string; options: string[] }>;
+  values: Record<string, RiskLevel | null>;
+  onAnswer: (key: string, value: RiskLevel) => void;
+}) {
+  return (
+    <div className="risk-v2-questions">
+      {questions.map((question) => (
+        <section key={question.key}>
+          <p>{question.title}</p>
+          <div>
+            {question.options.map((option, index) => {
+              const value = (index + 1) as RiskLevel;
+              return (
+                <button key={option} className={values[question.key] === value ? "selected" : ""} onClick={() => onAnswer(question.key, value)}>
+                  <b>{value}</b><span>{option}</span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function RiskOrientationDialog({ data, update, onClose }: {
   data: AdvisoryData;
-  update: <K extends keyof AdvisoryData>(
-    key: K,
-    value: AdvisoryData[K],
-  ) => void;
+  update: <K extends keyof AdvisoryData>(key: K, value: AdvisoryData[K]) => void;
   onClose: () => void;
 }) {
-  const firstUnanswered = riskQuestions.findIndex(
-    (question) => data.riskAssessment[question.key] === null,
-  );
-  const [questionIndex, setQuestionIndex] = useState(
-    firstUnanswered === -1 ? riskQuestions.length - 1 : firstUnanswered,
-  );
-  const [showResult, setShowResult] = useState(false);
-  const question = riskQuestions[questionIndex];
-  const orientation = riskOrientation(data);
-  const selected = data.riskAssessment[question.key];
-  const answer = (value: RiskLevel) =>
-    update("riskAssessment", { ...data.riskAssessment, [question.key]: value });
+  const [step, setStep] = useState(0);
+  const assessment = data.riskAssessmentV2;
+  const completed = completeRiskAssessment(assessment);
+  const vertices = {
+    security: { x: 45, y: 245 },
+    liquidity: { x: 355, y: 245 },
+    returnChance: { x: 200, y: 30 },
+  };
+  const marker = assessment.triangle
+    ? {
+        x: assessment.triangle.security * vertices.security.x + assessment.triangle.liquidity * vertices.liquidity.x + assessment.triangle.returnChance * vertices.returnChance.x,
+        y: assessment.triangle.security * vertices.security.y + assessment.triangle.liquidity * vertices.liquidity.y + assessment.triangle.returnChance * vertices.returnChance.y,
+      }
+    : null;
+  const capacityQuestions = [
+    { key: "goalImpact", title: "Welche Auswirkungen hätte ein deutlicher Verlust auf geplante Ausgaben, finanzielle Ziele oder notwendige Investitionen?", options: ["Unmittelbar gefährdet", "Deutliche Einschränkungen", "Einzelne Ziele anpassen", "Kaum Einschränkungen", "Keine wesentlichen Einschränkungen"] },
+    {
+      key: "capitalDependence",
+      title: data.scope === "business"
+        ? "In welchem Umfang ist das Unternehmen auf dieses Kapital für laufende Liquidität, Investitionen oder den Geschäftsbetrieb angewiesen?"
+        : data.scope === "private"
+          ? "In welchem Umfang sind Sie auf dieses Kapital für laufende Lebensführung oder absehbare Vorhaben angewiesen?"
+          : "In welchem Umfang wird dieses Kapital für laufende Liquidität oder absehbare Vorhaben benötigt?",
+      options: ["Sehr stark", "Deutlich", "Teilweise", "Gering", "Praktisch nicht"],
+    },
+    {
+      key: "lossBuffer",
+      title: data.scope === "business"
+        ? "Könnte ein deutlicher Verlust aus anderer Unternehmensliquidität oder finanziellen Reserven aufgefangen werden?"
+        : data.scope === "private"
+          ? "Könnte ein deutlicher Verlust aus anderen verfügbaren Mitteln aufgefangen werden?"
+          : "Könnte ein deutlicher Verlust aus anderen verfügbaren Mitteln oder Reserven aufgefangen werden?",
+      options: ["Nein", "Nur sehr eingeschränkt", "Teilweise", "Weitgehend", "Problemlos"],
+    },
+  ];
+  const canContinue = [
+    Boolean(assessment.triangle),
+    Boolean(assessment.scenario),
+    Object.values(assessment.willingness).every(Boolean),
+    Object.values(assessment.capacity).every(Boolean),
+    Boolean(completed.recommendedRisk),
+  ][step];
+  const headings = ["Präferenz im magischen Dreieck", "Welches Zielbild passt?", "Risikowille", "Finanzielle Verlusttragfähigkeit", "Ergebnis der Orientierung"];
+  const capacityLabels: Record<keyof RiskAssessmentV2["capacity"], string> = {
+    goalImpact: "Auswirkung auf Ziele",
+    capitalDependence: "Abhängigkeit vom Anlagekapital",
+    lossBuffer: "Ausgleichsmöglichkeiten",
+  };
+  const selectionDeviation = riskSelectionDeviation(data.risk, completed);
+  const conflict = riskConflictLevel(completed.riskWillingness || null, completed.lossCapacity || null);
 
   return (
     <div className="modal-backdrop risk-dialog-backdrop" role="presentation">
-      <section
-        className="risk-orientation-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Risiko-Orientierung ermitteln"
-      >
+      <section className="risk-orientation-dialog risk-v2-dialog" role="dialog" aria-modal="true" aria-label="Risikoorientierung ermitteln">
         <header>
-          <div>
-            <p className="eyebrow">KURZE RISIKO-ORIENTIERUNG</p>
-            <h2>{showResult ? "Orientierungswert" : `Frage ${questionIndex + 1} von ${riskQuestions.length}`}</h2>
-          </div>
-          <button
-            className="risk-dialog-close"
-            aria-label="Risiko-Orientierung schließen"
-            onClick={onClose}
-          >
-            <span>Schließen</span>
-            <b aria-hidden="true">×</b>
-          </button>
+          <div><p className="eyebrow">RISIKOORIENTIERUNG ERMITTELN</p><h2>{headings[step]}</h2></div>
+          <button className="risk-dialog-close" aria-label="Risikoorientierung schließen" onClick={onClose}><span>Schließen</span><b aria-hidden="true">×</b></button>
         </header>
-        {showResult ? (
-          <div className="risk-orientation-result">
-            <span>{orientation ? `${orientation}/5` : "–"}</span>
-            <div>
-              <strong>{orientation ? riskText[orientation].title : "Noch nicht vollständig"}</strong>
-              <p>
-                {orientation
-                  ? riskText[orientation].text
-                  : "Bitte beantworten Sie alle drei Fragen, bevor der Orientierungswert übernommen wird."}
-              </p>
+        <div className="risk-v2-progress" aria-label={`Schritt ${step + 1} von 5`}>
+          {[0, 1, 2, 3, 4].map((entry) => <i key={entry} className={entry <= step ? "active" : ""} />)}
+          <span>Schritt {step + 1} von 5</span>
+        </div>
+        <div className="risk-v2-body">
+          {step === 0 && (
+            <div className="risk-triangle-step">
+              <p>Markieren Sie, wie Sicherheit, Verfügbarkeit und Renditechance für Sie gewichtet sind. Die gesamte Fläche ist auswählbar.</p>
+              <svg viewBox="0 0 400 285" role="img" aria-label="Magisches Dreieck mit Sicherheit, Liquidität und Renditechance" onClick={(event) => {
+                const rect = event.currentTarget.getBoundingClientRect();
+                const weights = triangleWeightsFromPoint({ x: ((event.clientX - rect.left) / rect.width) * 400, y: ((event.clientY - rect.top) / rect.height) * 285 }, vertices);
+                if (!weights) return;
+                update("riskAssessmentV2", { ...assessment, triangle: { ...weights, score: triangleRiskScore(weights) } });
+              }}>
+                <polygon points="45,245 355,245 200,30" />
+                <text x="28" y="270">Sicherheit</text><text x="294" y="270">Liquidität</text><text x="200" y="18" textAnchor="middle">Renditechance</text>
+                {marker && <circle cx={marker.x} cy={marker.y} r="9" />}
+              </svg>
+              <strong>{assessment.triangle ? `Tendenz: ${riskProfiles[Math.round(assessment.triangle.score) as RiskLevel].title}` : "Noch keine Präferenz markiert"}</strong>
             </div>
-          </div>
-        ) : (
-          <div className="risk-dialog-question">
-            <p>{question.title}</p>
-            <div>
-              {question.options.map((option, index) => {
-                const value = (index + 1) as RiskLevel;
-                return (
-                  <button
-                    key={option}
-                    className={selected === value ? "selected" : ""}
-                    onClick={() => answer(value)}
-                  >
-                    <span>{value}</span>
-                    {option}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-        <footer>
-          {showResult ? (
-            <>
-              <button className="secondary" onClick={() => setShowResult(false)}>
-                ← Antworten prüfen
-              </button>
-              <button
-                className="primary"
-                disabled={!orientation}
-                onClick={() => {
-                  if (!orientation) return;
-                  update("risk", orientation);
-                  onClose();
-                }}
-              >
-                Orientierungswert übernehmen
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                className="secondary"
-                onClick={() =>
-                  questionIndex === 0
-                    ? onClose()
-                    : setQuestionIndex(questionIndex - 1)
-                }
-              >
-                {questionIndex === 0 ? "Schließen" : "← Zurück"}
-              </button>
-              <button
-                className="primary"
-                disabled={!selected}
-                onClick={() =>
-                  questionIndex === riskQuestions.length - 1
-                    ? setShowResult(true)
-                    : setQuestionIndex(questionIndex + 1)
-                }
-              >
-                {questionIndex === riskQuestions.length - 1
-                  ? "Ergebnis anzeigen"
-                  : "Weiter →"}
-              </button>
-            </>
           )}
+          {step === 1 && <div className="risk-scenario-grid">{riskScenarios.map((scenario) => {
+            const level = riskScenarioScores[scenario.id] as RiskLevel;
+            return <button key={scenario.id} className={assessment.scenario === scenario.id ? "selected" : ""} onClick={() => update("riskAssessmentV2", { ...assessment, scenario: scenario.id })}><span>Szenario {scenario.id}</span><strong>{scenario.title}</strong><p>{scenario.text}</p><RiskBand level={level} compact /></button>;
+          })}</div>}
+          {step === 2 && <RiskAnswerGroup questions={willingnessQuestions} values={assessment.willingness} onAnswer={(key, value) => update("riskAssessmentV2", { ...assessment, willingness: { ...assessment.willingness, [key]: value } })} />}
+          {step === 3 && <RiskAnswerGroup questions={capacityQuestions} values={assessment.capacity} onAnswer={(key, value) => update("riskAssessmentV2", { ...assessment, capacity: { ...assessment.capacity, [key]: value } })} />}
+          {step === 4 && completed.recommendedRisk && completed.riskWillingness && completed.lossCapacity && (
+            <div className="risk-v2-result">
+              <div className="risk-result-grid">
+                <article><span>Gewählte Risikoorientierung</span><strong>{riskProfiles[data.risk].title} · {data.risk}/5</strong></article>
+                <article><span>Risikowille</span><strong>{riskProfiles[completed.riskWillingness].title} · {completed.riskWillingness}/5</strong></article>
+                <article><span>Verlusttragfähigkeit</span><strong>{riskProfiles[completed.lossCapacity].title} · {completed.lossCapacity}/5</strong><small>Begrenzend: {limitingCapacityFactors(completed.capacity).map((key) => capacityLabels[key]).join(", ")}</small></article>
+                <article className="recommended"><span>Ermittelter Orientierungsrahmen</span><strong>{riskProfiles[completed.recommendedRisk].title} · {completed.recommendedRisk}/5</strong></article>
+              </div>
+              {(willingnessConsistencyGap(completed) || 0) >= 2 && <p className="risk-notice">Ihre Angaben zur Risikobereitschaft sind nicht vollständig einheitlich. Das Ergebnis ist eine Orientierung, die Einzelangaben bleiben erhalten.</p>}
+              {conflict !== "none" && <p className={`risk-${conflict}`}>{conflict === "warning" ? "Risikowunsch und finanzielle Verlusttragfähigkeit weichen deutlich voneinander ab." : "Die finanzielle Verlusttragfähigkeit begrenzt den ermittelten Risikowunsch."}</p>}
+              {selectionDeviation !== "none" && <p className={`risk-${selectionDeviation}`}>{data.risk > completed.lossCapacity ? "Die gewählte Risikoorientierung liegt über der finanziellen Verlusttragfähigkeit." : "Die gewählte Risikoorientierung liegt über dem ermittelten Orientierungsrahmen."}</p>}
+              <div className="risk-separate-context"><p><span>Anlagehorizont</span><strong>Wird je Kapitaltopf geprüft</strong></p><p><span>Kenntnisse & Erfahrung</span><strong>{data.experience}</strong></p></div>
+            </div>
+          )}
+        </div>
+        <footer>
+          <button className="secondary" onClick={() => step === 0 ? onClose() : setStep(step - 1)}>{step === 0 ? "Schließen" : "← Zurück"}</button>
+          {step < 4 ? <button className="primary" disabled={!canContinue} onClick={() => setStep(step + 1)}>Weiter →</button> : <button className="primary" disabled={!canContinue} onClick={() => {
+            const result = applyCompletedRiskAssessment(data.risk, data.riskSelectionSource, assessment);
+            update("riskAssessmentV2", result.assessment);
+            update("risk", result.risk);
+            update("riskSelectionSource", result.source);
+            onClose();
+          }}>Ergebnis übernehmen</button>}
         </footer>
       </section>
     </div>
@@ -1948,12 +1931,8 @@ function GoalsStep({
   ) => void;
   togglePriority: (value: string) => void;
 }) {
-  const orientation = riskOrientation(data);
   const [riskDialogOpen, setRiskDialogOpen] = useState(false);
-  const [manualRiskOpen, setManualRiskOpen] = useState(false);
-  const answeredQuestions = riskQuestions.filter(
-    (question) => data.riskAssessment[question.key] !== null,
-  ).length;
+  const completedAssessment = completeRiskAssessment(data.riskAssessmentV2);
   return (
     <>
       <SectionIntro
@@ -2005,56 +1984,35 @@ function GoalsStep({
         <div className="field full risk-orientation-card">
           <div className="risk-orientation-card-head">
             <div>
-              <span>Kurze Risiko-Orientierung</span>
-              <small>
-                Drei Klickfragen werden mit Horizont und Kenntnissen verbunden.
-              </small>
+              <span>Risikoorientierung</span>
+              <small>Direkt auswählen oder im Gespräch differenziert ermitteln.</small>
             </div>
-            <strong className={orientation ? "complete" : ""}>
-              {orientation
-                ? `${orientation}/5 · ${riskText[orientation].title}`
-                : answeredQuestions > 0
-                  ? `${answeredQuestions}/3 beantwortet`
-                  : "Noch nicht ermittelt"}
+            <strong className="complete">
+              {data.risk}/5 · {riskProfiles[data.risk].title}
             </strong>
           </div>
-          <div className="risk-orientation-actions">
-            <button className="primary" onClick={() => setRiskDialogOpen(true)}>
-              Orientierung ermitteln
-            </button>
-            <button
-              className="secondary"
-              onClick={() => setManualRiskOpen((open) => !open)}
-            >
-              Manuell festlegen
-            </button>
+          <div className="risk-profile-grid">
+            {([1, 2, 3, 4, 5] as RiskLevel[]).map((risk) => (
+              <button key={risk} className={data.risk === risk ? "selected" : ""} onClick={() => {
+                update("risk", risk);
+                update("riskSelectionSource", "manual");
+              }}>
+                <span>{risk}/5</span>
+                <strong>{riskProfiles[risk].title}</strong>
+                <p>{riskProfiles[risk].short}</p>
+                <RiskBand level={risk} compact />
+              </button>
+            ))}
           </div>
+          <div className="risk-orientation-actions"><button className="primary" onClick={() => setRiskDialogOpen(true)}>Risikoorientierung ermitteln</button></div>
           <p className="risk-orientation-note">
-            Die Auswertung ist eine Gesprächsorientierung. Sie ersetzt weder die
-            regulatorische Geeignetheitsprüfung noch die Verlusttragfähigkeitsprüfung.
+            Die Bandbreiten sind illustrative Beispielszenarien, keine Prognose. Die Orientierung ersetzt keine regulatorische Geeignetheitsprüfung.
           </p>
-          {manualRiskOpen && (
-            <div className="risk-manual-selection">
-              <span>Strategische Risikoeinordnung direkt festlegen</span>
-              <div className="risk-scale">
-                {([1, 2, 3, 4, 5] as RiskLevel[]).map((risk) => (
-                  <button
-                    key={risk}
-                    className={data.risk === risk ? "selected" : ""}
-                    onClick={() => update("risk", risk)}
-                  >
-                    <b>{risk}</b>
-                    <span>{riskText[risk].title}</span>
-                  </button>
-                ))}
-              </div>
-              <div className="risk-explainer">
-                <strong>{riskText[data.risk].title}</strong>
-                <p>
-                  {riskText[data.risk].text} Keine regulatorische
-                  Geeignetheitsprüfung.
-                </p>
-              </div>
+          {completedAssessment.recommendedRisk && (
+            <div className="risk-assessment-summary">
+              <span>Ermittelte Orientierung</span>
+              <strong>{riskProfiles[completedAssessment.recommendedRisk].title} · {completedAssessment.recommendedRisk}/5</strong>
+              <small>Risikowille {completedAssessment.riskWillingness}/5 · Verlusttragfähigkeit {completedAssessment.lossCapacity}/5</small>
             </div>
           )}
         </div>
@@ -2429,7 +2387,7 @@ function ResultStep({
           <p className="eyebrow">ORIENTIERUNGSERGEBNIS</p>
           <h2>{data.caseName || "Unbenannte Musterberatung"}</h2>
           <p>
-            {scopeLabel(data.scope)} · Risiko {data.risk}/5 ·{" "}
+            {scopeLabel(data.scope)} · Risiko {data.risk}/5 ({riskProfiles[data.risk].title}) ·{" "}
             {item.plans.length} Planvarianten · {advisor.name}
           </p>
         </div>
@@ -6434,6 +6392,7 @@ function ExportCenter({
     item.createdAt,
   );
   const advisor = advisorFor(item.advisorId);
+  const exportRiskAssessment = completeRiskAssessment(item.advisory.riskAssessmentV2);
   const exportTargetLabel = (entry: SavingsPlan): string => {
     if (!entry.targetRef) return "";
     if (entry.targetRef.kind === "savingsGoal") {
@@ -6462,10 +6421,12 @@ function ExportCenter({
         ["Status", item.status],
         ["Verantwortlich", advisor.name],
         ["Funktion", advisor.title],
-        ["Risiko", item.advisory.risk],
-        ["Risiko-Orientierung Verlustreaktion", item.advisory.riskAssessment.lossReaction || "offen"],
-        ["Risiko-Orientierung Wertminderung", item.advisory.riskAssessment.temporaryLoss || "offen"],
-        ["Risiko-Orientierung Tragfähigkeit", item.advisory.riskAssessment.financialCapacity || "offen"],
+        ["Gewählte Risikoorientierung", `${item.advisory.risk}/5 · ${riskProfiles[item.advisory.risk].title}`],
+        ["Quelle", item.advisory.riskSelectionSource],
+        ["Risikowille", exportRiskAssessment.riskWillingness ? `${exportRiskAssessment.riskWillingness}/5 · ${riskProfiles[exportRiskAssessment.riskWillingness].title}` : "nicht vollständig ermittelt"],
+        ["Verlusttragfähigkeit", exportRiskAssessment.lossCapacity ? `${exportRiskAssessment.lossCapacity}/5 · ${riskProfiles[exportRiskAssessment.lossCapacity].title}` : "nicht vollständig ermittelt"],
+        ["Ermittelter Orientierungsrahmen", exportRiskAssessment.recommendedRisk ? `${exportRiskAssessment.recommendedRisk}/5 · ${riskProfiles[exportRiskAssessment.recommendedRisk].title}` : "nicht vollständig ermittelt"],
+        ["Abweichung", exportRiskAssessment.recommendedRisk && item.advisory.risk > exportRiskAssessment.recommendedRisk ? "Gewählte Orientierung liegt über dem ermittelten Orientierungsrahmen" : ""],
         ["Ziel", item.advisory.goal],
         ["Erstellt", item.createdAt],
         ["Aktualisiert", item.updatedAt],
@@ -6867,7 +6828,7 @@ function ExportCenter({
           <h1>{item.advisory.caseName || "Unbenannter Testfall"}</h1>
           <p>
             {scopeLabel(item.advisory.scope)} · Ziel: {item.advisory.goal} ·
-            Risikostufe {item.advisory.risk}/5
+            Risikostufe {item.advisory.risk}/5 ({riskProfiles[item.advisory.risk].title})
           </p>
           <p className="print-advisor">
             Verantwortlich: {advisor.name}, {advisor.title}
@@ -6919,19 +6880,26 @@ function ExportCenter({
           <div className="print-overview">
             <div>
               <p>
-                <span>Strategische Einordnung</span>
+                <span>Gewählte Risikoorientierung</span>
                 <strong>{item.advisory.risk}/5 · {riskText[item.advisory.risk].title}</strong>
               </p>
               <p>
-                <span>Klickstrecke</span>
-                <strong>
-                  {riskOrientation(item.advisory)
-                    ? "vollständig durchgeführt"
-                    : "nicht vollständig durchgeführt"}
-                </strong>
+                <span>Risikowille</span>
+                <strong>{exportRiskAssessment.riskWillingness ? `${exportRiskAssessment.riskWillingness}/5 · ${riskProfiles[exportRiskAssessment.riskWillingness].title}` : "Nicht vollständig ermittelt"}</strong>
+              </p>
+              <p>
+                <span>Verlusttragfähigkeit</span>
+                <strong>{exportRiskAssessment.lossCapacity ? `${exportRiskAssessment.lossCapacity}/5 · ${riskProfiles[exportRiskAssessment.lossCapacity].title}` : "Nicht vollständig ermittelt"}</strong>
+              </p>
+              <p>
+                <span>Ermittelter Orientierungsrahmen</span>
+                <strong>{exportRiskAssessment.recommendedRisk ? `${exportRiskAssessment.recommendedRisk}/5 · ${riskProfiles[exportRiskAssessment.recommendedRisk].title}` : "Nicht vollständig ermittelt"}</strong>
               </p>
             </div>
           </div>
+          {exportRiskAssessment.recommendedRisk && item.advisory.risk > exportRiskAssessment.recommendedRisk && (
+            <p className="print-risk-note">Hinweis: Die gewählte Risikoorientierung liegt über dem ermittelten Orientierungsrahmen.</p>
+          )}
         </section>
         {item.advisory.needs.length > 0 && (
           <section>
