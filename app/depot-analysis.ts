@@ -21,8 +21,9 @@ export type ProductClassification = {
   confidence: "source" | "derived" | "unknown";
 };
 
-export type DepotAnalysisPosition = Omit<DepotHolding, "id" | "value"> & {
+export type DepotAnalysisPosition = Omit<DepotHolding, "id" | "value" | "depotId"> & {
   id: string;
+  depotId?: string;
   source: "holding" | "planned-purchase";
   value: number;
   classification: ProductClassification;
@@ -179,12 +180,32 @@ export function distribution(
 }
 
 export function concentrationMetrics(positions: DepotAnalysisPosition[]) {
-  const sorted = [...positions].sort((a, b) => b.value - a.value);
+  const values = new Map<string, DepotAnalysisPosition>();
+  for (const position of positions) {
+    const key = economicSecurityKey(position);
+    const current = values.get(key);
+    values.set(
+      key,
+      current ? { ...current, value: current.value + position.value } : { ...position },
+    );
+  }
+  const sorted = [...values.values()].sort((a, b) => b.value - a.value);
   const total = sorted.reduce((sum, position) => sum + position.value, 0);
   const share = (count: number) => total
     ? sorted.slice(0, count).reduce((sum, position) => sum + position.value, 0) / total
     : 0;
   return { total, count: sorted.length, largest: sorted[0], top3: share(3), top5: share(5), positions: sorted };
+}
+
+export function economicSecurityKey(
+  position: Pick<DepotAnalysisPosition, "id" | "wkn" | "productId">,
+) {
+  const wkn = String(position.wkn || "")
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .toUpperCase();
+  if (wkn) return `wkn:${wkn}`;
+  if (position.productId) return `product:${position.productId}`;
+  return `position:${position.id}`;
 }
 
 export function productTypeAnalysis(positions: DepotAnalysisPosition[]) {
@@ -248,6 +269,22 @@ export function valuationDateFor(positions: DepotAnalysisPosition[], fallback = 
     counts.set(position.valuationEnd, (counts.get(position.valuationEnd) || 0) + 1);
   const selected = [...counts.entries()].sort((a, b) => b[1] - a[1] || b[0].localeCompare(a[0]))[0]?.[0];
   return selected ? localDate(selected)! : new Date(fallback.getFullYear(), fallback.getMonth(), fallback.getDate(), 12);
+}
+
+export function valuationDatesFor(positions: DepotAnalysisPosition[]) {
+  return Array.from(
+    new Set(
+      positions.flatMap((position) =>
+        position.valuationEnd && localDate(position.valuationEnd)
+          ? [position.valuationEnd]
+          : [],
+      ),
+    ),
+  ).sort();
+}
+
+export function hasMixedValuationDates(positions: DepotAnalysisPosition[]) {
+  return valuationDatesFor(positions).length > 1;
 }
 
 export function remainingMaturityYears(valuationDate: Date, maturity?: string): number | null {
@@ -326,7 +363,10 @@ export function bondPortfolioAnalysis(positions: DepotAnalysisPosition[], fallba
   const renten = positions.filter((position) => position.classification.main === "Renten");
   const direct = renten.filter((position) => position.classification.direct);
   const rows: BondPositionAnalysis[] = renten.map((position) => {
-    const remaining = remainingMaturityYears(valuationDate, position.maturity);
+    const positionValuationDate = position.valuationEnd
+      ? localDate(position.valuationEnd) || valuationDate
+      : valuationDate;
+    const remaining = remainingMaturityYears(positionValuationDate, position.maturity);
     const running = position.classification.direct ? currentYield(position.coupon, position.currentPrice) : null;
     let reason: string | undefined;
     if (!position.classification.direct) reason = "Keine Einzeltitel-Cashflows";
