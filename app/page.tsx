@@ -760,7 +760,7 @@ export default function Home() {
         </nav>
         <div className="sidebar-foot">
           <p>
-            <strong>Prototyp V0.17.0</strong>
+            <strong>Prototyp V0.18.0</strong>
             <br />
             Browser-lokal, keine revisionssichere Speicherung.
           </p>
@@ -6289,9 +6289,9 @@ function DepotOptimizer({
             >
               CSV importieren
             </button>
-            <button className="secondary" onClick={() => addHolding()}>
+            {item.depotAccounts.length === 0 && <button className="secondary" onClick={() => addHolding()}>
               ＋ Position
-            </button>
+            </button>}
           </div>
         </div>
         {csvImport.input}
@@ -6322,7 +6322,7 @@ function DepotOptimizer({
               <span></span>
             </div>
             {item.depotAccounts.map((account) => <div className="depot-holding-group" key={account.id}>
-              <div className="depot-holding-group-title"><strong>{account.name}</strong><span>{euro.format(depot.filter((holding) => holding.depotId === account.id).reduce((sum, holding) => sum + holding.value, 0))} · {depot.filter((holding) => holding.depotId === account.id).length} Positionen</span></div>
+              <div className="depot-holding-group-title"><strong>{account.name}</strong><span>{euro.format(depot.filter((holding) => holding.depotId === account.id).reduce((sum, holding) => sum + holding.value, 0))} · {depot.filter((holding) => holding.depotId === account.id).length} Positionen</span><button className="secondary" onClick={() => addHolding(account.id)}>＋ Position</button></div>
             {depot.filter((holding) => holding.depotId === account.id).map((holding) => (
               <div className="holding-card" key={holding.id}>
               <div className="holding-row holding-row-v2">

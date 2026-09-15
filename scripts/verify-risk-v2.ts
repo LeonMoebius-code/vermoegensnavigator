@@ -110,7 +110,7 @@ assert.equal(riskSelectionDeviation(4, completeRiskAssessment(completeAssessment
 assert.equal(riskSelectionDeviation(5, capped), "warning");
 
 const created = createCase({ ...emptyAdvisory, horizon: 3, experience: "Keine / geringe Kenntnisse" });
-assert.equal(created.schemaVersion, 9);
+assert.equal(created.schemaVersion, 10);
 assert.equal(created.advisory.riskSelectionSource, "default");
 assert.equal(created.advisory.riskAssessmentV2.scenario, null);
 
@@ -129,7 +129,7 @@ const oldSnapshot = structuredClone(legacyCase);
 (legacyCase.versions as unknown[]) = [{ id: "v1", label: "Alt", createdAt: "2026-01-01", snapshot: oldSnapshot }];
 const migrated = normalizeImportedCase(legacyCase, false);
 assert.ok(migrated);
-assert.equal(migrated.schemaVersion, 9);
+assert.equal(migrated.schemaVersion, 10);
 assert.equal(migrated.advisory.risk, 4);
 assert.equal(migrated.advisory.riskSelectionSource, "legacy");
 assert.equal(migrated.advisory.riskAssessmentV2.willingness.lossReaction, 4);
