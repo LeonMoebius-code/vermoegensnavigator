@@ -110,6 +110,8 @@ export type StructurePlan = {
   depotMode: "none" | "compare" | "retain" | "afterSales";
   depotHoldingIds: string[];
   depotSelectionInitialized?: boolean;
+  /** Tracks an explicit adviser choice so the first concrete depot can use the default afterSales. */
+  depotModeSelectionInitialized?: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -163,6 +165,7 @@ export type SavingsGoal = {
 
 export type DepotHolding = {
   id: string;
+  depotId: string;
   productId?: string;
   name: string;
   value: number;
@@ -200,6 +203,15 @@ export type DepotHolding = {
   sourceType?: string;
   classificationStatus?: "mapped" | "matched" | "unresolved";
 };
+
+export type DepotAccount = {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ParsedDepotHolding = Omit<DepotHolding, "depotId">;
 
 export type VvFilters = {
   sustainable: "Keine Präferenz" | "Ja";
@@ -297,7 +309,7 @@ export type CustomerChecklistItem = {
 };
 
 export type AdvisoryCase = {
-  schemaVersion: 9;
+  schemaVersion: 10;
   id: string;
   status: "Entwurf" | "In Prüfung" | "Abgeschlossen";
   advisorId: AdvisorId;
@@ -305,6 +317,7 @@ export type AdvisoryCase = {
   plans: StructurePlan[];
   activePlanId: string;
   depot: DepotHolding[];
+  depotAccounts: DepotAccount[];
   moduleStates: Record<string, ModuleState>;
   customerChecklist: CustomerChecklistItem[];
   savingsGoals: SavingsGoal[];
@@ -403,7 +416,7 @@ export function createCase(
   const initialTotal = data.liquidAssets;
   const plan = createPlan("Plan A – Ausgangsstruktur", initialTotal);
   return {
-    schemaVersion: 9,
+    schemaVersion: 10,
     id: uid("fall"),
     status: "Entwurf",
     advisorId,
@@ -411,6 +424,7 @@ export function createCase(
     plans: [plan],
     activePlanId: plan.id,
     depot: [],
+    depotAccounts: [],
     moduleStates: {},
     customerChecklist: [],
     savingsGoals: [],
@@ -1019,26 +1033,48 @@ const normalizedHoldingWkn = (holding: DepotHolding) =>
 function uniqueHoldingMatch(
   holding: DepotHolding,
   nextDepot: DepotHolding[],
+  previousDepot: DepotHolding[] = [holding],
 ) {
+  const identicalId = nextDepot.filter((entry) => entry.id === holding.id);
+  if (identicalId.length === 1) return identicalId[0];
   const wkn = normalizedHoldingWkn(holding);
-  const candidates = wkn
-    ? nextDepot.filter((entry) => normalizedHoldingWkn(entry) === wkn)
-    : holding.productId
-      ? nextDepot.filter((entry) => entry.productId === holding.productId)
-      : nextDepot.filter(
-          (entry) =>
-            entry.name.trim().toLocaleLowerCase("de-DE") ===
-              holding.name.trim().toLocaleLowerCase("de-DE") &&
-            (entry.securityType || "") === (holding.securityType || ""),
-        );
-  return candidates.length === 1 ? candidates[0] : undefined;
+  if (wkn) {
+    const previousCandidates = previousDepot.filter(
+      (entry) => normalizedHoldingWkn(entry) === wkn,
+    );
+    const candidates = nextDepot.filter(
+      (entry) => normalizedHoldingWkn(entry) === wkn,
+    );
+    return previousCandidates.length === 1 && candidates.length === 1
+      ? candidates[0]
+      : undefined;
+  }
+  if (holding.productId) {
+    const previousCandidates = previousDepot.filter(
+      (entry) => entry.productId === holding.productId,
+    );
+    const candidates = nextDepot.filter(
+      (entry) => entry.productId === holding.productId,
+    );
+    return previousCandidates.length === 1 && candidates.length === 1
+      ? candidates[0]
+      : undefined;
+  }
+  const identity = (entry: DepotHolding) =>
+    `${entry.name.trim().toLocaleLowerCase("de-DE")}::${entry.securityType || ""}`;
+  const key = identity(holding);
+  const previousCandidates = previousDepot.filter((entry) => identity(entry) === key);
+  const candidates = nextDepot.filter((entry) => identity(entry) === key);
+  return previousCandidates.length === 1 && candidates.length === 1
+    ? candidates[0]
+    : undefined;
 }
 
 export function reconcileDepotHoldingSelections(
   plans: StructurePlan[],
   previousDepot: DepotHolding[],
   nextDepot: DepotHolding[],
-  mode: "replace" | "append" = "replace",
+  replacementDepotId?: string,
 ) {
   const nextIds = new Set(nextDepot.map((holding) => holding.id));
   const previousById = new Map(
@@ -1047,9 +1083,14 @@ export function reconcileDepotHoldingSelections(
   return plans.map((plan) => {
     const mappedIds = plan.depotHoldingIds.flatMap((id) => {
       if (nextIds.has(id)) return [id];
-      if (mode === "append") return [];
       const previous = previousById.get(id);
-      const match = previous && uniqueHoldingMatch(previous, nextDepot);
+      if (!previous || !replacementDepotId || previous.depotId !== replacementDepotId)
+        return [];
+      const match = uniqueHoldingMatch(
+        previous,
+        nextDepot.filter((entry) => entry.depotId === replacementDepotId),
+        previousDepot.filter((entry) => entry.depotId === replacementDepotId),
+      );
       return match ? [match.id] : [];
     });
     return {
@@ -1057,6 +1098,128 @@ export function reconcileDepotHoldingSelections(
       depotHoldingIds: Array.from(new Set(mappedIds)),
     };
   });
+}
+
+export function nextDepotName(accounts: DepotAccount[]) {
+  const used = new Set(accounts.map((account) => account.name.trim()));
+  let index = 1;
+  while (used.has(`Depot ${index}`)) index += 1;
+  return `Depot ${index}`;
+}
+
+export const holdingsForDepot = (depot: DepotHolding[], depotId: string) =>
+  depot.filter((holding) => holding.depotId === depotId);
+
+export const depotMarketValue = (depot: DepotHolding[], depotId: string) =>
+  holdingsForDepot(depot, depotId).reduce(
+    (sum, holding) => sum + Math.max(0, Number(holding.value) || 0),
+    0,
+  );
+
+type DepotLifecycleState = Pick<
+  AdvisoryCase,
+  "advisory" | "depotAccounts" | "depot" | "plans"
+>;
+
+const withDepotValue = (advisory: AdvisoryData, depot: DepotHolding[]) => ({
+  ...advisory,
+  depotValue: depot.reduce(
+    (sum, holding) => sum + Math.max(0, Number(holding.value) || 0),
+    0,
+  ),
+  hasDepot: depot.length > 0 || advisory.hasDepot,
+});
+
+export function addDepotAccount(
+  state: DepotLifecycleState,
+  parsed: ParsedDepotHolding[],
+  requestedName?: string,
+): DepotLifecycleState {
+  const now = iso();
+  const account: DepotAccount = {
+    id: uid("depot"),
+    name: requestedName?.trim() || nextDepotName(state.depotAccounts),
+    createdAt: now,
+    updatedAt: now,
+  };
+  const imported = parsed.map((holding) => ({ ...holding, depotId: account.id }));
+  const depot = [...state.depot, ...imported];
+  const firstConcreteDepot = state.depot.length === 0 && imported.length > 0;
+  const plans = state.plans.map((plan) =>
+    firstConcreteDepot && !plan.depotModeSelectionInitialized
+      ? { ...plan, depotMode: "afterSales" as const }
+      : plan,
+  );
+  return {
+    advisory: withDepotValue(state.advisory, depot),
+    depotAccounts: [...state.depotAccounts, account],
+    depot,
+    plans,
+  };
+}
+
+export function replaceDepotAccount(
+  state: DepotLifecycleState,
+  depotId: string,
+  parsed: ParsedDepotHolding[],
+): DepotLifecycleState {
+  if (!state.depotAccounts.some((account) => account.id === depotId)) return state;
+  const previous = holdingsForDepot(state.depot, depotId);
+  const imported = parsed.map((holding) => ({ ...holding, depotId }));
+  const reconciled = imported.map((holding) => {
+    const match = previous.find(
+      (candidate) => uniqueHoldingMatch(candidate, imported, previous)?.id === holding.id,
+    );
+    return match
+      ? { ...holding, plannedSale: Math.min(match.plannedSale, holding.value) }
+      : holding;
+  });
+  const depot = [
+    ...state.depot.filter((holding) => holding.depotId !== depotId),
+    ...reconciled,
+  ];
+  return {
+    advisory: withDepotValue(state.advisory, depot),
+    depotAccounts: state.depotAccounts.map((account) =>
+      account.id === depotId ? { ...account, updatedAt: iso() } : account,
+    ),
+    depot,
+    plans: reconcileDepotHoldingSelections(
+      state.plans,
+      state.depot,
+      depot,
+      depotId,
+    ),
+  };
+}
+
+export function deleteDepotAccount(
+  state: DepotLifecycleState,
+  depotId: string,
+): DepotLifecycleState {
+  const depot = state.depot.filter((holding) => holding.depotId !== depotId);
+  const validIds = new Set(depot.map((holding) => holding.id));
+  return {
+    advisory: withDepotValue(state.advisory, depot),
+    depotAccounts: state.depotAccounts.filter((account) => account.id !== depotId),
+    depot,
+    plans: state.plans.map((plan) => ({
+      ...plan,
+      depotHoldingIds: plan.depotHoldingIds.filter((id) => validIds.has(id)),
+    })),
+  };
+}
+
+export function renameDepotAccount(
+  accounts: DepotAccount[],
+  depotId: string,
+  name: string,
+) {
+  const trimmed = name.trim();
+  if (!trimmed) return accounts;
+  return accounts.map((account) =>
+    account.id === depotId ? { ...account, name: trimmed, updatedAt: iso() } : account,
+  );
 }
 
 export function planAssetAmounts(plan: StructurePlan) {
@@ -1380,15 +1543,41 @@ export function normalizeImportedCase(
   if (!item.advisory || !Array.isArray(item.plans)) return null;
   const sourceSchemaVersion = Number(item.schemaVersion) || 0;
   const normalized = clone(item) as AdvisoryCase;
-  normalized.schemaVersion = 9;
+  normalized.schemaVersion = 10;
   if (regenerateId) normalized.id = uid("fall-import");
   normalized.updatedAt = iso();
   normalized.versions = Array.isArray(normalized.versions)
     ? normalized.versions
     : [];
-  normalized.depot = Array.isArray(normalized.depot)
-    ? normalized.depot.map((holding) => ({
+  normalized.depotAccounts = Array.isArray(normalized.depotAccounts)
+    ? normalized.depotAccounts
+        .filter((account) => account && typeof account === "object")
+        .map((account, index) => ({
+          id: account.id || uid("depot"),
+          name: account.name?.trim() || `Depot ${index + 1}`,
+          createdAt: account.createdAt || normalized.createdAt || iso(),
+          updatedAt: account.updatedAt || normalized.updatedAt || iso(),
+        }))
+    : [];
+  const rawDepot = Array.isArray(normalized.depot) ? normalized.depot : [];
+  if (rawDepot.length > 0 && normalized.depotAccounts.length === 0) {
+    const migratedAt = normalized.createdAt || iso();
+    normalized.depotAccounts = [{
+      id: uid("depot"),
+      name: "Depot 1",
+      createdAt: migratedAt,
+      updatedAt: normalized.updatedAt || migratedAt,
+    }];
+  }
+  const validDepotIds = new Set(normalized.depotAccounts.map((account) => account.id));
+  const fallbackDepotId = normalized.depotAccounts[0]?.id;
+  normalized.depot = rawDepot
+    .map((holding) => ({
         ...holding,
+        depotId:
+          holding.depotId && validDepotIds.has(holding.depotId)
+            ? holding.depotId
+            : fallbackDepotId!,
         value: Math.max(0, Number(holding.value) || 0),
         plannedSale: Math.min(
           Math.max(0, Number(holding.value) || 0),
@@ -1401,7 +1590,7 @@ export function normalizeImportedCase(
         classificationStatus:
           holding.classificationStatus || "mapped",
       }))
-    : [];
+    .filter((holding) => Boolean(holding.depotId));
   normalized.moduleStates = normalized.moduleStates || {};
   normalized.customerChecklist = Array.isArray(normalized.customerChecklist)
     ? normalized.customerChecklist
@@ -1524,6 +1713,12 @@ export function normalizeImportedCase(
       depotSelectionInitialized:
         Boolean(plan.depotSelectionInitialized) ||
         (sourceSchemaVersion < 7 && plan.depotMode === "retain"),
+      depotModeSelectionInitialized:
+        typeof plan.depotModeSelectionInitialized === "boolean"
+          ? plan.depotModeSelectionInitialized
+          : sourceSchemaVersion < 10
+            ? normalized.depot.length > 0 || Boolean(plan.depotMode && plan.depotMode !== "none")
+            : false,
       investmentPlans: normalizeInvestmentPlans(
         plan.investmentPlans,
         allocations,

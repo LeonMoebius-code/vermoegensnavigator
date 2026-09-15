@@ -5024,6 +5024,76 @@ input[inputmode="numeric"],
 .depot-top-v3 {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
+
+.csv-depot-choice {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 13rem;
+}
+
+.csv-depot-choice span {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.depot-management {
+  margin-bottom: 1rem;
+}
+
+.depot-account-list {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.depot-account-list article {
+  background: var(--canvas);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: grid;
+  gap: 0.4rem;
+  padding: 1rem;
+}
+
+.depot-account-list article input {
+  background: white;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.depot-account-list article > div {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+.depot-holding-group,
+.depot-selection-group {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.depot-holding-group + .depot-holding-group,
+.depot-selection-group + .depot-selection-group {
+  border-top: 1px solid var(--line);
+  margin-top: 1rem;
+  padding-top: 1rem;
+}
+
+.depot-holding-group-title {
+  align-items: baseline;
+  display: flex;
+  justify-content: space-between;
+  padding: 0.35rem 0;
+}
+
+.depot-holding-group-title span,
+.depot-selection-group > strong {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
 .depot-section-tabs {
   display: flex;
   gap: 8px;

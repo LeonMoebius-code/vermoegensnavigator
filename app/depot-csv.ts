@@ -1,4 +1,4 @@
-import { DepotHolding } from "./case-model";
+import { ParsedDepotHolding } from "./case-model";
 import { AssetClass, assetClasses, houseProducts } from "./investment-data";
 import { depotRegionForCountry } from "./depot-country-codes";
 
@@ -6,7 +6,7 @@ export type DepotCsvFormat = "navigator" | "structure-overview";
 
 export type DepotCsvResult = {
   format: DepotCsvFormat;
-  rows: DepotHolding[];
+  rows: ParsedDepotHolding[];
   unresolved: number;
   ignoredPersonalColumns: boolean;
 };
@@ -135,7 +135,7 @@ export function parseDepotCsv(buffer: ArrayBuffer): DepotCsvResult {
         plannedSale: 0,
         note: valueAt(row, note),
         classificationStatus: recognized ? "mapped" : "unresolved",
-      } satisfies DepotHolding;
+      } satisfies ParsedDepotHolding;
     }).filter((row) => row.name || row.value > 0);
     return {
       format: "navigator",
@@ -227,7 +227,7 @@ export function parseDepotCsv(buffer: ArrayBuffer): DepotCsvResult {
       holdingAtValuationStart: optionalNumber(row, holdingAtValuationStart),
       holdingAtValuationEnd: optionalNumber(row, holdingAtValuationEnd),
       classificationStatus,
-    } satisfies DepotHolding;
+    } satisfies ParsedDepotHolding;
   }).filter((row) => row.name || row.value > 0);
   return {
     format: "structure-overview",

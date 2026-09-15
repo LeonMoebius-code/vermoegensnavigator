@@ -2,8 +2,8 @@
 
 > **Kanonischer Produkt- und Entscheidungsstand**
 >
-> Letzte fachliche Aktualisierung: **09.09.2026**
-> Aktuell veröffentlichte Version: **V0.17.0**
+> Letzte fachliche Aktualisierung: **15.09.2026**
+> Aktuell veröffentlichte Version: **V0.18.0**
 > Codebasis: **GitHub `main`**
 > Zielumgebung: **Desktop-Prototyp**
 > Öffentliche Testversion: GitHub Pages
@@ -255,6 +255,19 @@ Umgesetzt sind insbesondere:
 - Aktien werden nicht mehr als Rentenposition dargestellt
 - `Stück` und `Nominal` werden fachlich differenziert
 - Vergleichsdach zeigt IST → PLAN verständlicher
+
+## 3.4 ✅ V0.18.0 – Multi Depot
+
+Ein Beratungsfall kann mehrere eigenständige DepotAccounts mit stabiler technischer ID, frei editierbarem Namen, eigenen physischen Positionen und jeweils vollständigem CSV-Snapshot enthalten.
+
+- CSV-Import kennt ausschließlich `Als neues Depot hinzufügen` und `Bestehendes Depot ersetzen`; der frühere Append-Modus entfällt.
+- Schema 9 wird zentral über `normalizeImportedCase(...)` auf Schema 10 migriert. Konkrete Altbestände werden einem `Depot 1` zugeordnet, leere Altfälle erhalten kein künstliches Depot.
+- Bestand, Transaktionen, Einstands- und positionsbezogene Rentendaten bleiben je Depot bzw. physischer Holding getrennt.
+- Vermögenshaus, Diversifikation und Gesamtkennzahlen arbeiten wirtschaftlich über das aggregierte Gesamtdepot.
+- Die Konzentrationsanalyse aggregiert identische Wertpapiere konservativ über WKN, ersatzweise productId; Produktnamen allein erzeugen keine wirtschaftliche Identität.
+- Depot-Replacement reconciliiert bewusste Holdingreferenzen ausschließlich innerhalb desselben DepotAccounts und erhält simulierte Verkäufe bei eindeutigem Match bis maximal zum neuen Marktwert.
+- Unterschiedliche gültige Bewertungsstichtage werden transparent kenntlich gemacht; Bond-Restlaufzeiten verwenden bevorzugt den positionsbezogenen Stichtag.
+- Beim ersten konkreten Depotimport wechseln noch nicht bewusst anders gesetzte Planvarianten auf den Standard `Nach simulierten Verkäufen`.
 
 ---
 
@@ -1452,7 +1465,7 @@ Keine zufällig aus dem Internet beschafften Fontdateien verwenden.
 
 # 12. Technische / fachliche Kernzustände
 
-Persistenzschema: **9**. Alte Schema-6-, Schema-7- und Schema-8-Fälle werden beim Laden der aktiven Arbeitskopie über `normalizeImportedCase(...)` migriert. Historische Versionssnapshots bleiben unverändert gespeichert und werden erst bei Wiederherstellung normalisiert.
+Persistenzschema: **10**. Alte Fälle bis Schema 9 werden beim Laden der aktiven Arbeitskopie über `normalizeImportedCase(...)` migriert. Historische Versionssnapshots bleiben unverändert gespeichert und werden erst bei Wiederherstellung normalisiert.
 
 ## 12.1 Planvarianten
 
@@ -1766,9 +1779,10 @@ Freie WKN / freie Produktbezeichnung für Sparpläne zunächst bewusst nicht in 
 | 2 | **4B Einstieg & Sparpläne** | ✅ Umgesetzt |
 | 3 | **Depotcheck 3B Portfolioanalyse** | ✅ Umgesetzt |
 | 4 | **Risiko V2** | ✅ Umgesetzt |
-| 5 | **Vertiefungsframework** | 🟡 Konzept weiter ausarbeiten |
-| 6 | **Ergebnis & Export konsolidieren** | 🟡 nach 4B vollständig testen |
-| 7 | finaler Gesamt-UX-/Regressionsblock | ⏳ später |
+| 5 | **Multi Depot** | ✅ Umgesetzt |
+| 6 | **Vertiefungsframework** | 🟡 Konzept weiter ausarbeiten |
+| 7 | **Ergebnis & Export konsolidieren** | 🟡 nach 4B vollständig testen |
+| 8 | finaler Gesamt-UX-/Regressionsblock | ⏳ später |
 
 Die Reihenfolge kann sich ändern, wenn ein fachlicher Block priorisiert werden muss. Kleine Fixes sollen möglichst gebündelt werden.
 
@@ -1806,6 +1820,17 @@ Keine zentrale fachliche Entscheidung offen. Paket ist umgesetzt.
 ---
 
 # 19. Entscheidungslog
+
+## 15.09.2026
+
+### Multi Depot
+
+- Mehrere DepotAccounts mit stabilen technischen IDs bei flacher Holdingliste eingeführt; Persistenzschema auf 10 und Version auf V0.18.0 erhöht.
+- Physische Bestände und Transaktionen bleiben depotbezogen, wirtschaftliche Analysen arbeiten grundsätzlich über das Gesamtdepot.
+- Konzentration fasst sichere WKN-/productId-Identitäten depotübergreifend zusammen; Replacement-Matching bleibt strikt auf das ersetzte Depot begrenzt.
+- Unterschiedliche Bewertungsstichtage werden sichtbar gemacht und direkte Anleihen verwenden bevorzugt ihren eigenen gültigen Stichtag.
+- Für den ersten konkreten Depotimport ist `Nach simulierten Verkäufen` der Standard, sofern keine bewusste Moduswahl vorliegt.
+- Später vorgesehen, aber nicht in V0.18 umgesetzt: frei wählbarer Planvergleich; Auszahlplan; standardmäßig ausgeschaltete, ausschließlich jährliche prozentuale Dynamik für Spar- und Auszahlplan (erste Erhöhung nach zwölf Monaten); fachliche Vertiefungen zu Marktsituation, Inflation/Kaufkraft, Zins-/Anleihenumfeld, Zinsstrukturkurve, Zinsniveau und Bindungsdauer, historischer Zinsentwicklung, Credit Spreads, Cashflow-Planbarkeit, Vermögensstruktur sowie Diversifikation/Korrelationen.
 
 ## 09.09.2026
 

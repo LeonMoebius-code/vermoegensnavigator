@@ -46,6 +46,7 @@ import {
 } from "./investment-data";
 import {
   AdvisoryCase,
+  addDepotAccount,
   AdvisorId,
   allocationAmountInCapitalPot,
   allocationCapitalCoverageTotal,
@@ -65,6 +66,8 @@ import {
   depotAssetAmounts,
   depotPlanAssetAmounts,
   DepotHolding,
+  DepotAccount,
+  deleteDepotAccount,
   defaultAdvisorId,
   duplicateStructurePlan,
   maturityBuckets,
@@ -77,6 +80,7 @@ import {
   InvestmentFrequency,
   InvestmentPlan,
   nextImplementationDate,
+  nextDepotName,
   nextPlanCopyName,
   parsePhasedEntryNumericDraft,
   phasedEntryAmounts,
@@ -88,6 +92,8 @@ import {
   plannerPlanHoldingValue,
   reconcileCasePlans,
   reconcileDepotHoldingSelections,
+  renameDepotAccount,
+  replaceDepotAccount,
   reconcilePlanCapitalPots,
   strategicAmount,
   StructurePlan,
@@ -110,6 +116,7 @@ import {
   industryAnalysis,
   ProductMainCategory,
   productTypeAnalysis,
+  hasMixedValuationDates,
 } from "./depot-analysis";
 
 type View = "home" | "cases" | "wizard" | "planner" | "depot" | "export";
@@ -753,7 +760,7 @@ export default function Home() {
         </nav>
         <div className="sidebar-foot">
           <p>
-            <strong>Prototyp V0.17.0</strong>
+            <strong>Prototyp V0.18.0</strong>
             <br />
             Browser-lokal, keine revisionssichere Speicherung.
           </p>
@@ -1123,7 +1130,8 @@ function WizardView({
               data={data}
               update={updateData}
               depot={item.depot}
-              setDepot={(depot, importMode) =>
+              depotAccounts={item.depotAccounts}
+              setDepot={(depot) =>
                 setItem((current) => ({
                   ...current,
                   advisory: {
@@ -1136,8 +1144,15 @@ function WizardView({
                     current.plans,
                     current.depot,
                     depot,
-                    importMode || "append",
                   ),
+                }))
+              }
+              applyDepotImport={(mode, rows, value) =>
+                setItem((current) => ({
+                  ...current,
+                  ...(mode === "newDepot"
+                    ? addDepotAccount(current, rows, value)
+                    : replaceDepotAccount(current, value, rows)),
                 }))
               }
               setView={setView}
@@ -1276,10 +1291,11 @@ function ScopeStep({
 }
 
 function useDepotCsvImport(
-  depot: DepotHolding[],
-  setDepot: (
-    next: DepotHolding[],
-    importMode?: "replace" | "append",
+  depotAccounts: DepotAccount[],
+  applyImport: (
+    mode: "newDepot" | "replaceDepot",
+    rows: DepotCsvResult["rows"],
+    value: string,
   ) => void,
 ) {
   const csvRef = useRef<HTMLInputElement>(null);
@@ -1288,12 +1304,16 @@ function useDepotCsvImport(
     result: DepotCsvResult;
   } | null>(null);
   const [csvError, setCsvError] = useState("");
+  const [depotName, setDepotName] = useState("");
+  const [targetDepotId, setTargetDepotId] = useState("");
   const importCsv = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     try {
       const result = parseDepotCsv(await file.arrayBuffer());
       setCsvPreview({ fileName: file.name, result });
+      setDepotName(nextDepotName(depotAccounts));
+      setTargetDepotId(depotAccounts[0]?.id || "");
       setCsvError("");
     } catch (error) {
       setCsvPreview(null);
@@ -1303,13 +1323,12 @@ function useDepotCsvImport(
     }
     event.target.value = "";
   };
-  const applyCsv = (mode: "replace" | "append") => {
+  const applyCsv = (mode: "newDepot" | "replaceDepot") => {
     if (!csvPreview) return;
-    setDepot(
-      mode === "replace"
-        ? csvPreview.result.rows
-        : [...depot, ...csvPreview.result.rows],
+    applyImport(
       mode,
+      csvPreview.result.rows,
+      mode === "newDepot" ? depotName : targetDepotId,
     );
     setCsvPreview(null);
   };
@@ -1364,13 +1383,25 @@ function useDepotCsvImport(
               </p>
             )}
             <div className="csv-preview-actions">
-              <button className="primary" onClick={() => applyCsv("replace")}>
-                Bestehendes Depot ersetzen
+              <label className="csv-depot-choice">
+                <span>Depotname</span>
+                <input value={depotName} onChange={(event) => setDepotName(event.target.value)} />
+              </label>
+              <button className="primary" onClick={() => applyCsv("newDepot")} disabled={!depotName.trim()}>
+                Als neues Depot hinzufügen
               </button>
-              {depot.length > 0 && (
-                <button className="secondary" onClick={() => applyCsv("append")}>
-                  Positionen ergänzen
-                </button>
+              {depotAccounts.length > 0 && (
+                <>
+                  <label className="csv-depot-choice">
+                    <span>Zieldepot</span>
+                    <select value={targetDepotId} onChange={(event) => setTargetDepotId(event.target.value)}>
+                      {depotAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
+                    </select>
+                  </label>
+                  <button className="secondary" onClick={() => applyCsv("replaceDepot")} disabled={!targetDepotId}>
+                    Bestehendes Depot ersetzen
+                  </button>
+                </>
               )}
               <button className="text-button" onClick={() => setCsvPreview(null)}>
                 Abbrechen
@@ -1387,7 +1418,9 @@ function SituationStep({
   data,
   update,
   depot,
+  depotAccounts,
   setDepot,
+  applyDepotImport,
   setView,
 }: {
   data: AdvisoryData;
@@ -1396,19 +1429,36 @@ function SituationStep({
     value: AdvisoryData[K],
   ) => void;
   depot: DepotHolding[];
-  setDepot: (
-    depot: DepotHolding[],
-    importMode?: "replace" | "append",
+  depotAccounts: DepotAccount[];
+  setDepot: (depot: DepotHolding[]) => void;
+  applyDepotImport: (
+    mode: "newDepot" | "replaceDepot",
+    rows: DepotCsvResult["rows"],
+    value: string,
   ) => void;
   setView: (view: View) => void;
 }) {
   const business = data.scope === "business" || data.scope === "combined";
-  const csvImport = useDepotCsvImport(depot, setDepot);
-  const addHolding = () =>
+  const csvImport = useDepotCsvImport(depotAccounts, applyDepotImport);
+  const addHolding = (depotId = depotAccounts[0]?.id) => {
+    if (!depotId) {
+      applyDepotImport("newDepot", [{
+        id: uid("holding"),
+        name: "",
+        value: 0,
+        assetClass: "Geldwerte",
+        region: "Weltweit",
+        risk: 2,
+        plannedSale: 0,
+        note: "",
+      }], nextDepotName(depotAccounts));
+      return;
+    }
     setDepot([
       ...depot,
       {
         id: uid("holding"),
+        depotId,
         name: "",
         value: 0,
         assetClass: "Geldwerte",
@@ -1418,6 +1468,7 @@ function SituationStep({
         note: "",
       },
     ]);
+  };
   const updateHolding = (id: string, changes: Partial<DepotHolding>) =>
     setDepot(
       depot.map((entry) =>
@@ -1523,7 +1574,7 @@ function SituationStep({
                 <button className="secondary" onClick={() => setView("depot")}>
                   Depotcheck öffnen
                 </button>
-                <button className="secondary" onClick={addHolding}>
+                <button className="secondary" onClick={() => addHolding()}>
                   ＋ Position
                 </button>
               </div>
@@ -1531,7 +1582,7 @@ function SituationStep({
             {csvImport.input}
             {csvImport.preview}
             {depot.length === 0 ? (
-              <button className="mini-empty" onClick={addHolding}>
+              <button className="mini-empty" onClick={() => addHolding()}>
                 Erste Depotposition erfassen
               </button>
             ) : (
@@ -2410,6 +2461,7 @@ function ResultStep({
         <article>
           <span>Vorhandenes Depot</span>
           <strong>{euro.format(data.depotValue)}</strong>
+          <small>{item.depotAccounts.length} {item.depotAccounts.length === 1 ? "Depot" : "Depots"}</small>
         </article>
       </div>
       {warning && (
@@ -3380,6 +3432,7 @@ function PlannerView({
                     !plan.depotSelectionInitialized;
                   updatePlan({
                     depotMode,
+                    depotModeSelectionInitialized: true,
                     depotHoldingIds:
                       initializeRetain
                         ? item.depot.map((holding) => holding.id)
@@ -3404,7 +3457,9 @@ function PlannerView({
             <div className="depot-planning-grid">
               {plan.depotMode === "retain" ? (
                 <div className="depot-position-selection">
-                {item.depot.map((holding) => (
+                {item.depotAccounts.map((account) => <div className="depot-selection-group" key={account.id}>
+                  <strong>{account.name}</strong>
+                  {item.depot.filter((holding) => holding.depotId === account.id).map((holding) => (
                   <label key={holding.id}>
                     <input
                       type="checkbox"
@@ -3428,7 +3483,8 @@ function PlannerView({
                     </span>
                     <b>{euro.format(holding.value)}</b>
                   </label>
-                ))}
+                  ))}
+                </div>)}
                 </div>
               ) : (
                 <div className="depot-mode-explanation">
@@ -5282,7 +5338,7 @@ function VvSelection({
   addToPlan,
 }: {
   item: AdvisoryCase;
-  setItem: (item: AdvisoryCase) => void;
+  setItem: Dispatch<SetStateAction<AdvisoryCase>>;
   plan: StructurePlan;
   addToPlan: (id: string, amount: number) => "added" | "updated" | "ignored";
 }) {
@@ -5909,9 +5965,11 @@ function DiversificationAnalysis({ depot, plan }: { depot: DepotHolding[]; plan:
   const countries = countryAnalysis(positions, countryView);
   const currencies = currencyAnalysis(positions);
   const positionBars = concentration.positions.map((position) => ({ label: position.name, value: position.value, share: concentration.total ? position.value / concentration.total : 0 }));
+  const mixedDates = hasMixedValuationDates(positions);
   return <section className="panel analysis-panel">
     <div className="analysis-heading"><div><p className="eyebrow">PORTFOLIOANALYSE</p><h2>Diversifikation</h2></div><AnalysisToggle value={state} onChange={setState} label="Analysezustand" options={[{ value: "ist", label: "IST" }, { value: "plan", label: "PLAN" }]} /></div>
     <p className="analysis-context">{state === "ist" ? "Aktueller physischer Depotbestand" : "Bestand nach simulierten Verkäufen plus geplante Käufe des aktiven Strukturplans"}</p>
+    {mixedDates && <p className="csv-privacy-note">Die zusammengefasste Analyse enthält Positionen mit unterschiedlichen Bewertungsstichtagen.</p>}
     <div className="analysis-section">
       <h3>Positionen / Konzentration</h3>
       <div className="analysis-kpis five">
@@ -5952,7 +6010,7 @@ function DiversificationAnalysis({ depot, plan }: { depot: DepotHolding[]; plan:
   </section>;
 }
 
-function BondAnalysis({ depot, plan }: { depot: DepotHolding[]; plan: StructurePlan }) {
+function BondAnalysis({ depot, plan, depotAccounts }: { depot: DepotHolding[]; plan: StructurePlan; depotAccounts: DepotAccount[] }) {
   const [state, setState] = useState<AnalysisState>("ist");
   const positions = buildDepotAnalysisPositions(depot, plan, state);
   if (!positions.length) return <section className="panel analysis-panel"><div className="analysis-heading"><div><p className="eyebrow">RENTENPORTFOLIO</p><h2>Zins &amp; Laufzeiten</h2></div><AnalysisToggle value={state} onChange={setState} label="Analysezustand" options={[{ value: "ist", label: "IST" }, { value: "plan", label: "PLAN" }]} /></div><AnalysisEmpty>Für diese Analyse sind noch keine Depotpositionen vorhanden.</AnalysisEmpty></section>;
@@ -5963,7 +6021,7 @@ function BondAnalysis({ depot, plan }: { depot: DepotHolding[]; plan: StructureP
   const ladderMax = Math.max(1, ...analysis.ladder.map((item) => item.nominal));
   return <section className="panel analysis-panel">
     <div className="analysis-heading"><div><p className="eyebrow">RENTENPORTFOLIO</p><h2>Zins &amp; Laufzeiten</h2></div><AnalysisToggle value={state} onChange={setState} label="Analysezustand" options={[{ value: "ist", label: "IST" }, { value: "plan", label: "PLAN" }]} /></div>
-    <p className="analysis-context">Bewertungsstichtag der Portfolioaggregation: {analysis.valuationDate.toLocaleDateString("de-DE")}. Abweichende Positionsstichtage können bestehen.</p>
+    <p className="analysis-context">Restlaufzeiten verwenden den jeweiligen gültigen Positionsstichtag. Ohne eigenen Datenstand gilt als Fallback {analysis.valuationDate.toLocaleDateString("de-DE")}.</p>
     <div className="analysis-kpis four">
       <article><span>Direkte Rentenwerte</span><b>{euro.format(analysis.directValue)}</b><small>{totalValue ? percent.format(analysis.directValue / totalValue * 100) : "0"} % des Depots</small></article>
       <article><span>Mit gültiger Fälligkeit</span><b>{percent.format(analysis.maturityCoverage * 100)} %</b><small>der direkten Rentenwerte</small></article>
@@ -5976,7 +6034,7 @@ function BondAnalysis({ depot, plan }: { depot: DepotHolding[]; plan: StructureP
     </div>
     <div className="analysis-section">
       <h3>Direkte Rentenpositionen</h3>
-      <div className="analysis-table-wrap"><table className="analysis-table"><thead><tr><th>Position</th><th>Typ</th><th>Nominal</th><th>Coupon</th><th>Fälligkeit</th><th>Restlaufzeit</th><th>Kurs</th><th>Laufende Verzinsung auf aktuellen Kurs</th><th>Modellierte YTM</th><th>Macaulay Duration</th><th>Modified Duration</th><th>DV01</th></tr></thead><tbody>{directRows.map((row) => <tr key={row.position.id}><td><b>{row.position.name}</b>{row.exclusionReason && <small>{row.exclusionReason}</small>}</td><td>{row.position.classification.sub}</td><td>{Number.isFinite(row.position.nominalOrUnits) ? depotDecimal.format(Number(row.position.nominalOrUnits)) : "–"}</td><td>{Number.isFinite(row.position.coupon) ? `${depotDecimal.format(Number(row.position.coupon))} %` : "–"}</td><td>{formatDepotDate(row.position.maturity) || "–"}</td><td>{row.remainingYears === null ? "–" : row.remainingYears <= 0 ? "fällig / Daten prüfen" : `${depotDecimal.format(row.remainingYears)} Jahre`}</td><td>{Number.isFinite(row.position.currentPrice) ? depotDecimal.format(Number(row.position.currentPrice)) : "–"}</td><td>{row.currentYield === null ? "–" : `${depotDecimal.format(row.currentYield * 100)} %`}</td><td>{row.ytm === null ? "–" : `${depotDecimal.format(row.ytm * 100)} %`}</td><td>{row.macaulay === null ? "–" : `${depotDecimal.format(row.macaulay)} Jahre`}</td><td>{row.modified === null ? "–" : `${depotDecimal.format(row.modified)} Jahre`}</td><td>{row.dv01 === null ? "–" : euro.format(row.dv01)}</td></tr>)}</tbody></table></div>
+      <div className="analysis-table-wrap"><table className="analysis-table"><thead><tr><th>Depot</th><th>Position</th><th>Typ</th><th>Nominal</th><th>Coupon</th><th>Fälligkeit</th><th>Restlaufzeit</th><th>Kurs</th><th>Laufende Verzinsung auf aktuellen Kurs</th><th>Modellierte YTM</th><th>Macaulay Duration</th><th>Modified Duration</th><th>DV01</th></tr></thead><tbody>{directRows.map((row) => <tr key={row.position.id}><td>{depotAccounts.find((account) => account.id === row.position.depotId)?.name || "Neukauf"}</td><td><b>{row.position.name}</b>{row.exclusionReason && <small>{row.exclusionReason}</small>}</td><td>{row.position.classification.sub}</td><td>{Number.isFinite(row.position.nominalOrUnits) ? depotDecimal.format(Number(row.position.nominalOrUnits)) : "–"}</td><td>{Number.isFinite(row.position.coupon) ? `${depotDecimal.format(Number(row.position.coupon))} %` : "–"}</td><td>{formatDepotDate(row.position.maturity) || "–"}</td><td>{row.remainingYears === null ? "–" : row.remainingYears <= 0 ? "fällig / Daten prüfen" : `${depotDecimal.format(row.remainingYears)} Jahre`}</td><td>{Number.isFinite(row.position.currentPrice) ? depotDecimal.format(Number(row.position.currentPrice)) : "–"}</td><td>{row.currentYield === null ? "–" : `${depotDecimal.format(row.currentYield * 100)} %`}</td><td>{row.ytm === null ? "–" : `${depotDecimal.format(row.ytm * 100)} %`}</td><td>{row.macaulay === null ? "–" : `${depotDecimal.format(row.macaulay)} Jahre`}</td><td>{row.modified === null ? "–" : `${depotDecimal.format(row.modified)} Jahre`}</td><td>{row.dv01 === null ? "–" : euro.format(row.dv01)}</td></tr>)}</tbody></table></div>
     </div>
     <div className="analysis-grid">
       <div className="analysis-section"><h3>Portfolio-Sensitivität</h3><div className="sensitivity-value"><span>Marktwertgewichtete Modified Duration</span><b>{analysis.portfolioModified === null ? "–" : `${depotDecimal.format(analysis.portfolioModified)} Jahre`}</b></div><p className="analysis-note">DV01 ist der näherungsweise Wertgewinn/-verlust des berechenbaren Rentenbestands bei einer parallelen Renditeänderung um einen Basispunkt.</p></div>
@@ -5986,7 +6044,7 @@ function BondAnalysis({ depot, plan }: { depot: DepotHolding[]; plan: StructureP
   </section>;
 }
 
-function EntryResultAnalysis({ depot }: { depot: DepotHolding[] }) {
+function EntryResultAnalysis({ depot, depotAccounts }: { depot: DepotHolding[]; depotAccounts: DepotAccount[] }) {
   const [metric, setMetric] = useState<"amount" | "percent">("amount");
   if (!depot.length) return <section className="panel analysis-panel"><AnalysisEmpty>Für diese Analyse sind noch keine Depotpositionen vorhanden.</AnalysisEmpty></section>;
   const analysis = entryResultAnalysis(depot);
@@ -6006,7 +6064,7 @@ function EntryResultAnalysis({ depot }: { depot: DepotHolding[] }) {
     </div>
     <CoverageLine value={analysis.coverage} label="Ergebnisdaten bezogen auf den Gesamtdepotwert" />
     <div className="analysis-section"><h3>Positionsergebnisse {metric === "amount" ? "in EUR" : "in %"}</h3><AnalysisBars items={resultBars} signed /></div>
-    <div className="analysis-section"><h3>Einstands- und Ergebnisdaten</h3><div className="analysis-table-wrap"><table className="analysis-table result-table"><thead><tr><th>Position</th><th>Letzter Kauf</th><th>Ø Einstand</th><th>Aktueller Kurs</th><th>G/V EUR</th><th>G/V %</th></tr></thead><tbody>{analysis.rows.map((position) => <tr key={position.id}><td><b>{position.name}</b></td><td>{formatDepotDate(position.lastPurchaseDate) || "–"}</td><td>{Number.isFinite(position.averageEntryPrice) ? depotDecimal.format(Number(position.averageEntryPrice)) : "–"}</td><td>{Number.isFinite(position.currentPrice) ? depotDecimal.format(Number(position.currentPrice)) : "–"}</td><td className={Number(position.gainLossAmount) < 0 ? "negative" : "positive"}>{Number.isFinite(position.gainLossAmount) ? euro.format(Number(position.gainLossAmount)) : "–"}</td><td className={Number(position.gainLossPercent) < 0 ? "negative" : "positive"}>{Number.isFinite(position.gainLossPercent) ? `${depotDecimal.format(Number(position.gainLossPercent))} %` : "–"}</td></tr>)}</tbody></table></div></div>
+    <div className="analysis-section"><h3>Einstands- und Ergebnisdaten</h3><div className="analysis-table-wrap"><table className="analysis-table result-table"><thead><tr><th>Depot</th><th>Position</th><th>Letzter Kauf</th><th>Ø Einstand</th><th>Aktueller Kurs</th><th>G/V EUR</th><th>G/V %</th></tr></thead><tbody>{analysis.rows.map((position) => <tr key={position.id}><td>{depotAccounts.find((account) => account.id === position.depotId)?.name || "–"}</td><td><b>{position.name}</b></td><td>{formatDepotDate(position.lastPurchaseDate) || "–"}</td><td>{Number.isFinite(position.averageEntryPrice) ? depotDecimal.format(Number(position.averageEntryPrice)) : "–"}</td><td>{Number.isFinite(position.currentPrice) ? depotDecimal.format(Number(position.currentPrice)) : "–"}</td><td className={Number(position.gainLossAmount) < 0 ? "negative" : "positive"}>{Number.isFinite(position.gainLossAmount) ? euro.format(Number(position.gainLossAmount)) : "–"}</td><td className={Number(position.gainLossPercent) < 0 ? "negative" : "positive"}>{Number.isFinite(position.gainLossPercent) ? `${depotDecimal.format(Number(position.gainLossPercent))} %` : "–"}</td></tr>)}</tbody></table></div></div>
     <p className="analysis-note">Nicht berücksichtigt sind unter anderem Ausschüttungen, Dividenden, Coupons, realisierte Ergebnisse, vollständige Zu- und Abflüsse, Steuern und eine vollständige Transaktionshistorie.</p>
   </section>;
 }
@@ -6019,7 +6077,7 @@ function DepotOptimizer({
   setView,
 }: {
   item: AdvisoryCase;
-  setItem: (item: AdvisoryCase) => void;
+  setItem: Dispatch<SetStateAction<AdvisoryCase>>;
   plan: StructurePlan;
   saveCase: (version?: boolean) => void;
   setView: (view: View) => void;
@@ -6034,31 +6092,59 @@ function DepotOptimizer({
   );
   const buys = plan.allocations.reduce((sum, entry) => sum + entry.amount, 0);
   const planTotal = depotPlanAssetAmounts(depot, plan).total;
-  const setDepotPositions = (
-    next: DepotHolding[],
-    importMode: "replace" | "append" = "append",
-  ) =>
-    setItem({
-      ...item,
+  const mixedValuationDates = hasMixedValuationDates(
+    buildDepotAnalysisPositions(depot, plan, "ist"),
+  );
+  const updateDepotName = (depotId: string, name: string) =>
+    setItem((current) => ({
+      ...current,
+      depotAccounts: current.depotAccounts.map((account) =>
+        account.id === depotId
+          ? { ...account, name, updatedAt: new Date().toISOString() }
+          : account,
+      ),
+    }));
+  const removeDepot = (account: DepotAccount) => {
+    const positions = depot.filter((holding) => holding.depotId === account.id);
+    const value = positions.reduce((sum, holding) => sum + holding.value, 0);
+    if (!window.confirm(`${account.name || "Depot"} löschen?\n\n${positions.length} Positionen · ${euro.format(value)}\n\nDieses Depot und seine Positionen werden aus dem Fall entfernt. Bestehende Berücksichtigungen dieser Positionen in Planvarianten werden bereinigt.`)) return;
+    setItem((current) => ({ ...current, ...deleteDepotAccount(current, account.id) }));
+  };
+  const setDepotPositions = (next: DepotHolding[]) =>
+    setItem((current) => ({
+      ...current,
       advisory: {
-        ...item.advisory,
+        ...current.advisory,
         depotValue: next.reduce((sum, entry) => sum + entry.value, 0),
-        hasDepot: next.length > 0 || item.advisory.hasDepot,
+        hasDepot: next.length > 0 || current.advisory.hasDepot,
       },
       depot: next,
-      plans: reconcileDepotHoldingSelections(
-        item.plans,
-        item.depot,
-        next,
-        importMode,
-      ),
-    });
-  const csvImport = useDepotCsvImport(depot, setDepotPositions);
-  const addHolding = () =>
+      plans: reconcileDepotHoldingSelections(current.plans, current.depot, next),
+    }));
+  const applyDepotImport = (
+    mode: "newDepot" | "replaceDepot",
+    rows: DepotCsvResult["rows"],
+    value: string,
+  ) => setItem((current) => ({
+    ...current,
+    ...(mode === "newDepot"
+      ? addDepotAccount(current, rows, value)
+      : replaceDepotAccount(current, value, rows)),
+  }));
+  const csvImport = useDepotCsvImport(item.depotAccounts, applyDepotImport);
+  const addHolding = (depotId = item.depotAccounts[0]?.id) => {
+    if (!depotId) {
+      applyDepotImport("newDepot", [{
+        id: uid("holding"), name: "", value: 0, assetClass: "Geldwerte",
+        region: "Nicht zugeordnet", risk: 2, plannedSale: 0, note: "",
+      }], nextDepotName(item.depotAccounts));
+      return;
+    }
     setDepotPositions([
       ...depot,
       {
         id: uid("holding"),
+        depotId,
         name: "",
         value: 0,
         assetClass: "Geldwerte",
@@ -6068,6 +6154,7 @@ function DepotOptimizer({
         note: "",
       },
     ]);
+  };
   const updateHolding = (id: string, changes: Partial<DepotHolding>) =>
     setDepotPositions(
       depot.map((entry) =>
@@ -6076,7 +6163,7 @@ function DepotOptimizer({
     );
   const loadSample = () => {
     const value = item.advisory.depotValue || 420000;
-    setDepotPositions([
+    applyDepotImport("newDepot", [
       {
         id: uid("holding"),
         name: "Globaler Aktienfonds",
@@ -6117,7 +6204,7 @@ function DepotOptimizer({
         plannedSale: 0,
         note: "",
       },
-    ]);
+    ], nextDepotName(item.depotAccounts));
   };
   return (
     <div className="tool-view depot-view">
@@ -6164,6 +6251,20 @@ function DepotOptimizer({
           <small>begrenzt auf den aktuellen Positionswert</small>
         </article>
       </div>}
+      {item.depotAccounts.length > 0 && <section className="panel depot-management">
+        <div className="panel-heading"><div><p className="eyebrow">DEPOTÜBERSICHT</p><h2>{euro.format(total)} · {item.depotAccounts.length} {item.depotAccounts.length === 1 ? "Depot" : "Depots"}</h2></div><button className="secondary" onClick={csvImport.open}>Weiteres Depot hinzufügen</button></div>
+        {mixedValuationDates && <p className="csv-privacy-note">Die zusammengefasste Analyse enthält Positionen mit unterschiedlichen Bewertungsstichtagen.</p>}
+        <div className="depot-account-list">{item.depotAccounts.map((account) => {
+          const positions = depot.filter((holding) => holding.depotId === account.id);
+          const value = positions.reduce((sum, holding) => sum + holding.value, 0);
+          const dates = Array.from(new Set(positions.map((holding) => holding.valuationEnd).filter(Boolean))).sort();
+          return <article key={account.id}>
+            <input aria-label="Depotname" value={account.name} onChange={(event) => updateDepotName(account.id, event.target.value)} onBlur={() => !account.name.trim() && updateDepotName(account.id, nextDepotName(item.depotAccounts.filter((entry) => entry.id !== account.id)))} />
+            <strong>{euro.format(value)}</strong><small>{positions.length} {positions.length === 1 ? "Position" : "Positionen"}{dates.length === 1 ? ` · Stand ${formatDepotDate(dates[0])}` : dates.length > 1 ? " · unterschiedliche Datenstände" : ""}</small>
+            <div><button className="secondary" onClick={csvImport.open}>CSV ersetzen</button><button className="text-button danger" onClick={() => removeDepot(account)}>Depot löschen</button></div>
+          </article>;
+        })}</div>
+      </section>}
       <div className="depot-section-tabs" role="tablist" aria-label="Depotcheck-Bereiche">
           <button className={section === "positions" ? "active" : ""} onClick={() => setSection("positions")} role="tab" aria-selected={section === "positions"}>
             Bestand &amp; Transaktionen
@@ -6188,9 +6289,9 @@ function DepotOptimizer({
             >
               CSV importieren
             </button>
-            <button className="secondary" onClick={addHolding}>
+            {item.depotAccounts.length === 0 && <button className="secondary" onClick={() => addHolding()}>
               ＋ Position
-            </button>
+            </button>}
           </div>
         </div>
         {csvImport.input}
@@ -6220,7 +6321,9 @@ function DepotOptimizer({
               <span>Geplanter Verkauf</span>
               <span></span>
             </div>
-            {depot.map((holding) => (
+            {item.depotAccounts.map((account) => <div className="depot-holding-group" key={account.id}>
+              <div className="depot-holding-group-title"><strong>{account.name}</strong><span>{euro.format(depot.filter((holding) => holding.depotId === account.id).reduce((sum, holding) => sum + holding.value, 0))} · {depot.filter((holding) => holding.depotId === account.id).length} Positionen</span><button className="secondary" onClick={() => addHolding(account.id)}>＋ Position</button></div>
+            {depot.filter((holding) => holding.depotId === account.id).map((holding) => (
               <div className="holding-card" key={holding.id}>
               <div className="holding-row holding-row-v2">
                 <div className="holding-name-field">
@@ -6313,6 +6416,7 @@ function DepotOptimizer({
               {expandedHoldingId === holding.id && <DepotHoldingDetails holding={holding} />}
               </div>
             ))}
+            </div>)}
           </div>
         )}
       </section>}
@@ -6326,14 +6430,15 @@ function DepotOptimizer({
         <div className="transaction-columns">
           <div>
             <strong>Verkäufe</strong>
-            {depot
-              .filter((entry) => entry.plannedSale > 0)
-              .map((entry) => (
+            {item.depotAccounts.map((account) => {
+              const sales = depot.filter((entry) => entry.depotId === account.id && entry.plannedSale > 0);
+              return sales.length ? <section className="transaction-depot-group" key={account.id}><small>{account.name}</small>{sales.map((entry) => (
                 <span key={entry.id}>
                   {entry.name}
                   <b>– {euro.format(entry.plannedSale)}</b>
                 </span>
-              ))}
+              ))}</section> : null;
+            })}
             {!depot.some((entry) => entry.plannedSale > 0) && (
               <em>keine Verkäufe erfasst</em>
             )}
@@ -6359,8 +6464,8 @@ function DepotOptimizer({
       )}
       {section === "house" && depot.length === 0 && <section className="panel analysis-panel"><AnalysisEmpty>Für diese Analyse sind noch keine Depotpositionen vorhanden.</AnalysisEmpty></section>}
       {section === "diversification" && <DiversificationAnalysis depot={depot} plan={plan} />}
-      {section === "bonds" && <BondAnalysis depot={depot} plan={plan} />}
-      {section === "results" && <EntryResultAnalysis depot={depot} />}
+      {section === "bonds" && <BondAnalysis depot={depot} plan={plan} depotAccounts={item.depotAccounts} />}
+      {section === "results" && <EntryResultAnalysis depot={depot} depotAccounts={item.depotAccounts} />}
       <p className="tool-legal">
         Die Simulation ermittelt ausschließlich rechnerische Auswirkungen. Sie
         berücksichtigt weder Kurse noch Steuern, Spreads, Kosten, Stückelungen,
@@ -6585,7 +6690,25 @@ function ExportCenter({
     XLSX.utils.book_append_sheet(
       workbook,
       XLSX.utils.json_to_sheet(
+        item.depotAccounts.map((account) => {
+          const positions = item.depot.filter((holding) => holding.depotId === account.id);
+          const dates = Array.from(new Set(positions.map((holding) => holding.valuationEnd).filter(Boolean))).sort();
+          return {
+            Depot: account.name,
+            Marktwert: positions.reduce((sum, holding) => sum + holding.value, 0),
+            Positionen: positions.length,
+            Datenstand: dates.length === 1 ? dates[0] : dates.length > 1 ? "unterschiedliche Bewertungsstichtage" : "",
+          };
+        }),
+      ),
+      "Depotübersicht",
+    );
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.json_to_sheet(
         item.depot.map((entry) => ({
+          Depot: item.depotAccounts.find((account) => account.id === entry.depotId)?.name || "",
+          Depot_ID: entry.depotId,
           Position: entry.name,
           Wert: entry.value,
           Dynamischer_Depotanteil: item.depot.reduce((sum, holding) => sum + holding.value, 0)
@@ -6852,6 +6975,14 @@ function ExportCenter({
             <strong>{preferredPlan.name}</strong>
           </div>
         </div>
+        {item.depotAccounts.length > 0 && <section className="print-overview">
+          <h2>Depotübersicht</h2>
+          <div>{item.depotAccounts.map((account) => {
+            const positions = item.depot.filter((holding) => holding.depotId === account.id);
+            const dates = Array.from(new Set(positions.map((holding) => holding.valuationEnd).filter(Boolean))).sort();
+            return <p key={account.id}><span>{account.name}</span><strong>{euro.format(positions.reduce((sum, holding) => sum + holding.value, 0))} · {positions.length} Positionen{dates.length === 1 ? ` · Stand ${formatDepotDate(dates[0])}` : ""}</strong></p>;
+          })}</div>
+        </section>}
         <section className="print-overview">
           <h2>Ziele und Gesprächsrahmen</h2>
           <div>
