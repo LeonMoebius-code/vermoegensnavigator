@@ -2461,6 +2461,7 @@ function ResultStep({
         <article>
           <span>Vorhandenes Depot</span>
           <strong>{euro.format(data.depotValue)}</strong>
+          <small>{item.depotAccounts.length} {item.depotAccounts.length === 1 ? "Depot" : "Depots"}</small>
         </article>
       </div>
       {warning && (
@@ -6020,7 +6021,7 @@ function BondAnalysis({ depot, plan, depotAccounts }: { depot: DepotHolding[]; p
   const ladderMax = Math.max(1, ...analysis.ladder.map((item) => item.nominal));
   return <section className="panel analysis-panel">
     <div className="analysis-heading"><div><p className="eyebrow">RENTENPORTFOLIO</p><h2>Zins &amp; Laufzeiten</h2></div><AnalysisToggle value={state} onChange={setState} label="Analysezustand" options={[{ value: "ist", label: "IST" }, { value: "plan", label: "PLAN" }]} /></div>
-    <p className="analysis-context">Bewertungsstichtag der Portfolioaggregation: {analysis.valuationDate.toLocaleDateString("de-DE")}. Abweichende Positionsstichtage können bestehen.</p>
+    <p className="analysis-context">Restlaufzeiten verwenden den jeweiligen gültigen Positionsstichtag. Ohne eigenen Datenstand gilt als Fallback {analysis.valuationDate.toLocaleDateString("de-DE")}.</p>
     <div className="analysis-kpis four">
       <article><span>Direkte Rentenwerte</span><b>{euro.format(analysis.directValue)}</b><small>{totalValue ? percent.format(analysis.directValue / totalValue * 100) : "0"} % des Depots</small></article>
       <article><span>Mit gültiger Fälligkeit</span><b>{percent.format(analysis.maturityCoverage * 100)} %</b><small>der direkten Rentenwerte</small></article>
@@ -6429,14 +6430,15 @@ function DepotOptimizer({
         <div className="transaction-columns">
           <div>
             <strong>Verkäufe</strong>
-            {depot
-              .filter((entry) => entry.plannedSale > 0)
-              .map((entry) => (
+            {item.depotAccounts.map((account) => {
+              const sales = depot.filter((entry) => entry.depotId === account.id && entry.plannedSale > 0);
+              return sales.length ? <section className="transaction-depot-group" key={account.id}><small>{account.name}</small>{sales.map((entry) => (
                 <span key={entry.id}>
                   {entry.name}
                   <b>– {euro.format(entry.plannedSale)}</b>
                 </span>
-              ))}
+              ))}</section> : null;
+            })}
             {!depot.some((entry) => entry.plannedSale > 0) && (
               <em>keine Verkäufe erfasst</em>
             )}
@@ -6973,6 +6975,14 @@ function ExportCenter({
             <strong>{preferredPlan.name}</strong>
           </div>
         </div>
+        {item.depotAccounts.length > 0 && <section className="print-overview">
+          <h2>Depotübersicht</h2>
+          <div>{item.depotAccounts.map((account) => {
+            const positions = item.depot.filter((holding) => holding.depotId === account.id);
+            const dates = Array.from(new Set(positions.map((holding) => holding.valuationEnd).filter(Boolean))).sort();
+            return <p key={account.id}><span>{account.name}</span><strong>{euro.format(positions.reduce((sum, holding) => sum + holding.value, 0))} · {positions.length} Positionen{dates.length === 1 ? ` · Stand ${formatDepotDate(dates[0])}` : ""}</strong></p>;
+          })}</div>
+        </section>}
         <section className="print-overview">
           <h2>Ziele und Gesprächsrahmen</h2>
           <div>
