@@ -401,8 +401,10 @@ Die Grafik soll insbesondere sichtbar machen, dass ein nominal wachsendes Vermö
 
 Kompakte Darstellung:
 
-> Nominalrendite  
-> Inflation  
+> Nominalrendite
+>
+> Inflation
+>
 > Reale Rendite
 
 Kurzer Hilfetext:
