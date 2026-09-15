@@ -1,0 +1,61 @@
+name: Feature CI
+
+on:
+  push:
+    branches:
+      - "work/**"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: feature-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Tests, Typecheck und Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Node.js einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      - name: Depotcheck 3B testen
+        run: npm run test:3b
+
+      - name: Einstieg und Sparpläne 4B testen
+        run: npm run test:4b
+
+      - name: Risiko V2 testen
+        run: npm run test:risk-v2
+
+      - name: Multi Depot testen, sobald vorhanden
+        run: npm run --if-present test:multi-depot
+
+      - name: Typen prüfen
+        run: npm run typecheck
+
+      - name: Produktionsbuild prüfen
+        run: npm run build
+
+      - name: Diff auf Whitespace-Fehler prüfen
+        shell: bash
+        run: |
+          git fetch origin main --no-tags
+          git diff --check origin/main...HEAD
