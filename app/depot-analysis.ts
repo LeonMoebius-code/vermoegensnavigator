@@ -396,6 +396,25 @@ export function bondPortfolioAnalysis(positions: DepotAnalysisPosition[], fallba
     .reduce((sum, row) => sum + row.position.value, 0);
   const calculable = rows.filter((row) => row.modified !== null);
   const calculableValue = calculable.reduce((sum, row) => sum + row.position.value, 0);
+  const ytmRows = rows.filter((row) => row.ytm !== null);
+  const ytmValue = ytmRows.reduce((sum, row) => sum + row.position.value, 0);
+  const averageModeledYtm = ytmValue
+    ? ytmRows.reduce(
+        (sum, row) => sum + row.position.value * Number(row.ytm),
+        0,
+      ) / ytmValue
+    : null;
+  const currentYieldRows = rows.filter((row) => row.currentYield !== null);
+  const currentYieldValue = currentYieldRows.reduce(
+    (sum, row) => sum + row.position.value,
+    0,
+  );
+  const averageCurrentYield = currentYieldValue
+    ? currentYieldRows.reduce(
+        (sum, row) => sum + row.position.value * Number(row.currentYield),
+        0,
+      ) / currentYieldValue
+    : null;
   const portfolioModified = calculableValue
     ? calculable.reduce((sum, row) => sum + row.position.value * Number(row.modified), 0) / calculableValue
     : null;
@@ -417,6 +436,12 @@ export function bondPortfolioAnalysis(positions: DepotAnalysisPosition[], fallba
     totalRentenValue: renten.reduce((sum, position) => sum + position.value, 0),
     maturityCoverage: analysisCoverage(maturityValue, directValue),
     calculableCoverage: analysisCoverage(calculableValue, directValue),
+    ytmCoverage: analysisCoverage(ytmValue, directValue),
+    ytmValue,
+    averageModeledYtm,
+    currentYieldCoverage: analysisCoverage(currentYieldValue, directValue),
+    currentYieldValue,
+    averageCurrentYield,
     calculableValue,
     portfolioModified,
     portfolioDv01: calculable.reduce((sum, row) => sum + Number(row.dv01), 0),

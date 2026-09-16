@@ -74,6 +74,21 @@ assert.equal(bonds.rows.find((row) => row.position.id === "floater")?.ytm, null)
 assert.equal(bonds.rows.find((row) => row.position.id === "step")?.modified, null);
 assert.equal(bonds.rows.find((row) => row.position.id === "fund")?.ytm, null);
 assert.ok(bonds.ladder.length > 0 && bonds.portfolioDv01 > 0);
+const weightedBondPositions = buildDepotAnalysisPositions([
+  holding("YTM 4", 100_000, { securityType: "Festverzinsliche", coupon: 4, currentPrice: 100, maturity: "2031-01-01", nominalOrUnits: 100_000, valuationEnd: "2026-01-01" }),
+  holding("YTM 6", 300_000, { securityType: "Festverzinsliche", coupon: 6, currentPrice: 100, maturity: "2031-01-01", nominalOrUnits: 300_000, valuationEnd: "2026-01-01" }),
+  holding("Floater 5", 100_000, { securityType: "Floater", coupon: 5, currentPrice: 100, maturity: "2031-01-01", nominalOrUnits: 100_000, valuationEnd: "2026-01-01" }),
+  holding("Rentenfonds ohne Einzeltitel-Cashflows", 100_000, { securityType: "Rentenfonds" }),
+], { ...plan, allocations: [], investmentPlans: [] }, "ist");
+const weightedBonds = bondPortfolioAnalysis(weightedBondPositions, new Date(2026, 0, 1));
+close(weightedBonds.averageModeledYtm!, (100_000 * 0.04 + 300_000 * 0.06) / 400_000, 0.00002);
+close(weightedBonds.ytmCoverage, 400_000 / 500_000, 1e-8);
+assert.equal(weightedBonds.ytmValue, 400_000);
+close(weightedBonds.averageCurrentYield!, (100_000 * 0.04 + 300_000 * 0.06 + 100_000 * 0.05) / 500_000, 1e-8);
+close(weightedBonds.currentYieldCoverage, 1, 1e-8);
+assert.notEqual(weightedBonds.currentYieldCoverage, weightedBonds.ytmCoverage);
+assert.equal(weightedBonds.rows.find((row) => row.position.name === "Floater 5")?.ytm, null);
+assert.equal(weightedBonds.rows.find((row) => row.position.name === "Rentenfonds ohne Einzeltitel-Cashflows")?.currentYield, null);
 const results = entryResultAnalysis(depot);
 assert.equal(results.gainLossAmount, 3);
 assert.equal(results.winners, 1);
@@ -109,8 +124,8 @@ close(referenceBonds.directValue, 291_692.54, 0.01);
 close(referenceBonds.maturityCoverage, 224_085.01 / 291_692.54, 0.0001);
 close(referenceBonds.calculableCoverage, 220_592.43 / 291_692.54, 0.0001);
 assert.deepEqual(referenceBonds.ladder.map((item) => [item.year, item.nominal]), [[2031, 40_000], [2032, 50_000], [2033, 20_000], [2036, 50_000], [2040, 60_000], [2041, 5_000]]);
-assert.ok(referenceBonds.portfolioModified && referenceBonds.portfolioModified > 6 && referenceBonds.portfolioModified < 8);
-assert.ok(referenceBonds.portfolioDv01 > 140 && referenceBonds.portfolioDv01 < 165);
+close(referenceBonds.portfolioModified!, 6.873005, 0.000001);
+close(referenceBonds.portfolioDv01, 151.613296, 0.000001);
 assert.ok(referenceBonds.scenarios.every((scenario) => scenario.effect !== 0));
 assert.equal(referenceBonds.rows.find((row) => row.position.name === "Floater")?.ytm, null);
 assert.equal(referenceBonds.rows.find((row) => row.position.name === "Stufenzins")?.modified, null);

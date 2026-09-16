@@ -5340,6 +5340,7 @@ input[inputmode="numeric"],
 }
 .analysis-kpis.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .analysis-kpis.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.analysis-kpis.six { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .analysis-kpis article {
   min-width: 0;
   border: 1px solid #dce5ed;

@@ -767,7 +767,7 @@ export default function Home() {
         </nav>
         <div className="sidebar-foot">
           <p>
-            <strong>Prototyp V0.18.0</strong>
+            <strong>Prototyp V0.18.1</strong>
             <br />
             Browser-lokal, keine revisionssichere Speicherung.
           </p>
@@ -6058,10 +6058,12 @@ function BondAnalysis({ depot, plan, depotAccounts }: { depot: DepotHolding[]; p
   return <section className="panel analysis-panel">
     <div className="analysis-heading"><div><p className="eyebrow">RENTENPORTFOLIO</p><h2>Zins &amp; Laufzeiten</h2></div><AnalysisToggle value={state} onChange={setState} label="Analysezustand" options={[{ value: "ist", label: "IST" }, { value: "plan", label: "PLAN" }]} /></div>
     <p className="analysis-context">Restlaufzeiten verwenden den jeweiligen gültigen Positionsstichtag. Ohne eigenen Datenstand gilt als Fallback {analysis.valuationDate.toLocaleDateString("de-DE")}.</p>
-    <div className="analysis-kpis four">
+    <div className="analysis-kpis six">
       <article><span>Direkte Rentenwerte</span><b>{euro.format(analysis.directValue)}</b><small>{totalValue ? percent.format(analysis.directValue / totalValue * 100) : "0"} % des Depots</small></article>
       <article><span>Mit gültiger Fälligkeit</span><b>{percent.format(analysis.maturityCoverage * 100)} %</b><small>der direkten Rentenwerte</small></article>
-      <article><span>YTM/Duration berechenbar</span><b>{percent.format(analysis.calculableCoverage * 100)} %</b><small>der direkten Rentenwerte</small></article>
+      <article><span>Ø modellierte YTM</span><b>{analysis.averageModeledYtm === null ? "–" : `${depotDecimal.format(analysis.averageModeledYtm * 100)} %`}</b><small>marktwertgewichtet · {percent.format(analysis.ytmCoverage * 100)} % Abdeckung des direkten Anleihebestands</small></article>
+      <article><span>Ø laufende Verzinsung</span><b>{analysis.averageCurrentYield === null ? "–" : `${depotDecimal.format(analysis.averageCurrentYield * 100)} %`}</b><small>marktwertgewichtet · {percent.format(analysis.currentYieldCoverage * 100)} % Abdeckung des direkten Anleihebestands</small></article>
+      <article><span>Modified Duration</span><b>{analysis.portfolioModified === null ? "–" : `${depotDecimal.format(analysis.portfolioModified)} Jahre`}</b><small>{percent.format(analysis.calculableCoverage * 100)} % Abdeckung des direkten Anleihebestands</small></article>
       <article><span>Portfolio-DV01</span><b>{analysis.calculableValue ? euro.format(analysis.portfolioDv01) : "–"}</b><small>berechenbarer Teilbestand</small></article>
     </div>
     <div className="analysis-section">
@@ -6534,6 +6536,9 @@ function ExportCenter({
   );
   const advisor = advisorFor(item.advisorId);
   const exportRiskAssessment = completeRiskAssessment(item.advisory.riskAssessmentV2);
+  const exportBondAnalysis = bondPortfolioAnalysis(
+    buildDepotAnalysisPositions(item.depot, preferredPlan, "ist"),
+  );
   const exportTargetLabel = (entry: SavingsPlan): string => {
     if (!entry.targetRef) return "";
     if (entry.targetRef.kind === "savingsGoal") {
@@ -6784,6 +6789,21 @@ function ExportCenter({
       ),
       "Depot",
     );
+    if (exportBondAnalysis.directValue > 0)
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.aoa_to_sheet([
+          ["Zins & Laufzeiten – IST-Bestand"],
+          ["Direkte Rentenwerte", exportBondAnalysis.directValue],
+          ["Ø modellierte YTM", exportBondAnalysis.averageModeledYtm ?? "nicht berechenbar"],
+          ["YTM-Abdeckung des direkten Anleihebestands", exportBondAnalysis.ytmCoverage],
+          ["Ø laufende Verzinsung", exportBondAnalysis.averageCurrentYield ?? "nicht berechenbar"],
+          ["Current-Yield-Abdeckung des direkten Anleihebestands", exportBondAnalysis.currentYieldCoverage],
+          ["Marktwertgewichtete Modified Duration", exportBondAnalysis.portfolioModified ?? "nicht berechenbar"],
+          ["Portfolio-DV01", exportBondAnalysis.calculableValue ? exportBondAnalysis.portfolioDv01 : "nicht berechenbar"],
+        ]),
+        "Zins & Laufzeiten",
+      );
     XLSX.utils.book_append_sheet(
       workbook,
       XLSX.utils.json_to_sheet(
@@ -7018,6 +7038,13 @@ function ExportCenter({
             const dates = Array.from(new Set(positions.map((holding) => holding.valuationEnd).filter(Boolean))).sort();
             return <p key={account.id}><span>{account.name}</span><strong>{euro.format(positions.reduce((sum, holding) => sum + holding.value, 0))} · {positions.length} Positionen{dates.length === 1 ? ` · Stand ${formatDepotDate(dates[0])}` : ""}</strong></p>;
           })}</div>
+        </section>}
+        {exportBondAnalysis.directValue > 0 && <section className="print-overview">
+          <h2>Zins &amp; Laufzeiten · IST-Bestand</h2>
+          <div>
+            <p><span>Ø modellierte YTM</span><strong>{exportBondAnalysis.averageModeledYtm === null ? "Nicht berechenbar" : `${depotDecimal.format(exportBondAnalysis.averageModeledYtm * 100)} %`}</strong><small>marktwertgewichtet · {percent.format(exportBondAnalysis.ytmCoverage * 100)} % Abdeckung des direkten Anleihebestands</small></p>
+            <p><span>Ø laufende Verzinsung</span><strong>{exportBondAnalysis.averageCurrentYield === null ? "Nicht berechenbar" : `${depotDecimal.format(exportBondAnalysis.averageCurrentYield * 100)} %`}</strong><small>marktwertgewichtet · {percent.format(exportBondAnalysis.currentYieldCoverage * 100)} % Abdeckung des direkten Anleihebestands</small></p>
+          </div>
         </section>}
         <section className="print-overview">
           <h2>Ziele und Gesprächsrahmen</h2>
