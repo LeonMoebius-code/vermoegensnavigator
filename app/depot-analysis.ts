@@ -259,8 +259,8 @@ export function currencyAnalysis(positions: DepotAnalysisPosition[]) {
 const localDate = (value: string): Date | null => {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) return null;
-  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12);
-  return Number.isNaN(date.getTime()) || date.getFullYear() !== Number(match[1]) || date.getMonth() !== Number(match[2]) - 1 || date.getDate() !== Number(match[3]) ? null : date;
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12));
+  return Number.isNaN(date.getTime()) || date.getUTCFullYear() !== Number(match[1]) || date.getUTCMonth() !== Number(match[2]) - 1 || date.getUTCDate() !== Number(match[3]) ? null : date;
 };
 
 export function valuationDateFor(positions: DepotAnalysisPosition[], fallback = new Date()) {
@@ -268,7 +268,9 @@ export function valuationDateFor(positions: DepotAnalysisPosition[], fallback = 
   for (const position of positions) if (position.valuationEnd && localDate(position.valuationEnd))
     counts.set(position.valuationEnd, (counts.get(position.valuationEnd) || 0) + 1);
   const selected = [...counts.entries()].sort((a, b) => b[1] - a[1] || b[0].localeCompare(a[0]))[0]?.[0];
-  return selected ? localDate(selected)! : new Date(fallback.getFullYear(), fallback.getMonth(), fallback.getDate(), 12);
+  return selected
+    ? localDate(selected)!
+    : new Date(Date.UTC(fallback.getFullYear(), fallback.getMonth(), fallback.getDate(), 12));
 }
 
 export function valuationDatesFor(positions: DepotAnalysisPosition[]) {
@@ -422,7 +424,7 @@ export function bondPortfolioAnalysis(positions: DepotAnalysisPosition[], fallba
   for (const row of rows) {
     const date = row.position.maturity ? localDate(row.position.maturity) : null;
     if (!row.position.classification.direct || !date || row.remainingYears === null || row.remainingYears <= 0 || !Number.isFinite(row.position.nominalOrUnits) || Number(row.position.nominalOrUnits) < 0) continue;
-    const year = date.getFullYear();
+    const year = date.getUTCFullYear();
     const item = ladderMap.get(year) || { year, nominal: 0, marketValue: 0, count: 0 };
     item.nominal += Number(row.position.nominalOrUnits);
     item.marketValue += row.position.value;
