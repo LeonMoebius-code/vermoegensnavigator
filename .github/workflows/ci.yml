@@ -48,6 +48,9 @@ jobs:
       - name: Multi Depot testen, sobald vorhanden
         run: npm run --if-present test:multi-depot
 
+      - name: Modellportfolio-Semantik testen
+        run: npm run test:modelportfolio
+
       - name: Typen prüfen
         run: npm run typecheck
 

@@ -59,6 +59,7 @@ import {
   CapitalPot,
   capitalPots,
   caseSnapshot,
+  buildMultiDepotExportData,
   customerChecklistCategories,
   CustomerChecklistCategory,
   createCase,
@@ -79,6 +80,7 @@ import {
   PlannerAllocation,
   InvestmentFrequency,
   InvestmentPlan,
+  initialReplacementDepotId,
   nextImplementationDate,
   nextDepotName,
   nextPlanCopyName,
@@ -87,6 +89,8 @@ import {
   phasedEntryScheduleValidation,
   PhasedEntryPlan,
   legacyBucketAmountsForCapitalPots,
+  ModelPortfolioAction,
+  modelPortfolioDefaultAmount,
   planningShortfall,
   plannerIstHoldingValue,
   plannerPlanHoldingValue,
@@ -95,6 +99,9 @@ import {
   renameDepotAccount,
   replaceDepotAccount,
   reconcilePlanCapitalPots,
+  replaceStrategicPlanAllocations,
+  supplementPlanWithModelPortfolio,
+  createModelPortfolioVariant,
   strategicAmount,
   StructurePlan,
   SavingsPlan,
@@ -760,7 +767,7 @@ export default function Home() {
         </nav>
         <div className="sidebar-foot">
           <p>
-            <strong>Prototyp V0.18.0</strong>
+            <strong>Prototyp V0.18.1</strong>
             <br />
             Browser-lokal, keine revisionssichere Speicherung.
           </p>
@@ -1299,6 +1306,7 @@ function useDepotCsvImport(
   ) => void,
 ) {
   const csvRef = useRef<HTMLInputElement>(null);
+  const requestedReplacementDepotId = useRef<string | undefined>(undefined);
   const [csvPreview, setCsvPreview] = useState<{
     fileName: string;
     result: DepotCsvResult;
@@ -1313,7 +1321,12 @@ function useDepotCsvImport(
       const result = parseDepotCsv(await file.arrayBuffer());
       setCsvPreview({ fileName: file.name, result });
       setDepotName(nextDepotName(depotAccounts));
-      setTargetDepotId(depotAccounts[0]?.id || "");
+      setTargetDepotId(
+        initialReplacementDepotId(
+          depotAccounts,
+          requestedReplacementDepotId.current,
+        ),
+      );
       setCsvError("");
     } catch (error) {
       setCsvPreview(null);
@@ -1333,7 +1346,13 @@ function useDepotCsvImport(
     setCsvPreview(null);
   };
   return {
-    open: () => csvRef.current?.click(),
+    open: (replacementDepotId?: string) => {
+      requestedReplacementDepotId.current = replacementDepotId;
+      setTargetDepotId(
+        initialReplacementDepotId(depotAccounts, replacementDepotId),
+      );
+      csvRef.current?.click();
+    },
     input: (
       <input
         ref={csvRef}
@@ -1568,7 +1587,7 @@ function SituationStep({
                 </small>
               </div>
               <div>
-                <button className="secondary" onClick={csvImport.open}>
+                <button className="secondary" onClick={() => csvImport.open()}>
                   Depot-CSV importieren
                 </button>
                 <button className="secondary" onClick={() => setView("depot")}>
@@ -2605,6 +2624,7 @@ function PlannerView({
   const [modelDialog, setModelDialog] = useState<{
     id: "rb2" | "rb3" | "rb4";
     amount: number;
+    action: ModelPortfolioAction;
   } | null>(null);
   const plan =
     item.plans.find((entry) => entry.id === item.activePlanId) ?? item.plans[0];
@@ -3028,7 +3048,7 @@ function PlannerView({
     updatePlan({ investmentPlans: [...plan.investmentPlans, next] });
   };
 
-  const applyModel = (action: "new" | "supplement" | "replace") => {
+  const applyModel = (action: ModelPortfolioAction) => {
     if (!modelDialog) return;
     const model = modelPortfolios.find((entry) => entry.id === modelDialog.id);
     if (!model) return;
@@ -3037,7 +3057,7 @@ function PlannerView({
       fallbackCapitalPot;
     if (!modelPot) return;
     const modelAllocations: PlannerAllocation[] = model.holdings.map(
-      (holding) => {
+      (holding): PlannerAllocation => {
         const amount = Math.round((modelDialog.amount * holding.weight) / 100);
         return {
           id: uid("allocation"),
@@ -3056,17 +3076,14 @@ function PlannerView({
           capitalPotAmounts: { [modelPot.id]: amount },
         };
       },
-    );
+    ).filter((allocation) => allocation.amount > 0);
     if (action === "new") {
-      const next = duplicateStructurePlan(
+      const next = createModelPortfolioVariant(
         plan,
+        modelAllocations,
+        visibleCapitalPots,
         `${model.name} – strategische Variante`,
       );
-      next.name = `${model.name} – strategische Variante`;
-      next.allocations = [
-        ...next.allocations.filter((entry) => entry.capitalPotId !== modelPot.id),
-        ...modelAllocations,
-      ];
       next.modelId = model.id;
       next.modelAmount = modelDialog.amount;
       const reconciledNext = reconcilePlanCapitalPots(
@@ -3083,18 +3100,30 @@ function PlannerView({
     }
     if (action === "supplement")
       updatePlan({
-        allocations: [...plan.allocations, ...modelAllocations],
+        ...supplementPlanWithModelPortfolio(plan, modelAllocations),
         modelId: model.id,
         modelAmount: modelDialog.amount,
       });
     if (action === "replace")
       updatePlan({
-        allocations: modelAllocations,
+        ...replaceStrategicPlanAllocations(
+          plan,
+          modelAllocations,
+          visibleCapitalPots,
+        ),
         modelId: model.id,
         modelAmount: modelDialog.amount,
       });
     setModelDialog(null);
     setMode("structure");
+  };
+  const selectModelAction = (action: ModelPortfolioAction) => {
+    if (!modelDialog) return;
+    setModelDialog({
+      ...modelDialog,
+      action,
+      amount: modelPortfolioDefaultAmount(action, plan, visibleCapitalPots),
+    });
   };
 
   const modelProductIds = new Set(
@@ -4549,8 +4578,8 @@ function PlannerView({
             <h2>Modellportfolio nur auf den gewählten Kapitaltopf anwenden</h2>
             <p>
               Bestehende Laufzeiten werden nicht mehr ungefragt überschrieben.
-              Standardbetrag: strategisch freies Kapital{" "}
-              {euro.format(strategicAmount(item.advisory, plan.total))}.
+              Beim Ergänzen wird der noch nicht verplante strategische
+              Restbetrag vorbelegt.
             </p>
           </div>
           <div className="model-grid">
@@ -4592,7 +4621,12 @@ function PlannerView({
                   onClick={() =>
                     setModelDialog({
                       id: model.id,
-                      amount: strategicAmount(item.advisory, plan.total),
+                      action: "supplement",
+                      amount: modelPortfolioDefaultAmount(
+                        "supplement",
+                        plan,
+                        visibleCapitalPots,
+                      ),
                     })
                   }
                 >
@@ -4662,30 +4696,32 @@ function PlannerView({
                   ?.name
               }
             </h2>
+            <div className="apply-options">
+              <button className={modelDialog.action === "new" ? "recommended" : ""} onClick={() => selectModelAction("new")}>
+                <strong>Als neue Variante</strong>
+                <small>
+                  Aktuellen Plan kopieren und nur den strategischen Teil ersetzen.
+                </small>
+              </button>
+              <button className={modelDialog.action === "supplement" ? "recommended" : ""} onClick={() => selectModelAction("supplement")}>
+                <strong>Aktuellen Plan ergänzen</strong>
+                <small>
+                  Nur den strategischen Restbetrag ergänzen; der Betrag bleibt editierbar.
+                </small>
+              </button>
+              <button className={modelDialog.action === "replace" ? "recommended" : ""} onClick={() => selectModelAction("replace")}>
+                <strong>Aktuellen Plan ersetzen</strong>
+                <small>Nur strategische Allokationen ersetzen; andere Kapitaltöpfe bleiben erhalten.</small>
+              </button>
+            </div>
             <AmountField
               label="Betroffener Betrag"
               value={modelDialog.amount}
               onChange={(amount) => setModelDialog({ ...modelDialog, amount })}
             />
-            <div className="apply-options">
-              <button className="recommended" onClick={() => applyModel("new")}>
-                <strong>Als neue Variante</strong>
-                <small>
-                  Aktuellen Plan kopieren und nur das strategische Laufzeitband
-                  ersetzen.
-                </small>
-              </button>
-              <button onClick={() => applyModel("supplement")}>
-                <strong>Aktuellen Plan ergänzen</strong>
-                <small>
-                  Positionen zusätzlich einfügen; Überplanung wird sichtbar.
-                </small>
-              </button>
-              <button onClick={() => applyModel("replace")}>
-                <strong>Aktuellen Plan ersetzen</strong>
-                <small>Alle bisherigen Produktzuordnungen entfernen.</small>
-              </button>
-            </div>
+            <button className="primary" onClick={() => applyModel(modelDialog.action)}>
+              Ausgewählte Aktion anwenden
+            </button>
           </section>
         </div>
       )}
@@ -6022,10 +6058,12 @@ function BondAnalysis({ depot, plan, depotAccounts }: { depot: DepotHolding[]; p
   return <section className="panel analysis-panel">
     <div className="analysis-heading"><div><p className="eyebrow">RENTENPORTFOLIO</p><h2>Zins &amp; Laufzeiten</h2></div><AnalysisToggle value={state} onChange={setState} label="Analysezustand" options={[{ value: "ist", label: "IST" }, { value: "plan", label: "PLAN" }]} /></div>
     <p className="analysis-context">Restlaufzeiten verwenden den jeweiligen gültigen Positionsstichtag. Ohne eigenen Datenstand gilt als Fallback {analysis.valuationDate.toLocaleDateString("de-DE")}.</p>
-    <div className="analysis-kpis four">
+    <div className="analysis-kpis six">
       <article><span>Direkte Rentenwerte</span><b>{euro.format(analysis.directValue)}</b><small>{totalValue ? percent.format(analysis.directValue / totalValue * 100) : "0"} % des Depots</small></article>
       <article><span>Mit gültiger Fälligkeit</span><b>{percent.format(analysis.maturityCoverage * 100)} %</b><small>der direkten Rentenwerte</small></article>
-      <article><span>YTM/Duration berechenbar</span><b>{percent.format(analysis.calculableCoverage * 100)} %</b><small>der direkten Rentenwerte</small></article>
+      <article><span>Ø modellierte YTM</span><b>{analysis.averageModeledYtm === null ? "–" : `${depotDecimal.format(analysis.averageModeledYtm * 100)} %`}</b><small>marktwertgewichtet · {percent.format(analysis.ytmCoverage * 100)} % Abdeckung des direkten Anleihebestands</small></article>
+      <article><span>Ø laufende Verzinsung</span><b>{analysis.averageCurrentYield === null ? "–" : `${depotDecimal.format(analysis.averageCurrentYield * 100)} %`}</b><small>marktwertgewichtet · {percent.format(analysis.currentYieldCoverage * 100)} % Abdeckung des direkten Anleihebestands</small></article>
+      <article><span>Modified Duration</span><b>{analysis.portfolioModified === null ? "–" : `${depotDecimal.format(analysis.portfolioModified)} Jahre`}</b><small>{percent.format(analysis.calculableCoverage * 100)} % Abdeckung des direkten Anleihebestands</small></article>
       <article><span>Portfolio-DV01</span><b>{analysis.calculableValue ? euro.format(analysis.portfolioDv01) : "–"}</b><small>berechenbarer Teilbestand</small></article>
     </div>
     <div className="analysis-section">
@@ -6251,8 +6289,10 @@ function DepotOptimizer({
           <small>begrenzt auf den aktuellen Positionswert</small>
         </article>
       </div>}
+      {csvImport.input}
+      {csvImport.preview}
       {item.depotAccounts.length > 0 && <section className="panel depot-management">
-        <div className="panel-heading"><div><p className="eyebrow">DEPOTÜBERSICHT</p><h2>{euro.format(total)} · {item.depotAccounts.length} {item.depotAccounts.length === 1 ? "Depot" : "Depots"}</h2></div><button className="secondary" onClick={csvImport.open}>Weiteres Depot hinzufügen</button></div>
+        <div className="panel-heading"><div><p className="eyebrow">DEPOTÜBERSICHT</p><h2>{euro.format(total)} · {item.depotAccounts.length} {item.depotAccounts.length === 1 ? "Depot" : "Depots"}</h2></div><button className="secondary" onClick={() => csvImport.open()}>Weiteres Depot hinzufügen</button></div>
         {mixedValuationDates && <p className="csv-privacy-note">Die zusammengefasste Analyse enthält Positionen mit unterschiedlichen Bewertungsstichtagen.</p>}
         <div className="depot-account-list">{item.depotAccounts.map((account) => {
           const positions = depot.filter((holding) => holding.depotId === account.id);
@@ -6261,7 +6301,7 @@ function DepotOptimizer({
           return <article key={account.id}>
             <input aria-label="Depotname" value={account.name} onChange={(event) => updateDepotName(account.id, event.target.value)} onBlur={() => !account.name.trim() && updateDepotName(account.id, nextDepotName(item.depotAccounts.filter((entry) => entry.id !== account.id)))} />
             <strong>{euro.format(value)}</strong><small>{positions.length} {positions.length === 1 ? "Position" : "Positionen"}{dates.length === 1 ? ` · Stand ${formatDepotDate(dates[0])}` : dates.length > 1 ? " · unterschiedliche Datenstände" : ""}</small>
-            <div><button className="secondary" onClick={csvImport.open}>CSV ersetzen</button><button className="text-button danger" onClick={() => removeDepot(account)}>Depot löschen</button></div>
+            <div><button className="secondary" onClick={() => csvImport.open(account.id)}>CSV ersetzen</button><button className="text-button danger" onClick={() => removeDepot(account)}>Depot löschen</button></div>
           </article>;
         })}</div>
       </section>}
@@ -6285,7 +6325,7 @@ function DepotOptimizer({
           <div>
             <button
               className="secondary"
-              onClick={csvImport.open}
+              onClick={() => csvImport.open()}
             >
               CSV importieren
             </button>
@@ -6294,8 +6334,6 @@ function DepotOptimizer({
             </button>}
           </div>
         </div>
-        {csvImport.input}
-        {csvImport.preview}
         {depot.length === 0 ? (
           <div className="depot-empty-state">
             <span>◫</span>
@@ -6306,7 +6344,7 @@ function DepotOptimizer({
               dargestellt.
             </p>
             <div>
-              <button className="primary" onClick={csvImport.open}>Depot-CSV importieren</button>
+              <button className="primary" onClick={() => csvImport.open()}>Depot-CSV importieren</button>
               <button className="secondary" onClick={loadSample}>Musterdepot laden</button>
             </div>
           </div>
@@ -6498,6 +6536,9 @@ function ExportCenter({
   );
   const advisor = advisorFor(item.advisorId);
   const exportRiskAssessment = completeRiskAssessment(item.advisory.riskAssessmentV2);
+  const exportBondAnalysis = bondPortfolioAnalysis(
+    buildDepotAnalysisPositions(item.depot, preferredPlan, "ist"),
+  );
   const exportTargetLabel = (entry: SavingsPlan): string => {
     if (!entry.targetRef) return "";
     if (entry.targetRef.kind === "savingsGoal") {
@@ -6517,6 +6558,10 @@ function ExportCenter({
   };
   const exportExcel = () => {
     const workbook = XLSX.utils.book_new();
+    const depotExport = buildMultiDepotExportData(
+      item.depotAccounts,
+      item.depot,
+    );
     XLSX.utils.book_append_sheet(
       workbook,
       XLSX.utils.aoa_to_sheet([
@@ -6690,29 +6735,25 @@ function ExportCenter({
     XLSX.utils.book_append_sheet(
       workbook,
       XLSX.utils.json_to_sheet(
-        item.depotAccounts.map((account) => {
-          const positions = item.depot.filter((holding) => holding.depotId === account.id);
-          const dates = Array.from(new Set(positions.map((holding) => holding.valuationEnd).filter(Boolean))).sort();
-          return {
-            Depot: account.name,
-            Marktwert: positions.reduce((sum, holding) => sum + holding.value, 0),
-            Positionen: positions.length,
-            Datenstand: dates.length === 1 ? dates[0] : dates.length > 1 ? "unterschiedliche Bewertungsstichtage" : "",
-          };
-        }),
+        depotExport.overview.map((account) => ({
+          Depot: account.depotName,
+          Marktwert: account.marketValue,
+          Positionen: account.positionCount,
+          Datenstand: account.valuationDate,
+        })),
       ),
       "Depotübersicht",
     );
     XLSX.utils.book_append_sheet(
       workbook,
       XLSX.utils.json_to_sheet(
-        item.depot.map((entry) => ({
-          Depot: item.depotAccounts.find((account) => account.id === entry.depotId)?.name || "",
+        depotExport.holdings.map((entry) => ({
+          Depot: entry.depotName,
           Depot_ID: entry.depotId,
           Position: entry.name,
           Wert: entry.value,
-          Dynamischer_Depotanteil: item.depot.reduce((sum, holding) => sum + holding.value, 0)
-            ? entry.value / item.depot.reduce((sum, holding) => sum + holding.value, 0)
+          Dynamischer_Depotanteil: depotExport.totalMarketValue
+            ? entry.value / depotExport.totalMarketValue
             : 0,
           Anlageklasse: entry.assetClass,
           Region: entry.region,
@@ -6748,6 +6789,21 @@ function ExportCenter({
       ),
       "Depot",
     );
+    if (exportBondAnalysis.directValue > 0)
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.aoa_to_sheet([
+          ["Zins & Laufzeiten – IST-Bestand"],
+          ["Direkte Rentenwerte", exportBondAnalysis.directValue],
+          ["Ø modellierte YTM", exportBondAnalysis.averageModeledYtm ?? "nicht berechenbar"],
+          ["YTM-Abdeckung des direkten Anleihebestands", exportBondAnalysis.ytmCoverage],
+          ["Ø laufende Verzinsung", exportBondAnalysis.averageCurrentYield ?? "nicht berechenbar"],
+          ["Current-Yield-Abdeckung des direkten Anleihebestands", exportBondAnalysis.currentYieldCoverage],
+          ["Marktwertgewichtete Modified Duration", exportBondAnalysis.portfolioModified ?? "nicht berechenbar"],
+          ["Portfolio-DV01", exportBondAnalysis.calculableValue ? exportBondAnalysis.portfolioDv01 : "nicht berechenbar"],
+        ]),
+        "Zins & Laufzeiten",
+      );
     XLSX.utils.book_append_sheet(
       workbook,
       XLSX.utils.json_to_sheet(
@@ -6982,6 +7038,13 @@ function ExportCenter({
             const dates = Array.from(new Set(positions.map((holding) => holding.valuationEnd).filter(Boolean))).sort();
             return <p key={account.id}><span>{account.name}</span><strong>{euro.format(positions.reduce((sum, holding) => sum + holding.value, 0))} · {positions.length} Positionen{dates.length === 1 ? ` · Stand ${formatDepotDate(dates[0])}` : ""}</strong></p>;
           })}</div>
+        </section>}
+        {exportBondAnalysis.directValue > 0 && <section className="print-overview">
+          <h2>Zins &amp; Laufzeiten · IST-Bestand</h2>
+          <div>
+            <p><span>Ø modellierte YTM</span><strong>{exportBondAnalysis.averageModeledYtm === null ? "Nicht berechenbar" : `${depotDecimal.format(exportBondAnalysis.averageModeledYtm * 100)} %`}</strong><small>marktwertgewichtet · {percent.format(exportBondAnalysis.ytmCoverage * 100)} % Abdeckung des direkten Anleihebestands</small></p>
+            <p><span>Ø laufende Verzinsung</span><strong>{exportBondAnalysis.averageCurrentYield === null ? "Nicht berechenbar" : `${depotDecimal.format(exportBondAnalysis.averageCurrentYield * 100)} %`}</strong><small>marktwertgewichtet · {percent.format(exportBondAnalysis.currentYieldCoverage * 100)} % Abdeckung des direkten Anleihebestands</small></p>
+          </div>
         </section>}
         <section className="print-overview">
           <h2>Ziele und Gesprächsrahmen</h2>

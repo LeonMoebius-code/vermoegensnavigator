@@ -2,8 +2,8 @@
 
 > **Kanonischer Produkt- und Entscheidungsstand**
 >
-> Letzte fachliche Aktualisierung: **15.09.2026**
-> Aktuell veröffentlichte Version: **V0.18.0**
+> Letzte fachliche Aktualisierung: **16.09.2026**
+> Aktuell veröffentlichte Version: **V0.18.1**
 > Codebasis: **GitHub `main`**
 > Zielumgebung: **Desktop-Prototyp**
 > Öffentliche Testversion: GitHub Pages
@@ -268,6 +268,15 @@ Ein Beratungsfall kann mehrere eigenständige DepotAccounts mit stabiler technis
 - Depot-Replacement reconciliiert bewusste Holdingreferenzen ausschließlich innerhalb desselben DepotAccounts und erhält simulierte Verkäufe bei eindeutigem Match bis maximal zum neuen Marktwert.
 - Unterschiedliche gültige Bewertungsstichtage werden transparent kenntlich gemacht; Bond-Restlaufzeiten verwenden bevorzugt den positionsbezogenen Stichtag.
 - Beim ersten konkreten Depotimport wechseln noch nicht bewusst anders gesetzte Planvarianten auf den Standard `Nach simulierten Verkäufen`.
+
+## 3.5 ✅ V0.18.1 – Konsolidierung
+
+V0.18.1 härtet den bestehenden Multi-Depot-Lifecycle, korrigiert die Semantik der drei Modellportfolio-Aktionen und ergänzt die bestehende Bondanalyse ohne Änderung des Persistenzschemas 10.
+
+- Depot-Replacement verwendet eine einzige depotbegrenzte, global eindeutige 1:1-Mappingtabelle für Planned Sales und Planreferenzen. Import/Replacement funktionieren aus allen Depotcheck-Untertabs; der depotbezogene Ersatz wählt das geklickte Depot vor.
+- Bei konkreten physischen Holdings ist `advisory.depotValue` stets deren Gesamtmarktwert. Der erste konkrete Import setzt auch über den Replacement-Weg einen unberührten Plan auf `afterSales`.
+- `Aktuellen Plan ergänzen` verwendet den strategischen Restbetrag. `Aktuellen Plan ersetzen` und `Als neue Variante` ersetzen ausschließlich den strategischen Teil und erhalten gültige nicht-strategische Planung und Umsetzungsbezüge.
+- `Zins & Laufzeiten` zeigt marktwertgewichtet die **Ø modellierte YTM** und die **Ø laufende Verzinsung** mit jeweils eigener Coverage des direkten Anleihebestands; Excel- und Druckexport übernehmen beide Kennzahlen samt Coverage.
 
 ---
 
@@ -1039,6 +1048,8 @@ Umgesetzte Kennzahlen:
 - Modified Duration
 - DV01
 - einfache Zinsszenarien
+- marktwertgewichtete Ø modellierte YTM des berechenbaren Festzins-Teilbestands mit eigener Coverage
+- marktwertgewichtete Ø laufende Verzinsung des nach bestehender Current-Yield-Logik berechenbaren direkten Anleihebestands mit eigener Coverage
 
 ### Fachliche Einschränkungen
 
@@ -1820,6 +1831,15 @@ Keine zentrale fachliche Entscheidung offen. Paket ist umgesetzt.
 ---
 
 # 19. Entscheidungslog
+
+## 16.09.2026
+
+### V0.18.1 Konsolidierung
+
+- Multi-Depot-Replacement auf ein global eindeutiges, priorisiertes 1:1-Matching für Holdingreferenzen und Planned Sales gehärtet; Depotwert-Wahrheit und Erstimportregel für alle Importwege vereinheitlicht.
+- Modellportfolio-Aktionen fachlich getrennt: Ergänzen nutzt den strategischen Rest, Ersetzen und neue Variante betreffen nur den strategischen Kapitaltopf.
+- Ø modellierte YTM und Ø laufende Verzinsung als getrennte marktwertgewichtete Portfoliokennzahlen mit eigener Coverage in Bondanalyse und Export ergänzt.
+- Version V0.18.1 bei unverändertem Persistenzschema 10.
 
 ## 15.09.2026
 
