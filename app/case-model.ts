@@ -1030,44 +1030,65 @@ export function reconcileCasePlans(
 const normalizedHoldingWkn = (holding: DepotHolding) =>
   (holding.wkn || "").replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
 
-function uniqueHoldingMatch(
-  holding: DepotHolding,
+const normalizedHoldingProductId = (holding: DepotHolding) =>
+  String(holding.productId || "").trim();
+
+const conservativeHoldingFallback = (holding: DepotHolding) => {
+  const name = holding.name.trim().toLocaleLowerCase("de-DE");
+  if (!name) return "";
+  return `${name}::${String(holding.securityType || holding.sourceType || "")
+    .trim()
+    .toLocaleLowerCase("de-DE")}`;
+};
+
+/**
+ * Builds the single, globally one-to-one mapping used for every consequence of
+ * a depot replacement. Each stage only sees holdings that were not claimed by
+ * a higher-priority identity.
+ */
+export function replacementHoldingIdMap(
+  previousDepot: DepotHolding[],
   nextDepot: DepotHolding[],
-  previousDepot: DepotHolding[] = [holding],
 ) {
-  const identicalId = nextDepot.filter((entry) => entry.id === holding.id);
-  if (identicalId.length === 1) return identicalId[0];
-  const wkn = normalizedHoldingWkn(holding);
-  if (wkn) {
-    const previousCandidates = previousDepot.filter(
-      (entry) => normalizedHoldingWkn(entry) === wkn,
-    );
-    const candidates = nextDepot.filter(
-      (entry) => normalizedHoldingWkn(entry) === wkn,
-    );
-    return previousCandidates.length === 1 && candidates.length === 1
-      ? candidates[0]
-      : undefined;
+  const matches = new Map<string, string>();
+  const availablePrevious = new Map(
+    previousDepot.map((holding) => [holding.id, holding]),
+  );
+  const availableNext = new Map(nextDepot.map((holding) => [holding.id, holding]));
+
+  const claim = (previous: DepotHolding, next: DepotHolding) => {
+    matches.set(previous.id, next.id);
+    availablePrevious.delete(previous.id);
+    availableNext.delete(next.id);
+  };
+
+  for (const previous of [...availablePrevious.values()]) {
+    const next = availableNext.get(previous.id);
+    if (next) claim(previous, next);
   }
-  if (holding.productId) {
-    const previousCandidates = previousDepot.filter(
-      (entry) => entry.productId === holding.productId,
-    );
-    const candidates = nextDepot.filter(
-      (entry) => entry.productId === holding.productId,
-    );
-    return previousCandidates.length === 1 && candidates.length === 1
-      ? candidates[0]
-      : undefined;
-  }
-  const identity = (entry: DepotHolding) =>
-    `${entry.name.trim().toLocaleLowerCase("de-DE")}::${entry.securityType || ""}`;
-  const key = identity(holding);
-  const previousCandidates = previousDepot.filter((entry) => identity(entry) === key);
-  const candidates = nextDepot.filter((entry) => identity(entry) === key);
-  return previousCandidates.length === 1 && candidates.length === 1
-    ? candidates[0]
-    : undefined;
+
+  const claimUniqueBy = (keyFor: (holding: DepotHolding) => string) => {
+    const previousByKey = new Map<string, DepotHolding[]>();
+    const nextByKey = new Map<string, DepotHolding[]>();
+    for (const holding of availablePrevious.values()) {
+      const key = keyFor(holding);
+      if (key) previousByKey.set(key, [...(previousByKey.get(key) || []), holding]);
+    }
+    for (const holding of availableNext.values()) {
+      const key = keyFor(holding);
+      if (key) nextByKey.set(key, [...(nextByKey.get(key) || []), holding]);
+    }
+    for (const [key, previousCandidates] of previousByKey) {
+      const nextCandidates = nextByKey.get(key) || [];
+      if (previousCandidates.length === 1 && nextCandidates.length === 1)
+        claim(previousCandidates[0], nextCandidates[0]);
+    }
+  };
+
+  claimUniqueBy(normalizedHoldingWkn);
+  claimUniqueBy(normalizedHoldingProductId);
+  claimUniqueBy(conservativeHoldingFallback);
+  return matches;
 }
 
 export function reconcileDepotHoldingSelections(
@@ -1075,23 +1096,26 @@ export function reconcileDepotHoldingSelections(
   previousDepot: DepotHolding[],
   nextDepot: DepotHolding[],
   replacementDepotId?: string,
+  replacementMap?: ReadonlyMap<string, string>,
 ) {
   const nextIds = new Set(nextDepot.map((holding) => holding.id));
   const previousById = new Map(
     previousDepot.map((holding) => [holding.id, holding]),
   );
+  const finalReplacementMap = replacementDepotId
+    ? replacementMap || replacementHoldingIdMap(
+        previousDepot.filter((holding) => holding.depotId === replacementDepotId),
+        nextDepot.filter((holding) => holding.depotId === replacementDepotId),
+      )
+    : undefined;
   return plans.map((plan) => {
     const mappedIds = plan.depotHoldingIds.flatMap((id) => {
       if (nextIds.has(id)) return [id];
       const previous = previousById.get(id);
       if (!previous || !replacementDepotId || previous.depotId !== replacementDepotId)
         return [];
-      const match = uniqueHoldingMatch(
-        previous,
-        nextDepot.filter((entry) => entry.depotId === replacementDepotId),
-        previousDepot.filter((entry) => entry.depotId === replacementDepotId),
-      );
-      return match ? [match.id] : [];
+      const matchId = finalReplacementMap?.get(previous.id);
+      return matchId ? [matchId] : [];
     });
     return {
       ...plan,
@@ -1105,6 +1129,15 @@ export function nextDepotName(accounts: DepotAccount[]) {
   let index = 1;
   while (used.has(`Depot ${index}`)) index += 1;
   return `Depot ${index}`;
+}
+
+export function initialReplacementDepotId(
+  accounts: DepotAccount[],
+  requestedDepotId?: string,
+) {
+  return requestedDepotId && accounts.some((account) => account.id === requestedDepotId)
+    ? requestedDepotId
+    : accounts[0]?.id || "";
 }
 
 export const holdingsForDepot = (depot: DepotHolding[], depotId: string) =>
@@ -1166,10 +1199,13 @@ export function replaceDepotAccount(
   if (!state.depotAccounts.some((account) => account.id === depotId)) return state;
   const previous = holdingsForDepot(state.depot, depotId);
   const imported = parsed.map((holding) => ({ ...holding, depotId }));
+  const replacementMap = replacementHoldingIdMap(previous, imported);
+  const previousByNextId = new Map(
+    [...replacementMap].map(([previousId, nextId]) => [nextId, previousId]),
+  );
+  const previousById = new Map(previous.map((holding) => [holding.id, holding]));
   const reconciled = imported.map((holding) => {
-    const match = previous.find(
-      (candidate) => uniqueHoldingMatch(candidate, imported, previous)?.id === holding.id,
-    );
+    const match = previousById.get(previousByNextId.get(holding.id) || "");
     return match
       ? { ...holding, plannedSale: Math.min(match.plannedSale, holding.value) }
       : holding;
@@ -1178,17 +1214,63 @@ export function replaceDepotAccount(
     ...state.depot.filter((holding) => holding.depotId !== depotId),
     ...reconciled,
   ];
+  const firstConcreteDepot = state.depot.length === 0 && reconciled.length > 0;
+  const plans = reconcileDepotHoldingSelections(
+    state.plans,
+    state.depot,
+    depot,
+    depotId,
+    replacementMap,
+  ).map((plan) =>
+    firstConcreteDepot && !plan.depotModeSelectionInitialized
+      ? { ...plan, depotMode: "afterSales" as const }
+      : plan,
+  );
   return {
     advisory: withDepotValue(state.advisory, depot),
     depotAccounts: state.depotAccounts.map((account) =>
       account.id === depotId ? { ...account, updatedAt: iso() } : account,
     ),
     depot,
-    plans: reconcileDepotHoldingSelections(
-      state.plans,
-      state.depot,
-      depot,
-      depotId,
+    plans,
+  };
+}
+
+export function buildMultiDepotExportData(
+  depotAccounts: DepotAccount[],
+  depot: DepotHolding[],
+) {
+  return {
+    overview: depotAccounts.map((account) => {
+      const positions = holdingsForDepot(depot, account.id);
+      const valuationDates = Array.from(
+        new Set(
+          positions.flatMap((holding) =>
+            holding.valuationEnd ? [holding.valuationEnd] : [],
+          ),
+        ),
+      ).sort();
+      return {
+        depotId: account.id,
+        depotName: account.name,
+        marketValue: depotMarketValue(depot, account.id),
+        positionCount: positions.length,
+        valuationDate:
+          valuationDates.length === 1
+            ? valuationDates[0]
+            : valuationDates.length > 1
+              ? "unterschiedliche Bewertungsstichtage"
+              : "",
+      };
+    }),
+    holdings: depot.map((holding) => ({
+      ...holding,
+      depotName:
+        depotAccounts.find((account) => account.id === holding.depotId)?.name || "",
+    })),
+    totalMarketValue: depot.reduce(
+      (sum, holding) => sum + Math.max(0, Number(holding.value) || 0),
+      0,
     ),
   };
 }
@@ -1591,6 +1673,8 @@ export function normalizeImportedCase(
           holding.classificationStatus || "mapped",
       }))
     .filter((holding) => Boolean(holding.depotId));
+  if (normalized.depot.length > 0)
+    normalized.advisory = withDepotValue(normalized.advisory, normalized.depot);
   normalized.moduleStates = normalized.moduleStates || {};
   normalized.customerChecklist = Array.isArray(normalized.customerChecklist)
     ? normalized.customerChecklist

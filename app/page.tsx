@@ -59,6 +59,7 @@ import {
   CapitalPot,
   capitalPots,
   caseSnapshot,
+  buildMultiDepotExportData,
   customerChecklistCategories,
   CustomerChecklistCategory,
   createCase,
@@ -79,6 +80,7 @@ import {
   PlannerAllocation,
   InvestmentFrequency,
   InvestmentPlan,
+  initialReplacementDepotId,
   nextImplementationDate,
   nextDepotName,
   nextPlanCopyName,
@@ -1299,6 +1301,7 @@ function useDepotCsvImport(
   ) => void,
 ) {
   const csvRef = useRef<HTMLInputElement>(null);
+  const requestedReplacementDepotId = useRef<string | undefined>(undefined);
   const [csvPreview, setCsvPreview] = useState<{
     fileName: string;
     result: DepotCsvResult;
@@ -1313,7 +1316,12 @@ function useDepotCsvImport(
       const result = parseDepotCsv(await file.arrayBuffer());
       setCsvPreview({ fileName: file.name, result });
       setDepotName(nextDepotName(depotAccounts));
-      setTargetDepotId(depotAccounts[0]?.id || "");
+      setTargetDepotId(
+        initialReplacementDepotId(
+          depotAccounts,
+          requestedReplacementDepotId.current,
+        ),
+      );
       setCsvError("");
     } catch (error) {
       setCsvPreview(null);
@@ -1333,7 +1341,13 @@ function useDepotCsvImport(
     setCsvPreview(null);
   };
   return {
-    open: () => csvRef.current?.click(),
+    open: (replacementDepotId?: string) => {
+      requestedReplacementDepotId.current = replacementDepotId;
+      setTargetDepotId(
+        initialReplacementDepotId(depotAccounts, replacementDepotId),
+      );
+      csvRef.current?.click();
+    },
     input: (
       <input
         ref={csvRef}
@@ -1568,7 +1582,7 @@ function SituationStep({
                 </small>
               </div>
               <div>
-                <button className="secondary" onClick={csvImport.open}>
+                <button className="secondary" onClick={() => csvImport.open()}>
                   Depot-CSV importieren
                 </button>
                 <button className="secondary" onClick={() => setView("depot")}>
@@ -6251,8 +6265,10 @@ function DepotOptimizer({
           <small>begrenzt auf den aktuellen Positionswert</small>
         </article>
       </div>}
+      {csvImport.input}
+      {csvImport.preview}
       {item.depotAccounts.length > 0 && <section className="panel depot-management">
-        <div className="panel-heading"><div><p className="eyebrow">DEPOTÜBERSICHT</p><h2>{euro.format(total)} · {item.depotAccounts.length} {item.depotAccounts.length === 1 ? "Depot" : "Depots"}</h2></div><button className="secondary" onClick={csvImport.open}>Weiteres Depot hinzufügen</button></div>
+        <div className="panel-heading"><div><p className="eyebrow">DEPOTÜBERSICHT</p><h2>{euro.format(total)} · {item.depotAccounts.length} {item.depotAccounts.length === 1 ? "Depot" : "Depots"}</h2></div><button className="secondary" onClick={() => csvImport.open()}>Weiteres Depot hinzufügen</button></div>
         {mixedValuationDates && <p className="csv-privacy-note">Die zusammengefasste Analyse enthält Positionen mit unterschiedlichen Bewertungsstichtagen.</p>}
         <div className="depot-account-list">{item.depotAccounts.map((account) => {
           const positions = depot.filter((holding) => holding.depotId === account.id);
@@ -6261,7 +6277,7 @@ function DepotOptimizer({
           return <article key={account.id}>
             <input aria-label="Depotname" value={account.name} onChange={(event) => updateDepotName(account.id, event.target.value)} onBlur={() => !account.name.trim() && updateDepotName(account.id, nextDepotName(item.depotAccounts.filter((entry) => entry.id !== account.id)))} />
             <strong>{euro.format(value)}</strong><small>{positions.length} {positions.length === 1 ? "Position" : "Positionen"}{dates.length === 1 ? ` · Stand ${formatDepotDate(dates[0])}` : dates.length > 1 ? " · unterschiedliche Datenstände" : ""}</small>
-            <div><button className="secondary" onClick={csvImport.open}>CSV ersetzen</button><button className="text-button danger" onClick={() => removeDepot(account)}>Depot löschen</button></div>
+            <div><button className="secondary" onClick={() => csvImport.open(account.id)}>CSV ersetzen</button><button className="text-button danger" onClick={() => removeDepot(account)}>Depot löschen</button></div>
           </article>;
         })}</div>
       </section>}
@@ -6285,7 +6301,7 @@ function DepotOptimizer({
           <div>
             <button
               className="secondary"
-              onClick={csvImport.open}
+              onClick={() => csvImport.open()}
             >
               CSV importieren
             </button>
@@ -6294,8 +6310,6 @@ function DepotOptimizer({
             </button>}
           </div>
         </div>
-        {csvImport.input}
-        {csvImport.preview}
         {depot.length === 0 ? (
           <div className="depot-empty-state">
             <span>◫</span>
@@ -6306,7 +6320,7 @@ function DepotOptimizer({
               dargestellt.
             </p>
             <div>
-              <button className="primary" onClick={csvImport.open}>Depot-CSV importieren</button>
+              <button className="primary" onClick={() => csvImport.open()}>Depot-CSV importieren</button>
               <button className="secondary" onClick={loadSample}>Musterdepot laden</button>
             </div>
           </div>
@@ -6517,6 +6531,10 @@ function ExportCenter({
   };
   const exportExcel = () => {
     const workbook = XLSX.utils.book_new();
+    const depotExport = buildMultiDepotExportData(
+      item.depotAccounts,
+      item.depot,
+    );
     XLSX.utils.book_append_sheet(
       workbook,
       XLSX.utils.aoa_to_sheet([
@@ -6690,29 +6708,25 @@ function ExportCenter({
     XLSX.utils.book_append_sheet(
       workbook,
       XLSX.utils.json_to_sheet(
-        item.depotAccounts.map((account) => {
-          const positions = item.depot.filter((holding) => holding.depotId === account.id);
-          const dates = Array.from(new Set(positions.map((holding) => holding.valuationEnd).filter(Boolean))).sort();
-          return {
-            Depot: account.name,
-            Marktwert: positions.reduce((sum, holding) => sum + holding.value, 0),
-            Positionen: positions.length,
-            Datenstand: dates.length === 1 ? dates[0] : dates.length > 1 ? "unterschiedliche Bewertungsstichtage" : "",
-          };
-        }),
+        depotExport.overview.map((account) => ({
+          Depot: account.depotName,
+          Marktwert: account.marketValue,
+          Positionen: account.positionCount,
+          Datenstand: account.valuationDate,
+        })),
       ),
       "Depotübersicht",
     );
     XLSX.utils.book_append_sheet(
       workbook,
       XLSX.utils.json_to_sheet(
-        item.depot.map((entry) => ({
-          Depot: item.depotAccounts.find((account) => account.id === entry.depotId)?.name || "",
+        depotExport.holdings.map((entry) => ({
+          Depot: entry.depotName,
           Depot_ID: entry.depotId,
           Position: entry.name,
           Wert: entry.value,
-          Dynamischer_Depotanteil: item.depot.reduce((sum, holding) => sum + holding.value, 0)
-            ? entry.value / item.depot.reduce((sum, holding) => sum + holding.value, 0)
+          Dynamischer_Depotanteil: depotExport.totalMarketValue
+            ? entry.value / depotExport.totalMarketValue
             : 0,
           Anlageklasse: entry.assetClass,
           Region: entry.region,
