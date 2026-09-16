@@ -89,6 +89,8 @@ import {
   phasedEntryScheduleValidation,
   PhasedEntryPlan,
   legacyBucketAmountsForCapitalPots,
+  ModelPortfolioAction,
+  modelPortfolioDefaultAmount,
   planningShortfall,
   plannerIstHoldingValue,
   plannerPlanHoldingValue,
@@ -97,6 +99,9 @@ import {
   renameDepotAccount,
   replaceDepotAccount,
   reconcilePlanCapitalPots,
+  replaceStrategicPlanAllocations,
+  supplementPlanWithModelPortfolio,
+  createModelPortfolioVariant,
   strategicAmount,
   StructurePlan,
   SavingsPlan,
@@ -2619,6 +2624,7 @@ function PlannerView({
   const [modelDialog, setModelDialog] = useState<{
     id: "rb2" | "rb3" | "rb4";
     amount: number;
+    action: ModelPortfolioAction;
   } | null>(null);
   const plan =
     item.plans.find((entry) => entry.id === item.activePlanId) ?? item.plans[0];
@@ -3042,7 +3048,7 @@ function PlannerView({
     updatePlan({ investmentPlans: [...plan.investmentPlans, next] });
   };
 
-  const applyModel = (action: "new" | "supplement" | "replace") => {
+  const applyModel = (action: ModelPortfolioAction) => {
     if (!modelDialog) return;
     const model = modelPortfolios.find((entry) => entry.id === modelDialog.id);
     if (!model) return;
@@ -3051,7 +3057,7 @@ function PlannerView({
       fallbackCapitalPot;
     if (!modelPot) return;
     const modelAllocations: PlannerAllocation[] = model.holdings.map(
-      (holding) => {
+      (holding): PlannerAllocation => {
         const amount = Math.round((modelDialog.amount * holding.weight) / 100);
         return {
           id: uid("allocation"),
@@ -3070,17 +3076,14 @@ function PlannerView({
           capitalPotAmounts: { [modelPot.id]: amount },
         };
       },
-    );
+    ).filter((allocation) => allocation.amount > 0);
     if (action === "new") {
-      const next = duplicateStructurePlan(
+      const next = createModelPortfolioVariant(
         plan,
+        modelAllocations,
+        visibleCapitalPots,
         `${model.name} – strategische Variante`,
       );
-      next.name = `${model.name} – strategische Variante`;
-      next.allocations = [
-        ...next.allocations.filter((entry) => entry.capitalPotId !== modelPot.id),
-        ...modelAllocations,
-      ];
       next.modelId = model.id;
       next.modelAmount = modelDialog.amount;
       const reconciledNext = reconcilePlanCapitalPots(
@@ -3097,18 +3100,30 @@ function PlannerView({
     }
     if (action === "supplement")
       updatePlan({
-        allocations: [...plan.allocations, ...modelAllocations],
+        ...supplementPlanWithModelPortfolio(plan, modelAllocations),
         modelId: model.id,
         modelAmount: modelDialog.amount,
       });
     if (action === "replace")
       updatePlan({
-        allocations: modelAllocations,
+        ...replaceStrategicPlanAllocations(
+          plan,
+          modelAllocations,
+          visibleCapitalPots,
+        ),
         modelId: model.id,
         modelAmount: modelDialog.amount,
       });
     setModelDialog(null);
     setMode("structure");
+  };
+  const selectModelAction = (action: ModelPortfolioAction) => {
+    if (!modelDialog) return;
+    setModelDialog({
+      ...modelDialog,
+      action,
+      amount: modelPortfolioDefaultAmount(action, plan, visibleCapitalPots),
+    });
   };
 
   const modelProductIds = new Set(
@@ -4563,8 +4578,8 @@ function PlannerView({
             <h2>Modellportfolio nur auf den gewählten Kapitaltopf anwenden</h2>
             <p>
               Bestehende Laufzeiten werden nicht mehr ungefragt überschrieben.
-              Standardbetrag: strategisch freies Kapital{" "}
-              {euro.format(strategicAmount(item.advisory, plan.total))}.
+              Beim Ergänzen wird der noch nicht verplante strategische
+              Restbetrag vorbelegt.
             </p>
           </div>
           <div className="model-grid">
@@ -4606,7 +4621,12 @@ function PlannerView({
                   onClick={() =>
                     setModelDialog({
                       id: model.id,
-                      amount: strategicAmount(item.advisory, plan.total),
+                      action: "supplement",
+                      amount: modelPortfolioDefaultAmount(
+                        "supplement",
+                        plan,
+                        visibleCapitalPots,
+                      ),
                     })
                   }
                 >
@@ -4676,30 +4696,32 @@ function PlannerView({
                   ?.name
               }
             </h2>
+            <div className="apply-options">
+              <button className={modelDialog.action === "new" ? "recommended" : ""} onClick={() => selectModelAction("new")}>
+                <strong>Als neue Variante</strong>
+                <small>
+                  Aktuellen Plan kopieren und nur den strategischen Teil ersetzen.
+                </small>
+              </button>
+              <button className={modelDialog.action === "supplement" ? "recommended" : ""} onClick={() => selectModelAction("supplement")}>
+                <strong>Aktuellen Plan ergänzen</strong>
+                <small>
+                  Nur den strategischen Restbetrag ergänzen; der Betrag bleibt editierbar.
+                </small>
+              </button>
+              <button className={modelDialog.action === "replace" ? "recommended" : ""} onClick={() => selectModelAction("replace")}>
+                <strong>Aktuellen Plan ersetzen</strong>
+                <small>Nur strategische Allokationen ersetzen; andere Kapitaltöpfe bleiben erhalten.</small>
+              </button>
+            </div>
             <AmountField
               label="Betroffener Betrag"
               value={modelDialog.amount}
               onChange={(amount) => setModelDialog({ ...modelDialog, amount })}
             />
-            <div className="apply-options">
-              <button className="recommended" onClick={() => applyModel("new")}>
-                <strong>Als neue Variante</strong>
-                <small>
-                  Aktuellen Plan kopieren und nur das strategische Laufzeitband
-                  ersetzen.
-                </small>
-              </button>
-              <button onClick={() => applyModel("supplement")}>
-                <strong>Aktuellen Plan ergänzen</strong>
-                <small>
-                  Positionen zusätzlich einfügen; Überplanung wird sichtbar.
-                </small>
-              </button>
-              <button onClick={() => applyModel("replace")}>
-                <strong>Aktuellen Plan ersetzen</strong>
-                <small>Alle bisherigen Produktzuordnungen entfernen.</small>
-              </button>
-            </div>
+            <button className="primary" onClick={() => applyModel(modelDialog.action)}>
+              Ausgewählte Aktion anwenden
+            </button>
           </section>
         </div>
       )}

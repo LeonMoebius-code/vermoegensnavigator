@@ -870,6 +870,115 @@ export function legacyBucketAmountsForCapitalPots(
   return result;
 }
 
+export type ModelPortfolioAction = "new" | "supplement" | "replace";
+
+export function strategicAllocatedAmount(plan: StructurePlan) {
+  return plan.allocations.reduce(
+    (sum, allocation) =>
+      sum + Math.max(0, allocationAmountInCapitalPot(allocation, "strategic")),
+    0,
+  );
+}
+
+export function modelPortfolioDefaultAmount(
+  action: ModelPortfolioAction,
+  plan: StructurePlan,
+  pots: CapitalPot[],
+) {
+  const strategicTotal =
+    pots.find((pot) => pot.id === "strategic")?.total || 0;
+  return action === "supplement"
+    ? Math.max(0, strategicTotal - strategicAllocatedAmount(plan))
+    : Math.max(0, strategicTotal);
+}
+
+export function supplementPlanWithModelPortfolio(
+  plan: StructurePlan,
+  modelAllocations: PlannerAllocation[],
+) {
+  return {
+    ...plan,
+    allocations: [
+      ...plan.allocations,
+      ...modelAllocations.filter((allocation) => allocation.amount > 0),
+    ],
+  };
+}
+
+export function replaceStrategicPlanAllocations(
+  plan: StructurePlan,
+  modelAllocations: PlannerAllocation[],
+  pots: CapitalPot[],
+) {
+  const allocations = plan.allocations.flatMap<PlannerAllocation>((allocation) => {
+    const amounts = allocationCapitalPotAmounts(allocation);
+    const strategic = Math.max(0, Number(amounts.strategic) || 0);
+    if (strategic <= 0) return [{ ...allocation }];
+    const retainedAmounts = Object.fromEntries(
+      Object.entries(amounts).filter(
+        ([id, amount]) => id !== "strategic" && Number(amount) > 0,
+      ),
+    ) as Partial<Record<CapitalPotId, number>>;
+    const retainedIds = Object.keys(retainedAmounts) as CapitalPotId[];
+    if (retainedIds.length === 0) return [];
+    const retainedCoverage = Object.values(retainedAmounts).reduce<number>(
+      (sum, amount) => sum + Math.max(0, Number(amount) || 0),
+      0,
+    );
+    const originalCoverage = Object.values(amounts).reduce<number>(
+      (sum, amount) => sum + Math.max(0, Number(amount) || 0),
+      0,
+    );
+    const unassigned = Math.max(0, allocation.amount - originalCoverage);
+    const capitalPotId = retainedAmounts[allocation.capitalPotId || "strategic"]
+      ? allocation.capitalPotId
+      : retainedIds[0];
+    return [{
+      ...allocation,
+      amount: retainedCoverage + unassigned,
+      capitalPotId,
+      capitalPotAmounts: retainedAmounts,
+      bucketId:
+        pots.find((pot) => pot.id === capitalPotId)?.legacyBucketId ||
+        allocation.bucketId,
+      bucketAmounts: legacyBucketAmountsForCapitalPots(pots, retainedAmounts),
+    }];
+  });
+  const allocationById = new Map(
+    allocations.map((allocation) => [allocation.id, allocation]),
+  );
+  const investmentPlans = plan.investmentPlans.filter((entry) => {
+    if (entry.type === "savings") return true;
+    const allocation = allocationById.get(entry.allocationId);
+    return Boolean(
+      allocation &&
+      entry.capitalPotId !== "strategic" &&
+      allocationAmountInCapitalPot(allocation, entry.capitalPotId) > 0,
+    );
+  });
+  return {
+    ...plan,
+    allocations: [
+      ...allocations,
+      ...modelAllocations.filter((allocation) => allocation.amount > 0),
+    ],
+    investmentPlans,
+  };
+}
+
+export function createModelPortfolioVariant(
+  plan: StructurePlan,
+  modelAllocations: PlannerAllocation[],
+  pots: CapitalPot[],
+  name: string,
+) {
+  return replaceStrategicPlanAllocations(
+    duplicateStructurePlan(plan, name),
+    modelAllocations,
+    pots,
+  );
+}
+
 export type CapitalPotRemovalImpact = {
   removedPotIds: CapitalPotId[];
   allocationCount: number;
