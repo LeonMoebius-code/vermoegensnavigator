@@ -3,7 +3,7 @@ import { sanitizeOptionalHolding } from "./depot-validation";
 
 export const CASE_STORAGE_KEY = "vermoegensnavigator-cases-v2";
 export const RECOVERY_PREFIX = `${CASE_STORAGE_KEY}-recovery-`;
-type StorageAccess = Pick<Storage, "getItem" | "setItem">;
+type StorageAccess = Pick<Storage, "getItem" | "setItem" | "key" | "length">;
 export function recoveryBackups(storage: Pick<Storage, "getItem" | "key" | "length">) {
   const backups: { key: string; original: string }[] = [];
   for (let index = 0; index < storage.length; index += 1) {
@@ -17,13 +17,14 @@ export function recoveryBackups(storage: Pick<Storage, "getItem" | "key" | "leng
 export type CaseStoreRead = {
   cases: AdvisoryCase[];
   protectedEntries: unknown[];
+  recoveryEntries: unknown[];
   original: string | null;
   recoveryNeeded: boolean;
   malformed: boolean;
 };
 
 export function readCaseStore(original: string | null): CaseStoreRead {
-  const result: CaseStoreRead = { cases: [], protectedEntries: [], original, recoveryNeeded: false, malformed: false };
+  const result: CaseStoreRead = { cases: [], protectedEntries: [], recoveryEntries: [], original, recoveryNeeded: false, malformed: false };
   if (original === null) return result;
   let entries: unknown;
   try { entries = JSON.parse(original); } catch { result.malformed = result.recoveryNeeded = true; return result; }
@@ -40,9 +41,13 @@ export function readCaseStore(original: string | null): CaseStoreRead {
       if (!normalized || !normalized.plans.length) throw new Error("invalid-case");
       result.cases.push(normalized);
       if (Array.isArray(entry.depot) && entry.depot.some((holding: object) =>
-        JSON.stringify(sanitizeOptionalHolding(holding)) !== JSON.stringify(holding))) result.recoveryNeeded = true;
+        JSON.stringify(sanitizeOptionalHolding(holding)) !== JSON.stringify(holding))) {
+        result.recoveryNeeded = true;
+        result.recoveryEntries.push(entry);
+      }
     } catch {
       result.protectedEntries.push(entry);
+      result.recoveryEntries.push(entry);
       result.recoveryNeeded = true;
     }
   }
@@ -55,10 +60,28 @@ export function writeCaseStore(storage: StorageAccess, cases: AdvisoryCase[]) {
   const loaded = readCaseStore(original);
   if (loaded.malformed) throw new Error("Der lokale Fallbestand ist beschädigt. Originaldaten zuerst zur Wiederherstellung sichern. Der Bestand wurde nicht überschrieben.");
   const protectedIds = new Set(loaded.protectedEntries.map((entry) => (entry as { id?: unknown } | null)?.id));
+  if (cases.some((item) => typeof item.id !== "string" || !item.id) || new Set(cases.map((item) => item.id)).size !== cases.length)
+    throw new Error("Fälle mit fehlenden oder doppelten IDs können nicht gespeichert werden.");
   if (cases.some((item) => protectedIds.has(item.id))) throw new Error("Ein beschädigter Originalfall mit derselben ID ist geschützt.");
   const normalized = cases.map(enforceCaseDepotValue);
+  if (normalized.some((item) => !normalizeImportedCase(item, false))) throw new Error("Ein beschädigter Fall kann nicht gespeichert werden. Der Bestand bleibt erhalten.");
   const serialized = JSON.stringify([...normalized, ...loaded.protectedEntries]);
-  if (loaded.recoveryNeeded && original !== null) {
+  // Reuse a verified original containing every still-damaged entry (including
+  // duplicate multiplicity). Healthy-case edits do not require endless backups.
+  const alreadyBackedUp = loaded.recoveryNeeded && recoveryBackups(storage).some((backup) => {
+    try {
+      const entries: unknown = JSON.parse(backup.original);
+      if (!Array.isArray(entries)) return false;
+      const available = entries.map((entry) => JSON.stringify(entry));
+      return loaded.recoveryEntries.every((entry) => {
+        const index = available.indexOf(JSON.stringify(entry));
+        if (index < 0) return false;
+        available.splice(index, 1);
+        return true;
+      });
+    } catch { return false; }
+  });
+  if (loaded.recoveryNeeded && original !== null && !alreadyBackedUp) {
     const base = `${RECOVERY_PREFIX}${Date.now()}-${Math.random().toString(36).slice(2)}`;
     let key = base;
     let suffix = 0;

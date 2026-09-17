@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import "./verify-cp1-review";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -94,7 +95,7 @@ function findButton(node: ReactNode, label: string): (() => void) | undefined {
 }
 const exportView = ExportCenter({ item: stale, preferredPlan: stale.plans[0], setItem: noop, saveCase: noop, exportJson: noop, importJson: noop });
 const printed = renderToStaticMarkup(exportView);
-assert.match(printed, /100\.000/);
+assert.match(printed, /<span>Depot<\/span><strong>100\.000(?:<!-- -->)?(?:\s|&nbsp;|&#xA0;)*€<\/strong>/i);
 const excelButton = findButton(exportView, "Excel");
 assert.ok(excelButton);
 const previousDir = process.cwd();
@@ -226,12 +227,14 @@ const bound = createCase();
 bound.advisory.reserve = 500;
 bound.advisory.needs = [{ id: 1, purpose: "Synthetischer Bedarf", amount: 500, years: 1 }];
 const boundPots = capitalPots(bound.advisory, 1000);
-for (const pots of [[], boundPots, [{ ...strategy, total: 0 }], [{ ...strategy, total: NaN }], [{ ...strategy, kind: "reserve" as const }]]) {
+for (const pots of [[], boundPots, [strategy, strategy], [{ ...strategy, total: 0 }], [{ ...strategy, total: -1 }], [{ ...strategy, total: Infinity }], [{ ...strategy, total: NaN }], [{ ...strategy, kind: "reserve" as const }]]) {
   for (const action of actions) assert.equal(action(pots, [allocation]), basePlan, "blocked before any mutation or variant creation");
 }
 for (const wrong of [
   { ...allocation, capitalPotId: undefined }, { ...allocation, capitalPotId: "reserve" as const },
   { ...allocation, capitalPotAmounts: { reserve: 500 } }, { ...allocation, capitalPotAmounts: undefined },
+  { ...allocation, capitalPotAmounts: { strategic: 500, reserve: 1 } },
+  ...[NaN, Infinity, -1].map((amount) => ({ ...allocation, amount, capitalPotAmounts: { strategic: amount } })),
 ]) for (const action of actions) assert.equal(action([strategy], [wrong]), basePlan);
 for (const action of actions) assert.notEqual(action([strategy], [allocation]), basePlan);
 
@@ -277,7 +280,7 @@ const mixed = readCaseStore(JSON.stringify([future, item]));
 assert.deepEqual(mixed.protectedEntries, [future]);
 assert.equal(mixed.cases.length, 1);
 storage.setItem(CASE_STORAGE_KEY, original);
-const failingStorage = { getItem: (key: string) => storage.getItem(key), setItem: () => { throw new Error("quota"); } };
+const failingStorage = { length: 0, key: () => null, getItem: (key: string) => storage.getItem(key), setItem: () => { throw new Error("quota"); } };
 assert.throws(() => writeCaseStore(failingStorage, [item]));
 assert.equal(storage.getItem(CASE_STORAGE_KEY), original, "backup failure must abort the main write");
 assert.equal(enforceCaseDepotValue(manual).advisory.depotValue, 1);

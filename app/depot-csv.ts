@@ -28,23 +28,35 @@ function parseCsv(text: string): string[][] {
   let row: string[] = [];
   let cell = "";
   let quoted = false;
+  let closedQuote = false;
   for (let index = 0; index < text.length; index += 1) {
     const char = text[index];
     const next = text[index + 1];
     if (char === '"' && quoted && next === '"') {
       cell += '"';
       index += 1;
-    } else if (char === '"') quoted = !quoted;
+    } else if (char === '"') {
+      if (quoted) { quoted = false; closedQuote = true; }
+      else {
+        if (cell.trim() || closedQuote) throw new Error("Ungültige Anführungszeichen in der CSV. Import abgebrochen.");
+        quoted = true;
+      }
+    }
     else if (char === ";" && !quoted) {
       row.push(cell.trim());
       cell = "";
+      closedQuote = false;
     } else if ((char === "\n" || char === "\r") && !quoted) {
       if (char === "\r" && next === "\n") index += 1;
       row.push(cell.trim());
       if (row.some(Boolean)) rows.push(row);
       row = [];
       cell = "";
-    } else cell += char;
+      closedQuote = false;
+    } else {
+      if (closedQuote && !/\s/.test(char)) throw new Error("Ungültige Zeichen nach einem CSV-Textfeld. Import abgebrochen.");
+      cell += char;
+    }
   }
   if (quoted) throw new Error("Die CSV enthält ein nicht geschlossenes Anführungszeichen.");
   row.push(cell.trim());
@@ -149,7 +161,7 @@ export function parseDepotCsv(buffer: ArrayBuffer): DepotCsvResult {
         note: valueAt(row, note),
         classificationStatus: recognized ? "mapped" : "unresolved",
       } satisfies ParsedDepotHolding;
-    }).filter((row) => row.name || row.value > 0);
+    });
     if (!Number.isFinite(parsed.reduce((sum, row) => sum + row.value, 0))) throw new Error("Ungültiger Depotgesamtwert.");
     return {
       format: "navigator",
@@ -247,7 +259,7 @@ export function parseDepotCsv(buffer: ArrayBuffer): DepotCsvResult {
     } satisfies ParsedDepotHolding;
     warnings.push(...issues.map((issue) => ({ row: index + 2, ...issue })));
     return parsedHolding;
-  }).filter((row) => row.name || row.value > 0);
+  });
   if (!Number.isFinite(parsed.reduce((sum, row) => sum + row.value, 0))) throw new Error("Ungültiger Depotgesamtwert.");
   return {
     format: "structure-overview",

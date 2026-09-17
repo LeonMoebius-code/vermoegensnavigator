@@ -1193,6 +1193,8 @@ export function replacementHoldingIdMap(
   };
   const availablePrevious = uniqueIds(previousDepot);
   const availableNext = uniqueIds(nextDepot);
+  const excludedPrevious = previousDepot.filter((holding) => !availablePrevious.has(holding.id));
+  const excludedNext = nextDepot.filter((holding) => !availableNext.has(holding.id));
 
   const claim = (previous: DepotHolding, next: DepotHolding) => {
     matches.set(previous.id, next.id);
@@ -1202,7 +1204,15 @@ export function replacementHoldingIdMap(
 
   for (const previous of [...availablePrevious.values()]) {
     const next = availableNext.get(previous.id);
-    if (next && !holdingIdentityConflict(previous, next)) claim(previous, next);
+    if (!next) continue;
+    if (!holdingIdentityConflict(previous, next)) claim(previous, next);
+    else {
+      // A contradicted explicit identity must not be reinterpreted by weaker stages.
+      availablePrevious.delete(previous.id);
+      availableNext.delete(next.id);
+      excludedPrevious.push(previous);
+      excludedNext.push(next);
+    }
   }
 
   const ambiguousPrevious = new Set<string>();
@@ -1218,10 +1228,20 @@ export function replacementHoldingIdMap(
       const key = keyFor(holding);
       if (key && !ambiguousNext.has(holding.id)) nextByKey.set(`${holding.depotId}::${key}`, [...(nextByKey.get(`${holding.depotId}::${key}`) || []), holding]);
     }
+    // Invalid IDs cannot be claimed, but their securities still make weaker
+    // identities ambiguous. Dropping them would manufacture a unique WKN.
+    for (const [excluded, byKey] of [[excludedPrevious, previousByKey], [excludedNext, nextByKey]] as const) {
+      for (const holding of excluded) {
+        const key = keyFor(holding);
+        if (key) byKey.set(`${holding.depotId}::${key}`, [...(byKey.get(`${holding.depotId}::${key}`) || []), holding]);
+      }
+    }
     for (const key of new Set([...previousByKey.keys(), ...nextByKey.keys()])) {
       const previousCandidates = previousByKey.get(key) || [];
       const nextCandidates = nextByKey.get(key) || [];
-      if (previousCandidates.length > 1 || nextCandidates.length > 1) {
+      if (previousCandidates.length > 1 || nextCandidates.length > 1 ||
+        previousCandidates.some((holding) => !availablePrevious.has(holding.id)) ||
+        nextCandidates.some((holding) => !availableNext.has(holding.id))) {
         previousCandidates.forEach((holding) => ambiguousPrevious.add(holding.id));
         nextCandidates.forEach((holding) => ambiguousNext.add(holding.id));
       } else if (previousCandidates.length === 1 && nextCandidates.length === 1 &&
@@ -1394,7 +1414,12 @@ export function replaceDepotAccount(
   if (!state.depotAccounts.some((account) => account.id === depotId)) return state;
   const previous = holdingsForDepot(state.depot, depotId);
   const imported = importedHoldings(state, depotId, parsed);
-  const replacementMap = replacementHoldingIdMap(previous, imported);
+  // Preserve original identities for matching: repairing conflicts/duplicates is
+  // only a storage concern and must never manufacture fresh matching evidence.
+  const matchingHoldings = imported.map((holding, index) => ({ ...holding, id: parsed[index].id || holding.id }));
+  const finalIds = new Map(matchingHoldings.map((holding, index) => [holding.id, imported[index].id]));
+  const replacementMap = new Map([...replacementHoldingIdMap(state.depot, matchingHoldings)]
+    .map(([oldId, sourceId]) => [oldId, finalIds.get(sourceId)!]));
   const previousByNextId = new Map(
     [...replacementMap].map(([previousId, nextId]) => [nextId, previousId]),
   );
@@ -1819,6 +1844,14 @@ export function normalizeImportedCase(
   const item = candidate as Partial<AdvisoryCase>;
   if (!item.advisory || typeof item.advisory !== "object" || Array.isArray(item.advisory) ||
     !Array.isArray(item.plans) || !item.plans.length) return null;
+  // Missing legacy collections may migrate; malformed present collections may
+  // contain recoverable data and must not silently become empty arrays.
+  for (const field of ["depot", "depotAccounts", "versions", "savingsGoals"] as const)
+    if (item[field] !== undefined && !Array.isArray(item[field])) return null;
+  if (item.depotAccounts) {
+    const ids = item.depotAccounts.map((account) => account?.id);
+    if (ids.some((id) => typeof id !== "string" || !id) || new Set(ids).size !== ids.length) return null;
+  }
   const sourceSchemaVersion = Number(item.schemaVersion) || 0;
   if (sourceSchemaVersion > 10) return null;
   const normalized = clone(item) as AdvisoryCase;

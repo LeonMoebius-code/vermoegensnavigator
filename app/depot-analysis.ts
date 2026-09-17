@@ -101,8 +101,9 @@ export function classifyDepotProduct(
     // Names can veto standard-bond eligibility, never invent contractual terms.
     if (classification.bondKind === "fixed") {
       const name = normalized(source.name);
-      if (/\b(floater|floating|step-up|step up|stufenzins|callable|convertible|wandelanleihe|kündbar|kuendbar|perpetual|nachrang|hybrid)\b/.test(name)) {
+      if (/\b(floater|floating|step-up|step up|stufenzins\w*|callable|convertible|wandelanleihe\w*|kündbar\w*|kuendbar\w*|perpetual|nachrang\w*|hybrid\w*|stripped|zertifikat\w*|certificate\w*)\b/.test(name)) {
         const restricted = classifyText(`${name} ${sourceText}`, "source");
+        if (restricted?.main === "Strukturierte Produkte") return restricted;
         if (restricted?.bondKind && restricted.bondKind !== "fixed") return restricted;
         return { main: "Renten", sub: "Sonstige Anleihestruktur", direct: true, bondKind: "other", confidence: "source" };
       }
