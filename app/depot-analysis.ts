@@ -79,6 +79,8 @@ function classifyText(text: string, confidence: "source" | "derived"):
     return { main: "Renten", sub: "Floater", direct: true, bondKind: "floater", confidence };
   if (includesAny(text, ["stufenzins", "step-up", "step up"]))
     return { main: "Renten", sub: "Stufenzinsanleihen", direct: true, bondKind: "step-up", confidence };
+  if (!isFund && includesAny(text, ["callable", "convertible", "wandelanleihe", "kündbar", "kuendbar", "perpetual", "nachrang", "hybrid", "stripped"]))
+    return { main: "Renten", sub: "Sonstige Anleihestruktur", direct: true, bondKind: "other", confidence };
   if (!isFund && text.includes("festverzins"))
     return { main: "Renten", sub: "Festverzinsliche Anleihen", direct: true, bondKind: "fixed", confidence };
   if (!isFund && includesAny(text, ["schuldverschreibung", "anleihe", "bond", "rentenwert", "obligation"]))
@@ -93,9 +95,19 @@ function classifyText(text: string, confidence: "source" | "derived"):
 export function classifyDepotProduct(
   source: Partial<DepotHolding> & { productId?: string },
 ): ProductClassification {
-  for (const value of [source.securityType, source.investmentMedium, source.segment]) {
-    const result = classifyText(normalized(value), "source");
-    if (result) return result;
+  const sourceText = [source.securityType, source.sourceType, source.investmentMedium, source.segment, source.certificateClass].map(normalized).filter(Boolean).join(" ");
+  const classification = classifyText(sourceText, "source");
+  if (classification) {
+    // Names can veto standard-bond eligibility, never invent contractual terms.
+    if (classification.bondKind === "fixed") {
+      const name = normalized(source.name);
+      if (/\b(floater|floating|step-up|step up|stufenzins|callable|convertible|wandelanleihe|kündbar|kuendbar|perpetual|nachrang|hybrid)\b/.test(name)) {
+        const restricted = classifyText(`${name} ${sourceText}`, "source");
+        if (restricted?.bondKind && restricted.bondKind !== "fixed") return restricted;
+        return { main: "Renten", sub: "Sonstige Anleihestruktur", direct: true, bondKind: "other", confidence: "source" };
+      }
+    }
+    return classification;
   }
   const product = source.productId
     ? houseProducts.find((entry) => entry.id === source.productId)

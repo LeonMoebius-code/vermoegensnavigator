@@ -11,6 +11,8 @@ import {
   useState,
 } from "react";
 import * as XLSX from "xlsx";
+import { importIssueLabel } from "./depot-validation";
+import { CASE_STORAGE_KEY, readCaseStore, writeCaseStore, recoveryBackups } from "./case-storage";
 import {
   AdvisoryData,
   emptyAdvisory,
@@ -46,6 +48,11 @@ import {
 } from "./investment-data";
 import {
   AdvisoryCase,
+  enforceCaseDepotValue,
+  withDepotValue,
+  setCaseDepot,
+  updateCaseAdvisory,
+  positiveStrategicPot,
   addDepotAccount,
   AdvisorId,
   allocationAmountInCapitalPot,
@@ -95,7 +102,6 @@ import {
   plannerIstHoldingValue,
   plannerPlanHoldingValue,
   reconcileCasePlans,
-  reconcileDepotHoldingSelections,
   renameDepotAccount,
   replaceDepotAccount,
   reconcilePlanCapitalPots,
@@ -346,11 +352,13 @@ function AmountField({
   value,
   onChange,
   hint,
+  readOnly = false,
 }: {
   label: string;
   value: number;
   onChange: (value: number) => void;
   hint?: string;
+  readOnly?: boolean;
 }) {
   return (
     <label className="field amount-field">
@@ -360,7 +368,8 @@ function AmountField({
           inputMode="numeric"
           value={value ? value.toLocaleString("de-DE") : ""}
           placeholder="0"
-          onChange={(event) => onChange(parseAmount(event.target.value))}
+          readOnly={readOnly}
+          onChange={(event) => { if (!readOnly) onChange(parseAmount(event.target.value)); }}
         />
         <b>€</b>
       </div>
@@ -521,9 +530,15 @@ function CustomerChecklistEditor({
 
 export default function Home() {
   const [view, setView] = useState<View>("home");
-  const [activeCase, setActiveCase] = useState<AdvisoryCase>(() =>
+  const [activeCase, setActiveCaseState] = useState<AdvisoryCase>(() =>
     createCase(),
   );
+  const setActiveCase: Dispatch<SetStateAction<AdvisoryCase>> = (action) =>
+    setActiveCaseState((current) => enforceCaseDepotValue(typeof action === "function" ? action(current) : action));
+  const [storageNotice, setStorageNotice] = useState("");
+  const recoveryOriginal = useRef<string | null>(null);
+  const [backups, setBackups] = useState<ReturnType<typeof recoveryBackups>>([]);
+  const storageLoaded = useRef(false);
   const [newCaseAdvisorId, setNewCaseAdvisorId] =
     useState<AdvisorId>(defaultAdvisorId);
   const [savedCases, setSavedCases] = useState<AdvisoryCase[]>([]);
@@ -533,6 +548,7 @@ export default function Home() {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       try {
+        setBackups(recoveryBackups(window.localStorage));
         const storedAdvisor = window.localStorage.getItem(
           "vermoegensnavigator-advisor",
         ) as AdvisorId | null;
@@ -544,16 +560,17 @@ export default function Home() {
           }));
         }
         const stored = window.localStorage.getItem(
-          "vermoegensnavigator-cases-v2",
+          CASE_STORAGE_KEY,
         );
-        if (stored) {
-          const parsed = JSON.parse(stored) as AdvisoryCase[];
-          if (Array.isArray(parsed))
-            setSavedCases(
-              parsed
-                .map((entry) => normalizeImportedCase(entry, false))
-                .filter((entry): entry is AdvisoryCase => Boolean(entry)),
-            );
+        if (stored !== null) {
+          const loaded = readCaseStore(stored);
+          setSavedCases(loaded.cases);
+          if (loaded.recoveryNeeded) {
+            recoveryOriginal.current = stored;
+            setStorageNotice(loaded.malformed
+              ? "Der lokale Fallbestand konnte nicht gelesen werden. Die Originaldaten bleiben unverändert. Speichern ist zum Schutz des Bestands gesperrt."
+              : `${loaded.protectedEntries.length} beschädigte Fälle geschützt. Gesunde Fälle sind verfügbar. Fehlerhafte optionale Positionsdaten werden nicht ausgewertet. Die Originaldaten bleiben wiederherstellbar.`);
+          }
         } else {
           const old = window.localStorage.getItem("vermoegensnavigator-draft");
           if (old) {
@@ -565,24 +582,30 @@ export default function Home() {
             }
           }
         }
+        storageLoaded.current = true;
       } catch {
-        window.localStorage.removeItem("vermoegensnavigator-cases-v2");
+        setStorageNotice("Lokale Fälle konnten nicht vollständig geladen werden. Es wurden keine Originaldaten gelöscht.");
       }
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
 
   const persist = (items: AdvisoryCase[]) => {
-    setSavedCases(items);
-    window.localStorage.setItem(
-      "vermoegensnavigator-cases-v2",
-      JSON.stringify(items),
-    );
+    try {
+      if (!storageLoaded.current) throw new Error("Der lokale Fallbestand ist noch nicht sicher geladen. Speichern wurde abgebrochen.");
+      const saved = writeCaseStore(window.localStorage, items);
+      setSavedCases(saved);
+      setBackups(recoveryBackups(window.localStorage));
+      return true;
+    } catch (error) {
+      setStorageNotice(error instanceof Error ? error.message : "Speichern fehlgeschlagen. Der vorhandene Bestand bleibt erhalten.");
+      return false;
+    }
   };
 
   const saveCase = (withVersion = false) => {
     const updated: AdvisoryCase = {
-      ...clone(activeCase),
+      ...clone(enforceCaseDepotValue(activeCase)),
       updatedAt: new Date().toISOString(),
     };
     if (withVersion) {
@@ -597,12 +620,12 @@ export default function Home() {
       ];
     }
     const exists = savedCases.some((item) => item.id === updated.id);
-    persist(
+    const saved = persist(
       exists
         ? savedCases.map((item) => (item.id === updated.id ? updated : item))
         : [updated, ...savedCases],
     );
-    setActiveCase(updated);
+    if (saved) setActiveCase(updated);
   };
 
   const start = (scope?: Scope, scenarioId?: string) => {
@@ -637,7 +660,7 @@ export default function Home() {
           JSON.stringify(
             {
               exportedAt: new Date().toISOString(),
-              case: activeCase,
+              case: enforceCaseDepotValue(activeCase),
               dataSources,
             },
             null,
@@ -774,6 +797,18 @@ export default function Home() {
         </div>
       </aside>
       <section className="workspace">
+        {storageNotice && <div className="csv-error" role="alert">
+          <p>{storageNotice}</p>
+          {recoveryOriginal.current !== null && <button onClick={() => download(
+            new Blob([recoveryOriginal.current!], { type: "application/json" }), "fallbestand-original-wiederherstellung.json",
+          )}>Originalbestand zur Wiederherstellung herunterladen</button>}
+        </div>}
+        {backups.length > 0 && <details className="csv-privacy-note">
+          <summary>Originalsicherungen zur Wiederherstellung ({backups.length})</summary>
+          {backups.map((backup, index) => <button key={backup.key} onClick={() => download(
+            new Blob([backup.original], { type: "application/json" }), `fallbestand-original-${index + 1}.json`,
+          )}>Originalsicherung {index + 1} herunterladen</button>)}
+        </details>}
         {view === "home" && (
           <HomeView
             start={start}
@@ -1008,35 +1043,7 @@ function WizardView({
     key: K,
     value: AdvisoryData[K],
   ) =>
-    setItem((current) => {
-      const nextAdvisory = { ...current.advisory, [key]: value };
-      const liquidAssets =
-        key === "liquidAssets"
-          ? Number(value) || 0
-          : nextAdvisory.liquidAssets;
-      const updatedPlans = current.plans.map((plan) =>
-        key === "liquidAssets" && plan.capitalMode === "linked"
-          ? { ...plan, total: liquidAssets, updatedAt: new Date().toISOString() }
-          : plan,
-      );
-      return {
-        ...current,
-        advisory: nextAdvisory,
-        plans: reconcileCasePlans(
-          nextAdvisory,
-          updatedPlans,
-          current.createdAt,
-          current.savingsGoals,
-        ),
-        vvFilters: {
-          ...current.vvFilters,
-          amount:
-            current.vvFilters.amount === current.advisory.liquidAssets
-              ? liquidAssets
-              : current.vvFilters.amount,
-        },
-      };
-    });
+    setItem((current) => updateCaseAdvisory(current, key, value));
   const go = (next: number) => {
     setItem({ ...item, currentStep: Math.max(1, Math.min(6, next)) });
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1139,20 +1146,7 @@ function WizardView({
               depot={item.depot}
               depotAccounts={item.depotAccounts}
               setDepot={(depot) =>
-                setItem((current) => ({
-                  ...current,
-                  advisory: {
-                    ...current.advisory,
-                    depotValue: depot.reduce((sum, entry) => sum + entry.value, 0),
-                    hasDepot: depot.length > 0 || current.advisory.hasDepot,
-                  },
-                  depot,
-                  plans: reconcileDepotHoldingSelections(
-                    current.plans,
-                    current.depot,
-                    depot,
-                  ),
-                }))
+                setItem((current) => setCaseDepot(current, depot))
               }
               applyDepotImport={(mode, rows, value) =>
                 setItem((current) => ({
@@ -1338,11 +1332,12 @@ function useDepotCsvImport(
   };
   const applyCsv = (mode: "newDepot" | "replaceDepot") => {
     if (!csvPreview) return;
-    applyImport(
-      mode,
-      csvPreview.result.rows,
-      mode === "newDepot" ? depotName : targetDepotId,
-    );
+    try {
+      applyImport(mode, csvPreview.result.rows, mode === "newDepot" ? depotName : targetDepotId);
+    } catch {
+      setCsvError("Import abgebrochen. Der bisherige Bestand bleibt unverändert.");
+      return;
+    }
     setCsvPreview(null);
   };
   return {
@@ -1394,6 +1389,10 @@ function useDepotCsvImport(
                 Zuordnungen offen
               </span>
             </div>
+            {csvPreview.result.warnings.length > 0 && <div role="status">
+              <p>{csvPreview.result.warnings.length} optionale Felder sind ungültig und werden nicht ausgewertet.</p>
+              <ul>{csvPreview.result.warnings.map((issue, index) => <li key={index}>Zeile {issue.row}, {importIssueLabel(issue)}</li>)}</ul>
+            </div>}
             {csvPreview.result.ignoredPersonalColumns && (
               <p className="csv-privacy-note">
                 Depotnummer und Depotinhaber wurden erkannt, werden aber bewusst
@@ -1433,7 +1432,7 @@ function useDepotCsvImport(
   };
 }
 
-function SituationStep({
+export function SituationStep({
   data,
   update,
   depot,
@@ -1546,8 +1545,10 @@ function SituationStep({
         />
         <AmountField
           label="Wertpapierdepot"
-          value={data.depotValue}
+          value={withDepotValue(data, depot).depotValue}
+          readOnly={depot.length > 0}
           onChange={(value) => {
+            if (depot.length > 0) return;
             update("depotValue", value);
             update("hasDepot", value > 0);
           }}
@@ -1565,7 +1566,8 @@ function SituationStep({
         <label className="check-row full">
           <input
             type="checkbox"
-            checked={data.hasDepot}
+            checked={depot.length > 0 || data.hasDepot}
+            disabled={depot.length > 0}
             onChange={(event) => update("hasDepot", event.target.checked)}
           />
           <span>
@@ -3052,10 +3054,8 @@ function PlannerView({
     if (!modelDialog) return;
     const model = modelPortfolios.find((entry) => entry.id === modelDialog.id);
     if (!model) return;
-    const modelPot =
-      visibleCapitalPots.find((pot) => pot.id === "strategic") ||
-      fallbackCapitalPot;
-    if (!modelPot) return;
+    const modelPot = positiveStrategicPot(visibleCapitalPots);
+    if (!modelPot || !Number.isFinite(modelDialog.amount) || modelDialog.amount <= 0) return;
     const modelAllocations: PlannerAllocation[] = model.holdings.map(
       (holding): PlannerAllocation => {
         const amount = Math.round((modelDialog.amount * holding.weight) / 100);
@@ -3100,7 +3100,7 @@ function PlannerView({
     }
     if (action === "supplement")
       updatePlan({
-        ...supplementPlanWithModelPortfolio(plan, modelAllocations),
+        ...supplementPlanWithModelPortfolio(plan, modelAllocations, visibleCapitalPots),
         modelId: model.id,
         modelAmount: modelDialog.amount,
       });
@@ -4719,7 +4719,8 @@ function PlannerView({
               value={modelDialog.amount}
               onChange={(amount) => setModelDialog({ ...modelDialog, amount })}
             />
-            <button className="primary" onClick={() => applyModel(modelDialog.action)}>
+            {!positiveStrategicPot(visibleCapitalPots) && <p role="alert">Kein positives strategisches Kapital verfügbar. Modellportfolios können nicht angewendet werden.</p>}
+            <button className="primary" disabled={!positiveStrategicPot(visibleCapitalPots) || !Number.isFinite(modelDialog.amount) || modelDialog.amount <= 0} onClick={() => applyModel(modelDialog.action)}>
               Ausgewählte Aktion anwenden
             </button>
           </section>
@@ -6149,16 +6150,7 @@ function DepotOptimizer({
     setItem((current) => ({ ...current, ...deleteDepotAccount(current, account.id) }));
   };
   const setDepotPositions = (next: DepotHolding[]) =>
-    setItem((current) => ({
-      ...current,
-      advisory: {
-        ...current.advisory,
-        depotValue: next.reduce((sum, entry) => sum + entry.value, 0),
-        hasDepot: next.length > 0 || current.advisory.hasDepot,
-      },
-      depot: next,
-      plans: reconcileDepotHoldingSelections(current.plans, current.depot, next),
-    }));
+    setItem((current) => setCaseDepot(current, next));
   const applyDepotImport = (
     mode: "newDepot" | "replaceDepot",
     rows: DepotCsvResult["rows"],
@@ -6378,6 +6370,7 @@ function DepotOptimizer({
                         .join(" · ")}
                     </small>
                   )}
+                  {holding.importIssues?.length ? <small role="status">Nicht ausgewertet: {holding.importIssues.map(importIssueLabel).join(", ")}</small> : null}
                   {holding.classificationStatus === "unresolved" && <small className="classification-open">Durchschau ungeklärt</small>}
                 </div>
                 <div className="inline-amount">
@@ -6513,8 +6506,8 @@ function DepotOptimizer({
   );
 }
 
-function ExportCenter({
-  item,
+export function ExportCenter({
+  item: sourceItem,
   setItem,
   preferredPlan,
   saveCase,
@@ -6528,6 +6521,7 @@ function ExportCenter({
   exportJson: () => void;
   importJson: () => void;
 }) {
+  const item = enforceCaseDepotValue(sourceItem);
   const breakdown = planAssetAmounts(preferredPlan);
   const exportPots = capitalPots(
     item.advisory,
@@ -6589,6 +6583,7 @@ function ExportCenter({
             : "Abweichender Planungsbetrag",
         ],
         ["Depotmodus", preferredPlan.depotMode],
+        ["Depotwert", item.advisory.depotValue],
       ]),
       "Fall",
     );

@@ -1,3 +1,4 @@
+import { ImportIssue, sanitizeOptionalHolding } from "./depot-validation";
 import {
   AdvisoryData,
   emptyAdvisory,
@@ -182,6 +183,7 @@ export type DepotHolding = {
   currency?: string;
   industry?: string;
   certificateClass?: string;
+  importIssues?: ImportIssue[];
   coupon?: number;
   maturity?: string;
   nominalOrUnits?: number;
@@ -438,7 +440,7 @@ export function createCase(
 }
 
 export function caseSnapshot(item: AdvisoryCase): CaseSnapshot {
-  const snapshot = clone(item) as Partial<AdvisoryCase>;
+  const snapshot = clone(enforceCaseDepotValue(item)) as Partial<AdvisoryCase>;
   delete snapshot.versions;
   return snapshot as CaseSnapshot;
 }
@@ -872,6 +874,21 @@ export function legacyBucketAmountsForCapitalPots(
 
 export type ModelPortfolioAction = "new" | "supplement" | "replace";
 
+export function positiveStrategicPot(pots: CapitalPot[]) {
+  const candidates = pots.filter((pot) => pot.id === "strategic");
+  const pot = candidates.length === 1 ? candidates[0] : undefined;
+  return pot?.kind === "strategic" && Number.isFinite(pot.total) && pot.total > 0 ? pot : undefined;
+}
+
+export function validModelPortfolioTarget(pots: CapitalPot[], allocations: PlannerAllocation[]) {
+  if (!positiveStrategicPot(pots)) return false;
+  return allocations.every((allocation) =>
+    allocation.capitalPotId === "strategic" && Number.isFinite(allocation.amount) && allocation.amount >= 0 &&
+    allocation.capitalPotAmounts?.strategic === allocation.amount &&
+    Object.entries(allocation.capitalPotAmounts).every(([id, amount]) => id === "strategic" || amount === 0),
+  );
+}
+
 export function strategicAllocatedAmount(plan: StructurePlan) {
   return plan.allocations.reduce(
     (sum, allocation) =>
@@ -886,7 +903,7 @@ export function modelPortfolioDefaultAmount(
   pots: CapitalPot[],
 ) {
   const strategicTotal =
-    pots.find((pot) => pot.id === "strategic")?.total || 0;
+    positiveStrategicPot(pots)?.total || 0;
   return action === "supplement"
     ? Math.max(0, strategicTotal - strategicAllocatedAmount(plan))
     : Math.max(0, strategicTotal);
@@ -895,7 +912,9 @@ export function modelPortfolioDefaultAmount(
 export function supplementPlanWithModelPortfolio(
   plan: StructurePlan,
   modelAllocations: PlannerAllocation[],
+  pots: CapitalPot[],
 ) {
+  if (!validModelPortfolioTarget(pots, modelAllocations)) return plan;
   return {
     ...plan,
     allocations: [
@@ -910,6 +929,7 @@ export function replaceStrategicPlanAllocations(
   modelAllocations: PlannerAllocation[],
   pots: CapitalPot[],
 ) {
+  if (!validModelPortfolioTarget(pots, modelAllocations)) return plan;
   const allocations = plan.allocations.flatMap<PlannerAllocation>((allocation) => {
     const amounts = allocationCapitalPotAmounts(allocation);
     const strategic = Math.max(0, Number(amounts.strategic) || 0);
@@ -972,6 +992,7 @@ export function createModelPortfolioVariant(
   pots: CapitalPot[],
   name: string,
 ) {
+  if (!validModelPortfolioTarget(pots, modelAllocations)) return plan;
   return replaceStrategicPlanAllocations(
     duplicateStructurePlan(plan, name),
     modelAllocations,
@@ -1137,7 +1158,7 @@ export function reconcileCasePlans(
 }
 
 const normalizedHoldingWkn = (holding: DepotHolding) =>
-  (holding.wkn || "").replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+  String(holding.wkn || "").trim().toUpperCase();
 
 const normalizedHoldingProductId = (holding: DepotHolding) =>
   String(holding.productId || "").trim();
@@ -1150,6 +1171,10 @@ const conservativeHoldingFallback = (holding: DepotHolding) => {
     .toLocaleLowerCase("de-DE")}`;
 };
 
+const holdingIdentityConflict = (previous: DepotHolding, next: DepotHolding) =>
+  previous.depotId !== next.depotId ||
+  [normalizedHoldingWkn, normalizedHoldingProductId].some((key) => key(previous) && key(next) && key(previous) !== key(next));
+
 /**
  * Builds the single, globally one-to-one mapping used for every consequence of
  * a depot replacement. Each stage only sees holdings that were not claimed by
@@ -1160,10 +1185,14 @@ export function replacementHoldingIdMap(
   nextDepot: DepotHolding[],
 ) {
   const matches = new Map<string, string>();
-  const availablePrevious = new Map(
-    previousDepot.map((holding) => [holding.id, holding]),
-  );
-  const availableNext = new Map(nextDepot.map((holding) => [holding.id, holding]));
+  const uniqueIds = (holdings: DepotHolding[]) => {
+    const counts = new Map<string, number>();
+    holdings.forEach((holding) => counts.set(holding.id, (counts.get(holding.id) || 0) + 1));
+    return new Map(holdings.filter((holding) => holding.id && counts.get(holding.id) === 1)
+      .map((holding) => [holding.id, holding]));
+  };
+  const availablePrevious = uniqueIds(previousDepot);
+  const availableNext = uniqueIds(nextDepot);
 
   const claim = (previous: DepotHolding, next: DepotHolding) => {
     matches.set(previous.id, next.id);
@@ -1173,23 +1202,30 @@ export function replacementHoldingIdMap(
 
   for (const previous of [...availablePrevious.values()]) {
     const next = availableNext.get(previous.id);
-    if (next) claim(previous, next);
+    if (next && !holdingIdentityConflict(previous, next)) claim(previous, next);
   }
 
+  const ambiguousPrevious = new Set<string>();
+  const ambiguousNext = new Set<string>();
   const claimUniqueBy = (keyFor: (holding: DepotHolding) => string) => {
     const previousByKey = new Map<string, DepotHolding[]>();
     const nextByKey = new Map<string, DepotHolding[]>();
     for (const holding of availablePrevious.values()) {
       const key = keyFor(holding);
-      if (key) previousByKey.set(key, [...(previousByKey.get(key) || []), holding]);
+      if (key && !ambiguousPrevious.has(holding.id)) previousByKey.set(`${holding.depotId}::${key}`, [...(previousByKey.get(`${holding.depotId}::${key}`) || []), holding]);
     }
     for (const holding of availableNext.values()) {
       const key = keyFor(holding);
-      if (key) nextByKey.set(key, [...(nextByKey.get(key) || []), holding]);
+      if (key && !ambiguousNext.has(holding.id)) nextByKey.set(`${holding.depotId}::${key}`, [...(nextByKey.get(`${holding.depotId}::${key}`) || []), holding]);
     }
-    for (const [key, previousCandidates] of previousByKey) {
+    for (const key of new Set([...previousByKey.keys(), ...nextByKey.keys()])) {
+      const previousCandidates = previousByKey.get(key) || [];
       const nextCandidates = nextByKey.get(key) || [];
-      if (previousCandidates.length === 1 && nextCandidates.length === 1)
+      if (previousCandidates.length > 1 || nextCandidates.length > 1) {
+        previousCandidates.forEach((holding) => ambiguousPrevious.add(holding.id));
+        nextCandidates.forEach((holding) => ambiguousNext.add(holding.id));
+      } else if (previousCandidates.length === 1 && nextCandidates.length === 1 &&
+        !holdingIdentityConflict(previousCandidates[0], nextCandidates[0]))
         claim(previousCandidates[0], nextCandidates[0]);
     }
   };
@@ -1219,12 +1255,12 @@ export function reconcileDepotHoldingSelections(
     : undefined;
   return plans.map((plan) => {
     const mappedIds = plan.depotHoldingIds.flatMap((id) => {
-      if (nextIds.has(id)) return [id];
       const previous = previousById.get(id);
-      if (!previous || !replacementDepotId || previous.depotId !== replacementDepotId)
-        return [];
-      const matchId = finalReplacementMap?.get(previous.id);
-      return matchId ? [matchId] : [];
+      if (previous && replacementDepotId && previous.depotId === replacementDepotId) {
+        const matchId = finalReplacementMap?.get(previous.id);
+        return matchId && nextIds.has(matchId) ? [matchId] : [];
+      }
+      return previous && nextIds.has(id) ? [id] : [];
     });
     return {
       ...plan,
@@ -1263,14 +1299,64 @@ type DepotLifecycleState = Pick<
   "advisory" | "depotAccounts" | "depot" | "plans"
 >;
 
-const withDepotValue = (advisory: AdvisoryData, depot: DepotHolding[]) => ({
-  ...advisory,
-  depotValue: depot.reduce(
-    (sum, holding) => sum + Math.max(0, Number(holding.value) || 0),
-    0,
-  ),
-  hasDepot: depot.length > 0 || advisory.hasDepot,
-});
+export function physicalDepotValue(depot: DepotHolding[]) {
+  let total = 0;
+  for (const holding of depot) {
+    if (!Number.isFinite(holding.value) || holding.value < 0)
+      throw new Error("Ungültiger Marktwert. Der bisherige Bestand bleibt erhalten.");
+    total += holding.value;
+  }
+  if (!Number.isFinite(total)) throw new Error("Der Depotgesamtwert ist nicht endlich.");
+  return total;
+}
+
+export function withDepotValue(advisory: AdvisoryData, depot: DepotHolding[]): AdvisoryData {
+  return depot.length ? { ...advisory, depotValue: physicalDepotValue(depot), hasDepot: true } : advisory;
+}
+
+/** Every active-case mutation passes here before React publishes the next state. */
+export function enforceCaseDepotValue<T extends Pick<AdvisoryCase, "advisory" | "depot">>(item: T): T {
+  const advisory = withDepotValue(item.advisory, item.depot);
+  return advisory === item.advisory ? item : { ...item, advisory };
+}
+
+export function updateCaseAdvisory<K extends keyof AdvisoryData>(current: AdvisoryCase, key: K, value: AdvisoryData[K]): AdvisoryCase {
+  const advisory = withDepotValue({ ...current.advisory, [key]: value }, current.depot);
+  const liquidAssets = advisory.liquidAssets;
+  const plans = current.plans.map((plan) => key === "liquidAssets" && plan.capitalMode === "linked"
+    ? { ...plan, total: liquidAssets, updatedAt: iso() } : plan);
+  return { ...current, advisory,
+    plans: reconcileCasePlans(advisory, plans, current.createdAt, current.savingsGoals),
+    vvFilters: { ...current.vvFilters, amount: current.vvFilters.amount === current.advisory.liquidAssets ? liquidAssets : current.vvFilters.amount },
+  };
+}
+
+export function setCaseDepot<T extends DepotLifecycleState>(state: T, depot: DepotHolding[]): T {
+  return { ...state, depot,
+    advisory: withDepotValue(state.depot.length && !depot.length ? { ...state.advisory, depotValue: 0 } : state.advisory, depot),
+    plans: reconcileDepotHoldingSelections(state.plans, state.depot, depot),
+  };
+}
+
+function importedHoldings(state: DepotLifecycleState, depotId: string, parsed: ParsedDepotHolding[]) {
+  physicalDepotValue(parsed.map((holding) => ({ ...holding, depotId })));
+  const oldById = new Map(state.depot.map((holding) => [holding.id, holding]));
+  const reserved = new Set(state.depot.map((holding) => holding.id));
+  parsed.forEach((holding) => reserved.add(holding.id));
+  const used = new Set<string>();
+  const idCounts = new Map<string, number>();
+  parsed.forEach((holding) => idCounts.set(holding.id, (idCounts.get(holding.id) || 0) + 1));
+  return parsed.map((raw) => {
+    let id = raw.id;
+    const holding = { ...raw, depotId };
+    const old = oldById.get(id);
+    if (!id || idCounts.get(id)! > 1 || used.has(id) || (old && holdingIdentityConflict(old, holding))) {
+      do { id = uid("holding"); } while (reserved.has(id) || used.has(id));
+    }
+    used.add(id);
+    return { ...holding, id };
+  });
+}
 
 export function addDepotAccount(
   state: DepotLifecycleState,
@@ -1284,7 +1370,7 @@ export function addDepotAccount(
     createdAt: now,
     updatedAt: now,
   };
-  const imported = parsed.map((holding) => ({ ...holding, depotId: account.id }));
+  const imported = importedHoldings(state, account.id, parsed);
   const depot = [...state.depot, ...imported];
   const firstConcreteDepot = state.depot.length === 0 && imported.length > 0;
   const plans = state.plans.map((plan) =>
@@ -1307,7 +1393,7 @@ export function replaceDepotAccount(
 ): DepotLifecycleState {
   if (!state.depotAccounts.some((account) => account.id === depotId)) return state;
   const previous = holdingsForDepot(state.depot, depotId);
-  const imported = parsed.map((holding) => ({ ...holding, depotId }));
+  const imported = importedHoldings(state, depotId, parsed);
   const replacementMap = replacementHoldingIdMap(previous, imported);
   const previousByNextId = new Map(
     [...replacementMap].map(([previousId, nextId]) => [nextId, previousId]),
@@ -1316,8 +1402,8 @@ export function replaceDepotAccount(
   const reconciled = imported.map((holding) => {
     const match = previousById.get(previousByNextId.get(holding.id) || "");
     return match
-      ? { ...holding, plannedSale: Math.min(match.plannedSale, holding.value) }
-      : holding;
+      ? { ...holding, plannedSale: Math.max(0, Math.min(match.plannedSale, holding.value)) }
+      : { ...holding, plannedSale: 0 };
   });
   const depot = [
     ...state.depot.filter((holding) => holding.depotId !== depotId),
@@ -1336,7 +1422,7 @@ export function replaceDepotAccount(
       : plan,
   );
   return {
-    advisory: withDepotValue(state.advisory, depot),
+    advisory: withDepotValue(state.depot.length && !depot.length ? { ...state.advisory, depotValue: 0 } : state.advisory, depot),
     depotAccounts: state.depotAccounts.map((account) =>
       account.id === depotId ? { ...account, updatedAt: iso() } : account,
     ),
@@ -1391,7 +1477,7 @@ export function deleteDepotAccount(
   const depot = state.depot.filter((holding) => holding.depotId !== depotId);
   const validIds = new Set(depot.map((holding) => holding.id));
   return {
-    advisory: withDepotValue(state.advisory, depot),
+    advisory: withDepotValue(state.depot.length && !depot.length ? { ...state.advisory, depotValue: 0 } : state.advisory, depot),
     depotAccounts: state.depotAccounts.filter((account) => account.id !== depotId),
     depot,
     plans: state.plans.map((plan) => ({
@@ -1731,8 +1817,10 @@ export function normalizeImportedCase(
   const candidate = (value as { case?: unknown }).case ?? value;
   if (!candidate || typeof candidate !== "object") return null;
   const item = candidate as Partial<AdvisoryCase>;
-  if (!item.advisory || !Array.isArray(item.plans)) return null;
+  if (!item.advisory || typeof item.advisory !== "object" || Array.isArray(item.advisory) ||
+    !Array.isArray(item.plans) || !item.plans.length) return null;
   const sourceSchemaVersion = Number(item.schemaVersion) || 0;
+  if (sourceSchemaVersion > 10) return null;
   const normalized = clone(item) as AdvisoryCase;
   normalized.schemaVersion = 10;
   if (regenerateId) normalized.id = uid("fall-import");
@@ -1751,6 +1839,11 @@ export function normalizeImportedCase(
         }))
     : [];
   const rawDepot = Array.isArray(normalized.depot) ? normalized.depot : [];
+  // Reject structural corruption, but recover optional analysis data per holding.
+  if (rawDepot.some((holding) => !holding || typeof holding !== "object" ||
+    typeof holding.id !== "string" || !holding.id || typeof holding.name !== "string" ||
+    !Number.isFinite(holding.value) || holding.value < 0) ||
+    new Set(rawDepot.map((holding) => holding.id)).size !== rawDepot.length) return null;
   if (rawDepot.length > 0 && normalized.depotAccounts.length === 0) {
     const migratedAt = normalized.createdAt || iso();
     normalized.depotAccounts = [{
@@ -1764,7 +1857,7 @@ export function normalizeImportedCase(
   const fallbackDepotId = normalized.depotAccounts[0]?.id;
   normalized.depot = rawDepot
     .map((holding) => ({
-        ...holding,
+        ...sanitizeOptionalHolding(holding),
         depotId:
           holding.depotId && validDepotIds.has(holding.depotId)
             ? holding.depotId
@@ -1777,7 +1870,7 @@ export function normalizeImportedCase(
         risk: Number(holding.risk) || 0,
         note: holding.note || "",
         region: holding.region || "Nicht zugeordnet",
-        securityType: holding.securityType || holding.sourceType,
+        securityType: typeof holding.securityType === "string" ? holding.securityType : typeof holding.sourceType === "string" ? holding.sourceType : undefined,
         classificationStatus:
           holding.classificationStatus || "mapped",
       }))

@@ -1,3 +1,4 @@
+import { calendarDate, strictNumber, numberInRange, optionalNumberRules, OptionalNumberField, ImportIssue } from "./depot-validation";
 import { ParsedDepotHolding } from "./case-model";
 import { AssetClass, assetClasses, houseProducts } from "./investment-data";
 import { depotRegionForCountry } from "./depot-country-codes";
@@ -9,22 +10,17 @@ export type DepotCsvResult = {
   rows: ParsedDepotHolding[];
   unresolved: number;
   ignoredPersonalColumns: boolean;
+  warnings: { row: number; field: string; code: string }[];
 };
 
 const uid = () =>
   `holding-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+/** Strict CSV number conversion. Invalid values are never converted to zero. */
 export function parseGermanNumber(value: string): number {
-  const cleaned = String(value || "")
-    .trim()
-    .replace(/\s/g, "")
-    .replace(/€/g, "");
-  if (!cleaned) return 0;
-  const normalized = cleaned.includes(",")
-    ? cleaned.replace(/\./g, "").replace(",", ".")
-    : cleaned;
-  const number = Number(normalized.replace(/[^0-9.-]/g, ""));
-  return Number.isFinite(number) ? number : 0;
+  const result = strictNumber(value, "euro");
+  if (result.value === undefined) throw new Error(`Ungültige Zahl (${result.code}).`);
+  return result.value;
 }
 
 function parseCsv(text: string): string[][] {
@@ -50,6 +46,7 @@ function parseCsv(text: string): string[][] {
       cell = "";
     } else cell += char;
   }
+  if (quoted) throw new Error("Die CSV enthält ein nicht geschlossenes Anführungszeichen.");
   row.push(cell.trim());
   if (row.some(Boolean)) rows.push(row);
   return rows;
@@ -77,17 +74,28 @@ function valueAt(row: string[], index: number) {
   return index >= 0 ? row[index] || "" : "";
 }
 
-function optionalNumber(row: string[], index: number) {
-  const raw = valueAt(row, index).trim();
-  return raw ? parseGermanNumber(raw) : undefined;
+function requiredMarketValue(row: string[], index: number, rowNumber: number) {
+  const result = strictNumber(valueAt(row, index), "euro");
+  if (result.value === undefined || result.value < 0)
+    throw new Error(`Zeile ${rowNumber}: Marktwert fehlt oder ist ungültig. Import abgebrochen, bisheriger Bestand unverändert.`);
+  return result.value;
 }
 
-function normalizedDate(value: string) {
-  const raw = value.trim();
-  const match = raw.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
-  return match
-    ? `${match[3]}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}`
-    : raw || undefined;
+function optionalNumber(row: string[], index: number, field: OptionalNumberField, issues: ImportIssue[]) {
+  const raw = valueAt(row, index).trim();
+  if (!raw) return undefined;
+  const rule: { min?: number; max?: number; positive?: boolean; unit?: "percent" } = optionalNumberRules[field];
+  const result = strictNumber(raw, rule.unit);
+  const code = result.value === undefined ? result.code : numberInRange(field, result.value) ? undefined : "out-of-range";
+  if (code) { issues.push({ field, code }); return undefined; }
+  return result.value;
+}
+
+function normalizedDate(raw: string, field: string, issues: ImportIssue[]) {
+  if (!raw.trim()) return undefined;
+  const value = calendarDate(raw);
+  if (!value) issues.push({ field, code: "invalid-date" });
+  return value;
 }
 
 function mapAssetClass(segment: string, type: string): AssetClass | null {
@@ -115,6 +123,7 @@ export function parseDepotCsv(buffer: ArrayBuffer): DepotCsvResult {
       "Das Dateiformat wurde nicht erkannt. Erwartet wird die Navigator-Vorlage oder eine Strukturübersicht.",
     );
 
+  const warnings: DepotCsvResult["warnings"] = [];
   if (isNavigator) {
     const name = column(headers, "Name");
     const amount = column(headers, "Wert");
@@ -122,26 +131,32 @@ export function parseDepotCsv(buffer: ArrayBuffer): DepotCsvResult {
     const region = column(headers, "Region");
     const risk = column(headers, "RK", "Risikoklasse");
     const note = column(headers, "Notiz");
-    const parsed = rows.slice(1).map((row) => {
+    const parsed = rows.slice(1).map((row, index) => {
       const rawClass = valueAt(row, asset) as AssetClass;
       const recognized = assetClasses.includes(rawClass);
+      const parsedRisk = strictNumber(valueAt(row, risk));
+      const riskValue = parsedRisk.value;
+      const validRisk = riskValue !== undefined && Number.isInteger(riskValue) && riskValue >= 0 && riskValue <= 5;
+      if (valueAt(row, risk) && !validRisk) warnings.push({ row: index + 2, field: "risk", code: parsedRisk.code || "out-of-range" });
       return {
         id: uid(),
         name: valueAt(row, name),
-        value: parseGermanNumber(valueAt(row, amount)),
+        value: requiredMarketValue(row, amount, index + 2),
         assetClass: recognized ? rawClass : "Geldwerte",
         region: valueAt(row, region) || "Weltweit",
-        risk: parseGermanNumber(valueAt(row, risk)),
+        risk: validRisk ? riskValue : 0,
         plannedSale: 0,
         note: valueAt(row, note),
         classificationStatus: recognized ? "mapped" : "unresolved",
       } satisfies ParsedDepotHolding;
     }).filter((row) => row.name || row.value > 0);
+    if (!Number.isFinite(parsed.reduce((sum, row) => sum + row.value, 0))) throw new Error("Ungültiger Depotgesamtwert.");
     return {
       format: "navigator",
       rows: parsed,
       unresolved: parsed.filter((row) => row.classificationStatus === "unresolved").length,
       ignoredPersonalColumns: false,
+      warnings,
     };
   }
 
@@ -172,7 +187,8 @@ export function parseDepotCsv(buffer: ArrayBuffer): DepotCsvResult {
   const valuationEnd = column(headers, "Bewertungsende");
   const holdingAtValuationStart = column(headers, "Bestand per (Bewertungsanfang)");
   const holdingAtValuationEnd = column(headers, "Bestand per (Bewertungsende)");
-  const parsed = rows.slice(1).map((row) => {
+  const parsed = rows.slice(1).map((row, index) => {
+    const issues: ImportIssue[] = [];
     const wknValue = valueAt(row, wkn).trim();
     const matched = wknValue
       ? houseProducts.find(
@@ -191,11 +207,11 @@ export function parseDepotCsv(buffer: ArrayBuffer): DepotCsvResult {
       : null;
     const assetClass = mapped || matchedClass || "Geldwerte";
     const classificationStatus = mapped ? "mapped" : matchedClass ? "matched" : "unresolved";
-    return {
+    const parsedHolding = {
       id: uid(),
       productId: matched?.id,
       name: valueAt(row, name),
-      value: parseGermanNumber(valueAt(row, amount)),
+      value: requiredMarketValue(row, amount, index + 2),
       assetClass,
       region: matched?.region || depotRegionForCountry(valueAt(row, country)),
       risk: matched?.risk || 0,
@@ -209,28 +225,33 @@ export function parseDepotCsv(buffer: ArrayBuffer): DepotCsvResult {
       currency: valueAt(row, currency),
       industry: valueAt(row, industry),
       certificateClass: valueAt(row, certificateClass),
-      coupon: optionalNumber(row, coupon),
-      maturity: normalizedDate(valueAt(row, maturity)),
-      nominalOrUnits: optionalNumber(row, nominalOrUnits),
-      lastPurchaseDate: normalizedDate(valueAt(row, lastPurchaseDate)),
-      averageEntryPrice: optionalNumber(row, averageEntryPrice),
-      purchaseCosts: optionalNumber(row, purchaseCosts),
-      currentPrice: optionalNumber(row, currentPrice),
-      gainLossPercent: optionalNumber(row, gainLossPercent),
-      gainLossAmount: optionalNumber(row, gainLossAmount),
-      accruedInterest: optionalNumber(row, accruedInterest),
-      sourceDepotShare: optionalNumber(row, sourceDepotShare),
-      averageEntryFx: optionalNumber(row, averageEntryFx),
-      fxRate: optionalNumber(row, fxRate),
-      valuationStart: normalizedDate(valueAt(row, valuationStart)),
-      valuationEnd: normalizedDate(valueAt(row, valuationEnd)),
-      holdingAtValuationStart: optionalNumber(row, holdingAtValuationStart),
-      holdingAtValuationEnd: optionalNumber(row, holdingAtValuationEnd),
+      coupon: optionalNumber(row, coupon, "coupon", issues),
+      maturity: normalizedDate(valueAt(row, maturity), "maturity", issues),
+      nominalOrUnits: optionalNumber(row, nominalOrUnits, "nominalOrUnits", issues),
+      lastPurchaseDate: normalizedDate(valueAt(row, lastPurchaseDate), "lastPurchaseDate", issues),
+      averageEntryPrice: optionalNumber(row, averageEntryPrice, "averageEntryPrice", issues),
+      purchaseCosts: optionalNumber(row, purchaseCosts, "purchaseCosts", issues),
+      currentPrice: optionalNumber(row, currentPrice, "currentPrice", issues),
+      gainLossPercent: optionalNumber(row, gainLossPercent, "gainLossPercent", issues),
+      gainLossAmount: optionalNumber(row, gainLossAmount, "gainLossAmount", issues),
+      accruedInterest: optionalNumber(row, accruedInterest, "accruedInterest", issues),
+      sourceDepotShare: optionalNumber(row, sourceDepotShare, "sourceDepotShare", issues),
+      averageEntryFx: optionalNumber(row, averageEntryFx, "averageEntryFx", issues),
+      fxRate: optionalNumber(row, fxRate, "fxRate", issues),
+      valuationStart: normalizedDate(valueAt(row, valuationStart), "valuationStart", issues),
+      valuationEnd: normalizedDate(valueAt(row, valuationEnd), "valuationEnd", issues),
+      holdingAtValuationStart: optionalNumber(row, holdingAtValuationStart, "holdingAtValuationStart", issues),
+      holdingAtValuationEnd: optionalNumber(row, holdingAtValuationEnd, "holdingAtValuationEnd", issues),
       classificationStatus,
+      importIssues: issues.length ? issues : undefined,
     } satisfies ParsedDepotHolding;
+    warnings.push(...issues.map((issue) => ({ row: index + 2, ...issue })));
+    return parsedHolding;
   }).filter((row) => row.name || row.value > 0);
+  if (!Number.isFinite(parsed.reduce((sum, row) => sum + row.value, 0))) throw new Error("Ungültiger Depotgesamtwert.");
   return {
     format: "structure-overview",
+    warnings,
     rows: parsed,
     unresolved: parsed.filter((row) => row.classificationStatus === "unresolved").length,
     ignoredPersonalColumns:

@@ -123,6 +123,7 @@ equal(
 const supplemented = supplementPlanWithModelPortfolio(
   basePlan,
   modelAllocations(150_000),
+  pots,
 );
 equal(
   supplemented.allocations.slice(0, 3).map((entry) => entry.id).join(","),
@@ -148,12 +149,12 @@ equal(
   "3: negativer strategischer Restbetrag wird auf null begrenzt",
 );
 equal(
-  supplementPlanWithModelPortfolio(overAllocatedPlan, modelAllocations(0)).allocations.length,
+  supplementPlanWithModelPortfolio(overAllocatedPlan, modelAllocations(0), pots).allocations.length,
   overAllocatedPlan.allocations.length,
   "3: Nullbetrag erzeugt keine sinnlosen Modellallokationen",
 );
 equal(
-  supplementPlanWithModelPortfolio(basePlan, modelAllocations(500_000))
+  supplementPlanWithModelPortfolio(basePlan, modelAllocations(500_000), pots)
     .allocations.slice(3).reduce((sum, entry) => sum + entry.amount, 0),
   500_000,
   "4: bewusst gewählte Überplanung wird nicht still umgerechnet",
