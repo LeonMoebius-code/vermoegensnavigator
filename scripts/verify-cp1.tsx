@@ -275,7 +275,7 @@ const reloaded = readCaseStore(storage.getItem(CASE_STORAGE_KEY));
 assert.equal(reloaded.cases.length, 1);
 assert.equal(reloaded.cases[0].depot[0].coupon, undefined);
 assert.ok(reloaded.cases[0].depot[0].importIssues?.length);
-const future = { ...item, id: "future", schemaVersion: 11 };
+const future = { ...item, id: "future", schemaVersion: 12 };
 const mixed = readCaseStore(JSON.stringify([future, item]));
 assert.deepEqual(mixed.protectedEntries, [future]);
 assert.equal(mixed.cases.length, 1);

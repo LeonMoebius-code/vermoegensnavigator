@@ -1,4 +1,5 @@
 import { ImportIssue, sanitizeOptionalHolding } from "./depot-validation";
+import { BondSource, normalizeBondHolding } from "./bond-source";
 import {
   AdvisoryData,
   emptyAdvisory,
@@ -184,6 +185,8 @@ export type DepotHolding = {
   industry?: string;
   certificateClass?: string;
   importIssues?: ImportIssue[];
+  bondSource?: BondSource;
+  excludeFromBondAggregates?: boolean;
   coupon?: number;
   maturity?: string;
   nominalOrUnits?: number;
@@ -311,7 +314,7 @@ export type CustomerChecklistItem = {
 };
 
 export type AdvisoryCase = {
-  schemaVersion: 10;
+  schemaVersion: 11;
   id: string;
   status: "Entwurf" | "In Prüfung" | "Abgeschlossen";
   advisorId: AdvisorId;
@@ -418,7 +421,7 @@ export function createCase(
   const initialTotal = data.liquidAssets;
   const plan = createPlan("Plan A – Ausgangsstruktur", initialTotal);
   return {
-    schemaVersion: 10,
+    schemaVersion: 11,
     id: uid("fall"),
     status: "Entwurf",
     advisorId,
@@ -1853,9 +1856,9 @@ export function normalizeImportedCase(
     if (ids.some((id) => typeof id !== "string" || !id) || new Set(ids).size !== ids.length) return null;
   }
   const sourceSchemaVersion = Number(item.schemaVersion) || 0;
-  if (sourceSchemaVersion > 10) return null;
+  if (sourceSchemaVersion > 11) return null;
   const normalized = clone(item) as AdvisoryCase;
-  normalized.schemaVersion = 10;
+  normalized.schemaVersion = 11;
   if (regenerateId) normalized.id = uid("fall-import");
   normalized.updatedAt = iso();
   normalized.versions = Array.isArray(normalized.versions)
@@ -1890,7 +1893,7 @@ export function normalizeImportedCase(
   const fallbackDepotId = normalized.depotAccounts[0]?.id;
   normalized.depot = rawDepot
     .map((holding) => ({
-        ...sanitizeOptionalHolding(holding),
+        ...normalizeBondHolding(sanitizeOptionalHolding(holding)),
         depotId:
           holding.depotId && validDepotIds.has(holding.depotId)
             ? holding.depotId

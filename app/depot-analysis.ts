@@ -1,3 +1,4 @@
+import { analyzeBondV2, bondReasonLabel } from "./bond-v2";
 import { DepotHolding, StructurePlan } from "./case-model";
 import { depotCountryName } from "./depot-country-codes";
 import { houseProducts, managedPortfolios } from "./investment-data";
@@ -315,47 +316,6 @@ export function currentYield(coupon?: number, currentPrice?: number): number | n
   return plausibleCoupon(coupon) && plausiblePrice(currentPrice) ? Number(coupon) / Number(currentPrice) : null;
 }
 
-export type ModeledCashflow = { time: number; amount: number };
-export function modeledBondCashflows(coupon: number, remainingYears: number): ModeledCashflow[] {
-  if (!plausibleCoupon(coupon) || remainingYears <= 0) return [];
-  const count = Math.max(1, Math.ceil(remainingYears));
-  const first = remainingYears - (count - 1);
-  return Array.from({ length: count }, (_, index) => ({
-    time: first + index,
-    amount: coupon + (index === count - 1 ? 100 : 0),
-  }));
-}
-
-const modeledPrice = (cashflows: ModeledCashflow[], yieldRate: number) =>
-  cashflows.reduce((sum, cashflow) => sum + cashflow.amount / Math.pow(1 + yieldRate, cashflow.time), 0);
-
-export function solveModeledYtm(currentPrice: number, coupon: number, remainingYears: number): number | null {
-  if (!plausiblePrice(currentPrice)) return null;
-  const cashflows = modeledBondCashflows(coupon, remainingYears);
-  if (!cashflows.length) return null;
-  let low = -0.95;
-  let high = 10;
-  if (modeledPrice(cashflows, low) < currentPrice || modeledPrice(cashflows, high) > currentPrice) return null;
-  for (let index = 0; index < 160; index += 1) {
-    const mid = (low + high) / 2;
-    if (modeledPrice(cashflows, mid) > currentPrice) low = mid;
-    else high = mid;
-  }
-  const result = (low + high) / 2;
-  return Number.isFinite(result) ? result : null;
-}
-
-export function bondDurationMetrics(currentPrice: number, coupon: number, remainingYears: number, ytm?: number | null) {
-  const yieldRate = ytm ?? solveModeledYtm(currentPrice, coupon, remainingYears);
-  if (yieldRate === null || yieldRate <= -1) return null;
-  const cashflows = modeledBondCashflows(coupon, remainingYears);
-  const price = modeledPrice(cashflows, yieldRate);
-  if (!price) return null;
-  const macaulay = cashflows.reduce((sum, cashflow) =>
-    sum + cashflow.time * cashflow.amount / Math.pow(1 + yieldRate, cashflow.time), 0) / price;
-  return { macaulay, modified: macaulay / (1 + yieldRate), ytm: yieldRate };
-}
-
 export const bondDv01 = (marketValue: number, modifiedDuration: number) =>
   Math.max(0, marketValue) * Math.max(0, modifiedDuration) * 0.0001;
 
@@ -371,6 +331,7 @@ export type BondPositionAnalysis = {
   modified: number | null;
   dv01: number | null;
   exclusionReason?: string;
+  metrics: ReturnType<typeof analyzeBondV2>;
 };
 
 export function bondPortfolioAnalysis(positions: DepotAnalysisPosition[], fallbackDate = new Date()) {
@@ -378,34 +339,15 @@ export function bondPortfolioAnalysis(positions: DepotAnalysisPosition[], fallba
   const renten = positions.filter((position) => position.classification.main === "Renten");
   const direct = renten.filter((position) => position.classification.direct);
   const rows: BondPositionAnalysis[] = renten.map((position) => {
-    const positionValuationDate = position.valuationEnd
-      ? localDate(position.valuationEnd) || valuationDate
-      : valuationDate;
-    const remaining = remainingMaturityYears(positionValuationDate, position.maturity);
-    const running = position.classification.direct ? currentYield(position.coupon, position.currentPrice) : null;
-    let reason: string | undefined;
-    if (!position.classification.direct) reason = "Keine Einzeltitel-Cashflows";
-    else if (position.classification.bondKind === "floater") reason = "Variable Verzinsung";
-    else if (position.classification.bondKind === "step-up") reason = "Zukünftige Couponstaffel fehlt";
-    else if (position.classification.bondKind !== "fixed") reason = "Tilgungsstruktur nicht eindeutig";
-    else if (remaining === null) reason = "Fälligkeit fehlt oder ist ungültig";
-    else if (remaining <= 0) reason = "Fällig / Daten prüfen";
-    else if (!plausibleCoupon(position.coupon)) reason = "Coupon fehlt oder ist unplausibel";
-    else if (!plausiblePrice(position.currentPrice)) reason = "Aktueller Kurs fehlt oder ist unplausibel";
-    const ytm = reason ? null : solveModeledYtm(Number(position.currentPrice), Number(position.coupon), remaining!);
-    if (!reason && ytm === null) reason = "Keine stabile Modelllösung";
-    const duration = ytm === null ? null : bondDurationMetrics(Number(position.currentPrice), Number(position.coupon), remaining!, ytm);
+    const metrics = analyzeBondV2(position, fallbackDate);
     return {
-      position,
-      remainingYears: remaining,
-      currentYield: running,
-      ytm,
-      macaulay: duration?.macaulay ?? null,
-      modified: duration?.modified ?? null,
-      dv01: duration ? bondDv01(position.value, duration.modified) : null,
-      exclusionReason: reason,
+      position, metrics,
+      remainingYears: metrics.remainingYears.value, currentYield: metrics.currentYield.value,
+      ytm: metrics.ytm.value, macaulay: metrics.macaulay.value, modified: metrics.modified.value,
+      dv01: metrics.dv01.value, exclusionReason: bondReasonLabel(metrics.ytm.reasonCode),
     };
   });
+  const reportingComparable = direct.length > 0 && rows.filter((row) => row.position.classification.direct).every((row) => row.metrics.reportingComparable);
   const directValue = direct.reduce((sum, position) => sum + position.value, 0);
   const maturityValue = rows.filter((row) => row.position.classification.direct && row.remainingYears !== null && row.remainingYears > 0)
     .reduce((sum, row) => sum + row.position.value, 0);
@@ -450,20 +392,20 @@ export function bondPortfolioAnalysis(positions: DepotAnalysisPosition[], fallba
     directValue,
     totalRentenValue: renten.reduce((sum, position) => sum + position.value, 0),
     maturityCoverage: analysisCoverage(maturityValue, directValue),
-    calculableCoverage: analysisCoverage(calculableValue, directValue),
-    ytmCoverage: analysisCoverage(ytmValue, directValue),
+    calculableCoverage: reportingComparable ? analysisCoverage(calculableValue, directValue) : null,
+    ytmCoverage: reportingComparable ? analysisCoverage(ytmValue, directValue) : null,
     ytmValue,
-    averageModeledYtm,
-    currentYieldCoverage: analysisCoverage(currentYieldValue, directValue),
+    averageModeledYtm: reportingComparable ? averageModeledYtm : null,
+    currentYieldCoverage: reportingComparable ? analysisCoverage(currentYieldValue, directValue) : null,
     currentYieldValue,
-    averageCurrentYield,
+    averageCurrentYield: reportingComparable ? averageCurrentYield : null,
     calculableValue,
-    portfolioModified,
-    portfolioDv01: calculable.reduce((sum, row) => sum + Number(row.dv01), 0),
+    portfolioModified: reportingComparable ? portfolioModified : null,
+    portfolioDv01: reportingComparable && calculable.length ? calculable.reduce((sum, row) => sum + Number(row.dv01), 0) : null,
     ladder: [...ladderMap.values()].sort((a, b) => a.year - b.year),
     scenarios: [-0.01, -0.005, 0.005, 0.01].map((deltaYield) => ({
       deltaYield,
-      effect: calculable.reduce((sum, row) => sum + interestScenarioEffect(row.position.value, Number(row.modified), deltaYield), 0),
+      effect: !reportingComparable || !calculable.length ? null : calculable.reduce((sum, row) => sum + interestScenarioEffect(row.position.value, Number(row.modified), deltaYield), 0),
     })),
   };
 }

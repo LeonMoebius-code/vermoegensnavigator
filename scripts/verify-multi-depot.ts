@@ -71,7 +71,7 @@ const migrated = normalizeImportedCase({
   ],
   plans: [legacyPlan],
 }, false)!;
-equal(migrated.schemaVersion, 10, "A: Schema 9 wird zu 10");
+equal(migrated.schemaVersion, 11, "A: Schema 9 wird zu 11");
 equal(migrated.depotAccounts.length, 1, "A: genau ein migriertes Depot");
 equal(migrated.depotAccounts[0].name, "Depot 1", "A: Standardname");
 check(migrated.depot.every((entry) => entry.depotId === migrated.depotAccounts[0].id), "A: alle Holdings zugeordnet");
@@ -198,7 +198,7 @@ check(hasMixedValuationDates(positions), "S: gemischte Stichtage erkannt");
 const bonds = bondPortfolioAnalysis(positions);
 const bondRow = bonds.rows.find((row) => row.position.id === "bond")!;
 check(bondRow.remainingYears !== null && bondRow.remainingYears > 4.9 && bondRow.remainingYears < 5.1, "T: positionsbezogener Bond-Stichtag");
-check(bondRow.ytm !== null && Math.abs(bondRow.ytm - 0.05) < 0.002, "T: YTM plausibel");
+check(bondRow.ytm === null && bondRow.metrics.ytm.status === "legacy-unverified", "T: Legacy-Kuponherkunft ohne CSV-Nachweis verhindert V1-YTM");
 const datedBondCase = createCase();
 const datedBondPositions = buildDepotAnalysisPositions([
   { ...holding("bond-date-a", "Bond A", 40_000, { assetClass: "Geldwerte", securityType: "Festverzinsliche", coupon: 5, currentPrice: 100, maturity: "2031-01-01", nominalOrUnits: 40_000, valuationEnd: "2026-01-01" }), depotId: "date-depot-a" },

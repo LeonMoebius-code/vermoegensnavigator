@@ -2,6 +2,7 @@ import { calendarDate, strictNumber, numberInRange, optionalNumberRules, Optiona
 import { ParsedDepotHolding } from "./case-model";
 import { AssetClass, assetClasses, houseProducts } from "./investment-data";
 import { depotRegionForCountry } from "./depot-country-codes";
+import { structureOverviewSource } from "./bond-source";
 
 export type DepotCsvFormat = "navigator" | "structure-overview";
 
@@ -258,7 +259,7 @@ export function parseDepotCsv(buffer: ArrayBuffer): DepotCsvResult {
       importIssues: issues.length ? issues : undefined,
     } satisfies ParsedDepotHolding;
     warnings.push(...issues.map((issue) => ({ row: index + 2, ...issue })));
-    return parsedHolding;
+    return { ...parsedHolding, bondSource: structureOverviewSource(parsedHolding), excludeFromBondAggregates: false };
   });
   if (!Number.isFinite(parsed.reduce((sum, row) => sum + row.value, 0))) throw new Error("Ungültiger Depotgesamtwert.");
   return {

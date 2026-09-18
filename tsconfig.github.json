@@ -27,6 +27,7 @@
     "app/investment-data.ts",
     "app/navigator-config.ts",
     "scripts/verify-cp1.tsx",
-    "scripts/verify-modelportfolio.ts"
+    "scripts/verify-modelportfolio.ts",
+    "scripts/verify-bond-v2.ts"
   ]
 }

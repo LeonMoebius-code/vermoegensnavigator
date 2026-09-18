@@ -1,5 +1,6 @@
 import { AdvisoryCase, enforceCaseDepotValue, normalizeImportedCase } from "./case-model";
 import { sanitizeOptionalHolding } from "./depot-validation";
+import { validBondSource } from "./bond-source";
 
 export const CASE_STORAGE_KEY = "vermoegensnavigator-cases-v2";
 export const RECOVERY_PREFIX = `${CASE_STORAGE_KEY}-recovery-`;
@@ -40,8 +41,9 @@ export function readCaseStore(original: string | null): CaseStoreRead {
       const normalized = normalizeImportedCase(entry, false);
       if (!normalized || !normalized.plans.length) throw new Error("invalid-case");
       result.cases.push(normalized);
-      if (Array.isArray(entry.depot) && entry.depot.some((holding: object) =>
-        JSON.stringify(sanitizeOptionalHolding(holding)) !== JSON.stringify(holding))) {
+      if (Array.isArray(entry.depot) && entry.depot.some((holding: AdvisoryCase["depot"][number]) =>
+        JSON.stringify(sanitizeOptionalHolding(holding)) !== JSON.stringify(holding) ||
+        (holding.bondSource !== undefined && JSON.stringify(validBondSource(holding.bondSource, holding)) !== JSON.stringify(holding.bondSource)))) {
         result.recoveryNeeded = true;
         result.recoveryEntries.push(entry);
       }

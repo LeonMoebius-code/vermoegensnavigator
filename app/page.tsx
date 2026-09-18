@@ -1,4 +1,5 @@
 "use client";
+import { BOND_MODEL_NOTICE, BOND_PROFILE_NOTICE } from "./bond-v2";
 
 import {
   ChangeEvent,
@@ -6058,14 +6059,14 @@ function BondAnalysis({ depot, plan, depotAccounts }: { depot: DepotHolding[]; p
   const ladderMax = Math.max(1, ...analysis.ladder.map((item) => item.nominal));
   return <section className="panel analysis-panel">
     <div className="analysis-heading"><div><p className="eyebrow">RENTENPORTFOLIO</p><h2>Zins &amp; Laufzeiten</h2></div><AnalysisToggle value={state} onChange={setState} label="Analysezustand" options={[{ value: "ist", label: "IST" }, { value: "plan", label: "PLAN" }]} /></div>
-    <p className="analysis-context">Restlaufzeiten verwenden den jeweiligen gültigen Positionsstichtag. Ohne eigenen Datenstand gilt als Fallback {analysis.valuationDate.toLocaleDateString("de-DE")}.</p>
+    <p className="analysis-context">Restlaufzeiten verwenden den jeweiligen gültigen Positionsstichtag. Ohne eigenen Datenstand gilt nur für die Restlaufzeit der heutige Kalendertag als sichtbarer Fallback; eine YTM wird damit nicht berechnet.</p>
     <div className="analysis-kpis six">
       <article><span>Direkte Rentenwerte</span><b>{euro.format(analysis.directValue)}</b><small>{totalValue ? percent.format(analysis.directValue / totalValue * 100) : "0"} % des Depots</small></article>
       <article><span>Mit gültiger Fälligkeit</span><b>{percent.format(analysis.maturityCoverage * 100)} %</b><small>der direkten Rentenwerte</small></article>
-      <article><span>Ø modellierte YTM</span><b>{analysis.averageModeledYtm === null ? "–" : `${depotDecimal.format(analysis.averageModeledYtm * 100)} %`}</b><small>marktwertgewichtet · {percent.format(analysis.ytmCoverage * 100)} % Abdeckung des direkten Anleihebestands</small></article>
-      <article><span>Ø laufende Verzinsung</span><b>{analysis.averageCurrentYield === null ? "–" : `${depotDecimal.format(analysis.averageCurrentYield * 100)} %`}</b><small>marktwertgewichtet · {percent.format(analysis.currentYieldCoverage * 100)} % Abdeckung des direkten Anleihebestands</small></article>
-      <article><span>Modified Duration</span><b>{analysis.portfolioModified === null ? "–" : `${depotDecimal.format(analysis.portfolioModified)} Jahre`}</b><small>{percent.format(analysis.calculableCoverage * 100)} % Abdeckung des direkten Anleihebestands</small></article>
-      <article><span>Portfolio-DV01</span><b>{analysis.calculableValue ? euro.format(analysis.portfolioDv01) : "–"}</b><small>berechenbarer Teilbestand</small></article>
+      <article><span>Ø modellierte YTM</span><b>{analysis.averageModeledYtm === null ? "–" : `${depotDecimal.format(analysis.averageModeledYtm * 100)} %`}</b><small>marktwertgewichtet · {analysis.ytmCoverage === null ? "EUR-Abdeckung nicht ermittelbar" : `${percent.format(analysis.ytmCoverage * 100)} % Abdeckung des direkten Anleihebestands`}</small></article>
+      <article><span>Ø laufende Verzinsung</span><b>{analysis.averageCurrentYield === null ? "–" : `${depotDecimal.format(analysis.averageCurrentYield * 100)} %`}</b><small>marktwertgewichtet · {analysis.currentYieldCoverage === null ? "EUR-Abdeckung nicht ermittelbar" : `${percent.format(analysis.currentYieldCoverage * 100)} % Abdeckung des direkten Anleihebestands`}</small></article>
+      <article><span>Modified Duration</span><b>{analysis.portfolioModified === null ? "–" : `${depotDecimal.format(analysis.portfolioModified)} Jahre`}</b><small>{analysis.calculableCoverage === null ? "EUR-Abdeckung nicht ermittelbar" : `${percent.format(analysis.calculableCoverage * 100)} % Abdeckung des direkten Anleihebestands`}</small></article>
+      <article><span>Portfolio-DV01</span><b>{analysis.portfolioDv01 !== null ? euro.format(analysis.portfolioDv01) : "–"}</b><small>berechenbarer Teilbestand</small></article>
     </div>
     <div className="analysis-section">
       <h3>Fälligkeitsleiter</h3>
@@ -6073,13 +6074,13 @@ function BondAnalysis({ depot, plan, depotAccounts }: { depot: DepotHolding[]; p
     </div>
     <div className="analysis-section">
       <h3>Direkte Rentenpositionen</h3>
-      <div className="analysis-table-wrap"><table className="analysis-table"><thead><tr><th>Depot</th><th>Position</th><th>Typ</th><th>Nominal</th><th>Coupon</th><th>Fälligkeit</th><th>Restlaufzeit</th><th>Kurs</th><th>Laufende Verzinsung auf aktuellen Kurs</th><th>Modellierte YTM</th><th>Macaulay Duration</th><th>Modified Duration</th><th>DV01</th></tr></thead><tbody>{directRows.map((row) => <tr key={row.position.id}><td>{depotAccounts.find((account) => account.id === row.position.depotId)?.name || "Neukauf"}</td><td><b>{row.position.name}</b>{row.exclusionReason && <small>{row.exclusionReason}</small>}</td><td>{row.position.classification.sub}</td><td>{Number.isFinite(row.position.nominalOrUnits) ? depotDecimal.format(Number(row.position.nominalOrUnits)) : "–"}</td><td>{Number.isFinite(row.position.coupon) ? `${depotDecimal.format(Number(row.position.coupon))} %` : "–"}</td><td>{formatDepotDate(row.position.maturity) || "–"}</td><td>{row.remainingYears === null ? "–" : row.remainingYears <= 0 ? "fällig / Daten prüfen" : `${depotDecimal.format(row.remainingYears)} Jahre`}</td><td>{Number.isFinite(row.position.currentPrice) ? depotDecimal.format(Number(row.position.currentPrice)) : "–"}</td><td>{row.currentYield === null ? "–" : `${depotDecimal.format(row.currentYield * 100)} %`}</td><td>{row.ytm === null ? "–" : `${depotDecimal.format(row.ytm * 100)} %`}</td><td>{row.macaulay === null ? "–" : `${depotDecimal.format(row.macaulay)} Jahre`}</td><td>{row.modified === null ? "–" : `${depotDecimal.format(row.modified)} Jahre`}</td><td>{row.dv01 === null ? "–" : euro.format(row.dv01)}</td></tr>)}</tbody></table></div>
+      <div className="analysis-table-wrap"><table className="analysis-table"><thead><tr><th>Depot</th><th>Position</th><th>Typ</th><th>Nominal</th><th>Coupon</th><th>Fälligkeit</th><th>Restlaufzeit</th><th>Kurs</th><th>Laufende Verzinsung auf aktuellen Kurs</th><th>Modellierte YTM</th><th>Macaulay Duration</th><th>Modified Duration</th><th>DV01</th></tr></thead><tbody>{directRows.map((row) => <tr key={row.position.id}><td>{depotAccounts.find((account) => account.id === row.position.depotId)?.name || "Neukauf"}</td><td><b>{row.position.name}</b>{row.exclusionReason && <small>{row.exclusionReason}</small>}<small>{row.metrics.warnings.filter((text) => text.includes("rundungssensitiv") || text.includes("nicht prüfbar") || text.includes("Fallback")).join(" · ")}</small></td><td>{row.position.classification.sub}</td><td>{Number.isFinite(row.position.nominalOrUnits) ? depotDecimal.format(Number(row.position.nominalOrUnits)) : "–"}</td><td>{Number.isFinite(row.position.coupon) ? `${depotDecimal.format(Number(row.position.coupon))} %` : "–"}</td><td>{formatDepotDate(row.position.maturity) || "–"}</td><td>{row.remainingYears === null ? "–" : row.remainingYears <= 0 ? "fällig / Daten prüfen" : `${depotDecimal.format(row.remainingYears)} Jahre`}</td><td>{Number.isFinite(row.position.currentPrice) ? depotDecimal.format(Number(row.position.currentPrice)) : "–"}</td><td>{row.currentYield === null ? "–" : `${depotDecimal.format(row.currentYield * 100)} %`}</td><td>{row.ytm === null ? "–" : `${depotDecimal.format(row.ytm * 100)} %`}</td><td>{row.macaulay === null ? "–" : `${depotDecimal.format(row.macaulay)} Jahre`}</td><td>{row.modified === null ? "–" : `${depotDecimal.format(row.modified)} Jahre`}</td><td>{row.dv01 === null ? "–" : `${row.dv01 > 0 && row.dv01 < 0.01 ? "< 0,01" : depotDecimal.format(row.dv01)} ${row.metrics.dv01Currency || ""}`}</td></tr>)}</tbody></table></div>
     </div>
     <div className="analysis-grid">
       <div className="analysis-section"><h3>Portfolio-Sensitivität</h3><div className="sensitivity-value"><span>Marktwertgewichtete Modified Duration</span><b>{analysis.portfolioModified === null ? "–" : `${depotDecimal.format(analysis.portfolioModified)} Jahre`}</b></div><p className="analysis-note">DV01 ist der näherungsweise Wertgewinn/-verlust des berechenbaren Rentenbestands bei einer parallelen Renditeänderung um einen Basispunkt.</p></div>
-      <div className="analysis-section"><h3>Zinsszenarien</h3><div className="scenario-list">{analysis.scenarios.map((scenario) => <span key={scenario.deltaYield}><b>Rendite {scenario.deltaYield > 0 ? "+" : ""}{depotDecimal.format(scenario.deltaYield * 100)} %-Pkt.</b><em className={scenario.effect < 0 ? "negative" : "positive"}>{scenario.effect >= 0 ? "+" : ""}{euro.format(scenario.effect)}</em></span>)}</div><p className="analysis-note">Lineare Durationsnäherung. Größere Zinsbewegungen, Spreadänderungen, Bonitätsänderungen und nichtlineare Effekte werden nicht vollständig abgebildet.</p></div>
+      <div className="analysis-section"><h3>Zinsszenarien</h3><div className="scenario-list">{analysis.scenarios.map((scenario) => <span key={scenario.deltaYield}><b>Rendite {scenario.deltaYield > 0 ? "+" : ""}{depotDecimal.format(scenario.deltaYield * 100)} %-Pkt.</b><em className={scenario.effect !== null && scenario.effect < 0 ? "negative" : "positive"}>{scenario.effect === null ? "nicht berechenbar" : `${scenario.effect >= 0 ? "+" : ""}${euro.format(scenario.effect)}`}</em></span>)}</div><p className="analysis-note">Lineare Durationsnäherung. Größere Zinsbewegungen, Spreadänderungen, Bonitätsänderungen und nichtlineare Effekte werden nicht vollständig abgebildet.</p></div>
     </div>
-    <div className="analysis-section"><h3>Annahmen und ausgeschlossene Positionen</h3><p className="analysis-note">Modellierte YTM: Rückzahlung zu 100, jährliche Couponzahlung, aktueller Kurs als Clean-Preis in % des Nominals, keine Steuern, Transaktionskosten, Ausfälle oder exakte Stückzinstageszählung; vereinfachter Cashflow-Zeitplan anhand der Restlaufzeit.</p><div className="exclusion-list">{analysis.rows.filter((row) => row.exclusionReason).map((row) => <span key={row.position.id}><b>{row.position.name}</b>{row.exclusionReason}</span>)}</div></div>
+    <div className="analysis-section"><h3>Annahmen und ausgeschlossene Positionen</h3><p className="analysis-note">{BOND_MODEL_NOTICE} {BOND_PROFILE_NOTICE}</p><div className="exclusion-list">{analysis.rows.filter((row) => row.exclusionReason).map((row) => <span key={row.position.id}><b>{row.position.name}</b>{row.exclusionReason}</span>)}</div></div>
   </section>;
 }
 
@@ -6789,13 +6790,14 @@ export function ExportCenter({
         workbook,
         XLSX.utils.aoa_to_sheet([
           ["Zins & Laufzeiten – IST-Bestand"],
+          [BOND_MODEL_NOTICE], [BOND_PROFILE_NOTICE],
           ["Direkte Rentenwerte", exportBondAnalysis.directValue],
           ["Ø modellierte YTM", exportBondAnalysis.averageModeledYtm ?? "nicht berechenbar"],
-          ["YTM-Abdeckung des direkten Anleihebestands", exportBondAnalysis.ytmCoverage],
+          ["YTM-Abdeckung des direkten Anleihebestands", exportBondAnalysis.ytmCoverage ?? "nicht ermittelbar"],
           ["Ø laufende Verzinsung", exportBondAnalysis.averageCurrentYield ?? "nicht berechenbar"],
-          ["Current-Yield-Abdeckung des direkten Anleihebestands", exportBondAnalysis.currentYieldCoverage],
+          ["Current-Yield-Abdeckung des direkten Anleihebestands", exportBondAnalysis.currentYieldCoverage ?? "nicht ermittelbar"],
           ["Marktwertgewichtete Modified Duration", exportBondAnalysis.portfolioModified ?? "nicht berechenbar"],
-          ["Portfolio-DV01", exportBondAnalysis.calculableValue ? exportBondAnalysis.portfolioDv01 : "nicht berechenbar"],
+          ["Portfolio-DV01", exportBondAnalysis.portfolioDv01 ?? "nicht berechenbar"],
         ]),
         "Zins & Laufzeiten",
       );
@@ -7035,10 +7037,10 @@ export function ExportCenter({
           })}</div>
         </section>}
         {exportBondAnalysis.directValue > 0 && <section className="print-overview">
-          <h2>Zins &amp; Laufzeiten · IST-Bestand</h2>
+          <h2>Zins &amp; Laufzeiten · IST-Bestand</h2><p>{BOND_MODEL_NOTICE} {BOND_PROFILE_NOTICE}</p>
           <div>
-            <p><span>Ø modellierte YTM</span><strong>{exportBondAnalysis.averageModeledYtm === null ? "Nicht berechenbar" : `${depotDecimal.format(exportBondAnalysis.averageModeledYtm * 100)} %`}</strong><small>marktwertgewichtet · {percent.format(exportBondAnalysis.ytmCoverage * 100)} % Abdeckung des direkten Anleihebestands</small></p>
-            <p><span>Ø laufende Verzinsung</span><strong>{exportBondAnalysis.averageCurrentYield === null ? "Nicht berechenbar" : `${depotDecimal.format(exportBondAnalysis.averageCurrentYield * 100)} %`}</strong><small>marktwertgewichtet · {percent.format(exportBondAnalysis.currentYieldCoverage * 100)} % Abdeckung des direkten Anleihebestands</small></p>
+            <p><span>Ø modellierte YTM</span><strong>{exportBondAnalysis.averageModeledYtm === null ? "Nicht berechenbar" : `${depotDecimal.format(exportBondAnalysis.averageModeledYtm * 100)} %`}</strong><small>marktwertgewichtet · {exportBondAnalysis.ytmCoverage === null ? "EUR-Abdeckung nicht ermittelbar" : `${percent.format(exportBondAnalysis.ytmCoverage * 100)} % Abdeckung des direkten Anleihebestands`}</small></p>
+            <p><span>Ø laufende Verzinsung</span><strong>{exportBondAnalysis.averageCurrentYield === null ? "Nicht berechenbar" : `${depotDecimal.format(exportBondAnalysis.averageCurrentYield * 100)} %`}</strong><small>marktwertgewichtet · {exportBondAnalysis.currentYieldCoverage === null ? "EUR-Abdeckung nicht ermittelbar" : `${percent.format(exportBondAnalysis.currentYieldCoverage * 100)} % Abdeckung des direkten Anleihebestands`}</small></p>
           </div>
         </section>}
         <section className="print-overview">
