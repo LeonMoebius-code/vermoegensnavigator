@@ -291,6 +291,7 @@ CP1–CP4 sind getrennte Implementierungscheckpoint-Arbeiten. CP4 umfasst Gesamt
 - Modellportfolio nur auf einen vorhandenen positiven strategischen Topf. Keine Reserve-/Bedarfsersatzzuordnung.
 - Bond-V2 nach §6.3; Schema 11 nach §12. Genau eine optionale Einbeziehungscheckbox pro physischer Holding, keine Vertragseditoren/Bestätigungen/Overrides.
 - CP4 korrigiert eng begrenzt explizite `Aktienanleihe`-Signale (strukturierte Produkte, keine Standardbondrechnung) und priorisiert explizite Mischfonds-/Multi-Asset-Signale vor breiten Aktien-/Renten-Segmenten. Die tatsächlichen Klassifikationscodes und die wirtschaftliche Durchschau der realen Quelle bleiben fachlich zu prüfen.
+- Die [gezielte wirtschaftliche Nachprüfung nach CP4](V0182_Anlageklassifikation_Nachpruefung.md) belegt und korrigiert zusätzlich die pauschale CSV-Anlageklassenzuordnung unbekannter Mischfonds/strukturierter Produkte. Bekannte Produktmixe behalten Vorrang; ohne belegte Quoten bleibt der Betrag separat ungeklärt. Produktart, Quellsegment und wirtschaftliche Anlageklasse sind getrennt. Gespeicherte/manuelle Altzuordnungen werden nicht automatisch überschrieben.
 - Neu gemeldete agree21-/Original-CSV-Erkenntnisse zu Preisen, Stückzinsen und Währungen sind **noch kein freigegebener Quellvertrag**. Kein Freischalten von EUR-Aggregaten durch Zahlenpassung und keine zusätzliche Performance-CSV.
 
 ---

@@ -3,6 +3,7 @@ import { ParsedDepotHolding } from "./case-model";
 import { AssetClass, assetClasses, houseProducts } from "./investment-data";
 import { depotRegionForCountry } from "./depot-country-codes";
 import { structureOverviewSource } from "./bond-source";
+import { classifyDepotProduct } from "./depot-analysis";
 
 export type DepotCsvFormat = "navigator" | "structure-overview";
 
@@ -111,8 +112,13 @@ function normalizedDate(raw: string, field: string, issues: ImportIssue[]) {
   return value;
 }
 
-function mapAssetClass(segment: string, type: string): AssetClass | null {
-  const source = `${segment} ${type}`.toLowerCase();
+function mapAssetClass(holding: Partial<ParsedDepotHolding>): AssetClass | null {
+  // A product kind / agree21 segment is not an economic look-through.
+  // Reuse the product classifier's explicit mixed-fund and structured-product vetoes.
+  const productKind = classifyDepotProduct(holding).main;
+  if (productKind === "Mischfonds / Multi-Asset" || productKind === "Strukturierte Produkte")
+    return null;
+  const source = `${holding.segment} ${holding.investmentMedium} ${holding.securityType}`.toLowerCase();
   if (/liquid|tagesgeld|termingeld|kontoguthaben/.test(source))
     return "Liquidität";
   if (/aktien|equity/.test(source)) return "Substanzwerte";
@@ -211,15 +217,20 @@ export function parseDepotCsv(buffer: ArrayBuffer): DepotCsvResult {
     const segmentValue = valueAt(row, segment);
     const mediumValue = valueAt(row, investmentMedium);
     const securityTypeValue = valueAt(row, securityType);
-    const mapped = mapAssetClass(
-      segmentValue,
-      `${mediumValue} ${securityTypeValue}`,
-    );
+    const mapped = mapAssetClass({
+      name: valueAt(row, name),
+      segment: segmentValue,
+      investmentMedium: mediumValue,
+      securityType: securityTypeValue,
+      certificateClass: valueAt(row, certificateClass),
+    });
     const matchedClass = matched?.assetMix
       ? (Object.entries(matched.assetMix).sort((a, b) => b[1] - a[1])[0]?.[0] as AssetClass)
       : null;
-    const assetClass = mapped || matchedClass || "Geldwerte";
-    const classificationStatus = mapped ? "mapped" : matchedClass ? "matched" : "unresolved";
+    // assetClass is only a representative class for a matched product; downstream
+    // amounts continue to use its complete documented assetMix via productId.
+    const assetClass = matchedClass || mapped || "Geldwerte";
+    const classificationStatus = matchedClass ? "matched" : mapped ? "mapped" : "unresolved";
     const parsedHolding = {
       id: uid(),
       productId: matched?.id,

@@ -4828,7 +4828,7 @@ function CapitalPotStructure({
   );
 }
 
-function WealthHouse({
+export function WealthHouse({
   plan,
   plans = [plan],
   depot,
@@ -4874,6 +4874,8 @@ function WealthHouse({
     (sum, value) => sum + value,
     0,
   );
+  const combinedUnresolved = breakdown.unresolved + (includeInTotal ? depotBreakdown.unresolved : 0);
+  const combinedTotal = combinedKnown + combinedUnresolved;
   const colors: Record<AssetClass, string> = {
     Liquidität: "#96bee6",
     Geldwerte: "#327dc8",
@@ -4966,11 +4968,11 @@ function WealthHouse({
     0,
   );
   const shownTotal =
-    shownKnown + (context === "depot" ? shown.unresolved : 0);
+    shownKnown + shown.unresolved;
   const istTotal =
-    istKnown + (context === "depot" ? istSnapshot.unresolved : 0);
+    istKnown + istSnapshot.unresolved;
   const comparisonTotal =
-    comparisonKnown + (context === "depot" ? comparison.unresolved : 0);
+    comparisonKnown + comparison.unresolved;
   const holdingContributors = (
     holdings: DepotHolding[],
     asset: AssetClass,
@@ -5246,8 +5248,8 @@ function WealthHouse({
                   {euro.format(combinedAmounts[name])}
                   <small>
                     Quote {percent.format(
-                      combinedKnown
-                        ? (combinedAmounts[name] / combinedKnown) * 100
+                      combinedTotal
+                        ? (combinedAmounts[name] / combinedTotal) * 100
                         : 0,
                     )} %
                   </small>
@@ -5256,14 +5258,14 @@ function WealthHouse({
             ))}
             <div className="unresolved-row">
               <strong>Nicht durchgeschaut</strong>
-              <span>–</span>
+              <span>{euro.format(includeInTotal ? depotBreakdown.unresolved : 0)}</span>
               <span>{euro.format(breakdown.unresolved)}</span>
               <b>
-                {euro.format(breakdown.unresolved)}
+                {euro.format(combinedUnresolved)}
                 <small>
                   Quote {percent.format(
-                    combinedKnown
-                      ? (breakdown.unresolved / combinedKnown) * 100
+                    combinedTotal
+                      ? (combinedUnresolved / combinedTotal) * 100
                       : 0,
                   )} %
                 </small>
@@ -6507,6 +6509,15 @@ export function ExportCenter({
   const advisor = advisorFor(item.advisorId);
   const exportRiskAssessment = completeRiskAssessment(item.advisory.riskAssessmentV2);
   const exportBondData = buildBondIstExportData(item.depot, preferredPlan, item.depotAccounts);
+  const economicAssetLabel = (entry: DepotHolding) => {
+    const mix = entry.productId ? productAssetMix(entry.productId) : null;
+    if (mix) {
+      const classes = assetClasses.filter((asset) => mix[asset] > 0);
+      return classes.length === 1 ? classes[0]
+        : classes.map((asset) => `${asset}: ${percent.format(mix[asset])} %`).join(" · ");
+    }
+    return entry.classificationStatus === "unresolved" ? "Nicht durchgeschaut" : entry.assetClass;
+  };
   const exportTargetLabel = (entry: SavingsPlan): string => {
     if (!entry.targetRef) return "";
     if (entry.targetRef.kind === "savingsGoal") {
@@ -6724,7 +6735,7 @@ export function ExportCenter({
           Dynamischer_Depotanteil: depotExport.totalMarketValue
             ? entry.value / depotExport.totalMarketValue
             : 0,
-          Anlageklasse: entry.assetClass,
+          Anlageklasse: economicAssetLabel(entry),
           Region: entry.region,
           Verkauf: entry.plannedSale,
           WKN: entry.wkn || "",
