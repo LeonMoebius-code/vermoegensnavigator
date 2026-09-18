@@ -60,6 +60,9 @@ jobs:
       - name: CP3 Bond-Aggregation testen
         run: npm run test:cp3
 
+      - name: CP4 Gesamtpfade und Exporte testen
+        run: npm run test:cp4
+
       - name: Typen prüfen
         run: npm run typecheck
 

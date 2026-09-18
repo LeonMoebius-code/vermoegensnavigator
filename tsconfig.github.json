@@ -29,6 +29,7 @@
     "scripts/verify-cp1.tsx",
     "scripts/verify-modelportfolio.ts",
     "scripts/verify-bond-v2.ts",
-    "scripts/verify-cp3.tsx"
+    "scripts/verify-cp3.tsx",
+    "scripts/verify-cp4.tsx"
   ]
 }

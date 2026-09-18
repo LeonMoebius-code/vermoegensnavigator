@@ -8,6 +8,8 @@ Zielversion nach V0.18 Multi Depot und V0.19 freiem Planvergleich: **V0.20.0**
 
 Erwartetes Persistenzschema: **11**
 
+> CP4-Konflikthinweis vom 18.09.2026: Die historische Planung in diesem Dokument (insbesondere § Schema/Migration: V0.18/V0.19 Schema 10, V0.20 Schema 11) ist durch V0.18.2 überholt. Schema **11** ist bereits für Bond-V2-Quellherkunft und Ausschluss belegt. Vor einer späteren V0.20-Implementierung müssen Zielnummer und Migrationspfad vom dann aktuellen Schema aus neu festgelegt werden; Schema 11 darf nicht mit einer zweiten Bedeutung überschrieben werden. Diese Notiz ändert keine Auszahlplan-Fachlogik und implementiert keine Folgefunktion.
+
 Dieses Dokument beschreibt die fachlich verbindliche Zielkonzeption für den operativen Auszahlplan und die jährliche prozentuale Dynamik von Spar- und Auszahlplänen. Die spätere Ruhestandsplanung ist davon fachlich getrennt und darf keinen zweiten parallelen Auszahlplan speichern.
 
 ---

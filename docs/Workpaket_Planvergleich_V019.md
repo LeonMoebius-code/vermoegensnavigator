@@ -10,6 +10,8 @@ Zielversion: **0.19.0**
 
 Erwartetes Persistenzschema nach V0.18: **10**
 
+> CP4-Hinweis vom 18.09.2026: Diese Ausgangsannahme ist historisch. V0.18.2 verwendet bereits Schema **11** für Bond-V2-Herkunft und Ausschluss. V0.19 muss diese Felder und Migration erhalten und vom dann aktuellen Schema ausgehen. Keine Änderung der Vergleichsfachlichkeit und keine Umsetzung dieses Folgepakets durch CP4; Start erst nach separater V0.18.2-Abnahme.
+
 Für V0.19 ist **keine weitere Schemaerhöhung vorgesehen**, sofern die technische Umsetzung keinen unerwarteten zwingenden Grund offenlegt. Die Vergleichsauswahl ist UI-Zustand und keine fachliche Persistenz.
 
 ---

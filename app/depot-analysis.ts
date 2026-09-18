@@ -58,6 +58,9 @@ function classifyText(text: string, confidence: "source" | "derived"):
   if (text === "geldmarkt")
     return { main: "Renten", sub: "Geldmarktfonds", direct: false, confidence };
   const isFund = includesAny(text, ["fonds", "fund", "etf", "sicav"]);
+  // An explicit multi-asset label takes precedence over broad equity/bond segments.
+  if (includesAny(text, ["mischfonds", "multi-asset", "multi asset", "balanced fund"]))
+    return { main: "Mischfonds / Multi-Asset", sub: "Mischfonds / Multi-Asset", direct: false, confidence };
   if (isFund && includesAny(text, ["geldmarkt", "money market"]))
     return { main: "Renten", sub: "Geldmarktfonds", direct: false, confidence };
   if (isFund && includesAny(text, ["renten", "anleihe", "bond", "credit"]))
@@ -66,13 +69,11 @@ function classifyText(text: string, confidence: "source" | "derived"):
     return { main: "Renten", sub: "Rentenfonds", direct: false, confidence };
   if (isFund && includesAny(text, ["aktien", "equity", "share"]))
     return { main: "Aktien", sub: "Aktienfonds / Aktien-ETF", direct: false, confidence };
-  if (includesAny(text, ["mischfonds", "multi-asset", "multi asset", "balanced fund"]))
-    return { main: "Mischfonds / Multi-Asset", sub: "Mischfonds / Multi-Asset", direct: false, confidence };
   if (includesAny(text, ["vermögensverwaltung", "vermoegensverwaltung"]))
     return { main: "Mischfonds / Multi-Asset", sub: "Vermögensverwaltung", direct: false, confidence };
   if (isFund && includesAny(text, ["immobil", "real estate"]))
     return { main: "Immobilien / Sachwerte", sub: "Immobilienfonds", direct: false, confidence };
-  if (includesAny(text, ["zertifikat", "certificate", "strukturiert"]))
+  if (includesAny(text, ["zertifikat", "certificate", "strukturiert", "aktienanleihe"]))
     return { main: "Strukturierte Produkte", sub: "Zertifikate / strukturierte Produkte", direct: false, confidence };
   if (includesAny(text, ["rohstoff", "edelmetall", "commodity", "gold", "silber"]))
     return { main: "Alternative Anlagen", sub: "Rohstoffe / Edelmetalle", direct: true, confidence };
@@ -106,7 +107,7 @@ export function classifyDepotProduct(
     // Names can veto standard-bond eligibility, never invent contractual terms.
     if (classification.bondKind === "fixed") {
       const name = normalized(source.name);
-      if (/\b(floater|floating|step-up|step up|stufenzins\w*|callable|convertible|wandelanleihe\w*|kündbar\w*|kuendbar\w*|perpetual|nachrang\w*|hybrid\w*|stripped|zertifikat\w*|certificate\w*)\b/.test(name)) {
+      if (/\b(floater|floating|step-up|step up|stufenzins\w*|callable|convertible|wandelanleihe\w*|kündbar\w*|kuendbar\w*|perpetual|nachrang\w*|hybrid\w*|stripped|zertifikat\w*|certificate\w*|aktienanleihe\w*)\b/.test(name)) {
         const restricted = classifyText(`${name} ${sourceText}`, "source");
         if (restricted?.main === "Strukturierte Produkte") return restricted;
         if (restricted?.bondKind && restricted.bondKind !== "fixed") return restricted;

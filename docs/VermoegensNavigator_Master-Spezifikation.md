@@ -2,9 +2,10 @@
 
 > **Kanonischer Produkt- und Entscheidungsstand**
 >
-> Letzte fachliche Aktualisierung: **16.09.2026**
+> Letzte fachliche Aktualisierung: **18.09.2026 (CP4)**
 > Aktuell veröffentlichte Version: **V0.18.1**
-> Codebasis: **GitHub `main`**
+> Implementierter Feature-Stand: **V0.18.2 / Schema 11**, Branch `work/v0182-bond-hardening`; fachliche Abnahme, Merge und Veröffentlichung noch ausstehend.
+> Veröffentlichte Codebasis: **GitHub `main`**
 > Zielumgebung: **Desktop-Prototyp**
 > Öffentliche Testversion: GitHub Pages
 
@@ -34,6 +35,8 @@ Bei Widersprüchen gilt künftig:
 4. ältere Chats und alte Work-Prompts nur als historische Referenz
 
 Nach einem abgeschlossenen Brainstorming-Block oder Work-Paket wird diese Datei aktualisiert. Nicht jede Zwischenidee wird sofort eingetragen.
+
+Für V0.18.2 gilt der [verbindliche Zero-Touch-Nachtrag](V0182_ZeroTouch_CSV_Only_Verbindlicher_Nachtrag.md) vor den kompatiblen Preflight-/Bond-V2-/Arbeitspaket-Regeln. Der unten dokumentierte Feature-Stand ersetzt historische V1-Rechenannahmen, behauptet aber weder eine Veröffentlichung noch einen bestätigten realen CSV-Quellvertrag.
 
 ---
 
@@ -277,6 +280,18 @@ V0.18.1 härtet den bestehenden Multi-Depot-Lifecycle, korrigiert die Semantik d
 - Bei konkreten physischen Holdings ist `advisory.depotValue` stets deren Gesamtmarktwert. Der erste konkrete Import setzt auch über den Replacement-Weg einen unberührten Plan auf `afterSales`.
 - `Aktuellen Plan ergänzen` verwendet den strategischen Restbetrag. `Aktuellen Plan ersetzen` und `Als neue Variante` ersetzen ausschließlich den strategischen Teil und erhalten gültige nicht-strategische Planung und Umsetzungsbezüge.
 - `Zins & Laufzeiten` zeigt marktwertgewichtet die **Ø modellierte YTM** und die **Ø laufende Verzinsung** mit jeweils eigener Coverage des direkten Anleihebestands; Excel- und Druckexport übernehmen beide Kennzahlen samt Coverage.
+
+## 3.6 V0.18.2 – implementierter Feature-Stand, fachliche Abnahme offen
+
+CP1–CP4 sind getrennte Implementierungscheckpoint-Arbeiten. CP4 umfasst Gesamtpfade, tatsächliche XLSX-/JSON-Dateien, Druck-HTML, Browserbedienung, Schema-Migration und Regressionen. Der [CP4-Nachweis](V0182_CP4_Gesamtabnahme.md) trennt technische Resultate, offene Quellvoraussetzungen und Komfortarbeiten. Dies ist keine automatische Merge-/Releasefreigabe.
+
+- Depotwert bei Holdings aus deren Marktwerten abgeleitet, Eingabe gesperrt; Save/JSON/Restore/Export bleiben konsistent. Ohne Holdings bleibt die manuelle Gesamterfassung möglich.
+- Depotbezogenes konfliktfreies 1:1-Replacement steuert Verkauf, Planreferenzen und Bond-Ausschluss gemeinsam. Gleicher Name oder wiederverwendete ID überstimmen keine widersprechende WKN. Ungültige Pflichtmarktwerte brechen den Import vor Bestandsänderung ab.
+- Strenge Zahlen-/Datumsvalidierung; explizite Quellnull und ungültiger bzw. unbelegter Altcoupon getrennt. Beschädigte Fälle dürfen gesunde Nachbarfälle nicht zerstören; Originale bleiben recoverable.
+- Modellportfolio nur auf einen vorhandenen positiven strategischen Topf. Keine Reserve-/Bedarfsersatzzuordnung.
+- Bond-V2 nach §6.3; Schema 11 nach §12. Genau eine optionale Einbeziehungscheckbox pro physischer Holding, keine Vertragseditoren/Bestätigungen/Overrides.
+- CP4 korrigiert eng begrenzt explizite `Aktienanleihe`-Signale (strukturierte Produkte, keine Standardbondrechnung) und priorisiert explizite Mischfonds-/Multi-Asset-Signale vor breiten Aktien-/Renten-Segmenten. Die tatsächlichen Klassifikationscodes und die wirtschaftliche Durchschau der realen Quelle bleiben fachlich zu prüfen.
+- Neu gemeldete agree21-/Original-CSV-Erkenntnisse zu Preisen, Stückzinsen und Währungen sind **noch kein freigegebener Quellvertrag**. Kein Freischalten von EUR-Aggregaten durch Zahlenpassung und keine zusätzliche Performance-CSV.
 
 ---
 
@@ -1058,7 +1073,23 @@ Umgesetzte Kennzahlen:
 - Coverage-Quote anzeigen: welcher Anteil des Rentenbestands ist tatsächlich berechenbar?
 - tatsächliche Anleihefälligkeit, empfohlener Produktanlagehorizont und Kundenbedarfstermin bleiben getrennte Größen
 
-Die modellierte YTM verwendet einen vereinfachten, für YTM und Duration identischen jährlichen Cashflow-Zeitplan, Rückzahlung zu 100 und den aktuellen Kurs als Clean-Preis. Steuern, Kosten, Ausfall, exakte Coupontermine und Stückzinstageszählung werden nicht modelliert. Floater, Stufenzinsanleihen ohne Couponpfad, Fonds, fällige Positionen und unplausible Datensätze bleiben mit Ausschlussgrund außerhalb des berechenbaren Subsets. DV01 und die vier Zinsszenarien beruhen auf der Modified-Duration-Näherung.
+### Historische V1-Annahme bis V0.18.1 – durch V2 ersetzt
+
+Die ursprüngliche 3B-Implementierung verwendete den Clean-Kurs ohne Stückzinsen als PV-Basis und `ceil(Restlaufzeit)` als Couponanzahl eines vereinfachten jährlichen Plans mit Tilgung 100. Dies dokumentiert die damalige Annahme, **nicht den aktuellen V2-Standard**. Historische Sollwerte 75,6 % Coverage, 6,87 Modified und 151,61 EUR DV01 sind keine V2-Referenzen. Unveränderte Produkt-/Marktwertregressionen (423.952,54 Gesamtwert, 100 % Produktartenabdeckung) bleiben erhalten. Historische 3B-Dokumente werden nicht rückwirkend umgeschrieben.
+
+### Verbindlicher Bond-V2-Stand auf dem Feature-Branch
+
+Ein Rechenpfad verwendet eindeutig ableitbaren **Dirty-Kurs pro100**, datierte hypothetische jährliche Coupons am rückwärts vom originalen Fälligkeitstag abgeleiteten Anker (Monatsendregel), Tilgung 100 und ausschließlich Zahlungen nach dem Berichtsstichtag. Effektive Jahresrendite `y > -1`, Exponent tatsächliche Tage/365; Solver mit Endlichkeits-, Intervall- und PV-Residualprüfung. Macaulay, Modified und DV01 stammen aus demselben Zahlungsplan. Kein Street-Yield-, Ausfall-, Credit-, FX- oder Konvexitätsmodell.
+
+Dirty-Gesamtwert ist bei belegten Einheiten primär; Clean plus korrekt umgerechnete absolute Stückzinsen dient als Kontrolle oder eindeutige Ersatzbasis. Fehlende AI ist keine Null. Bei mehreren möglichen Einheiten ist nur ein invariantes Ergebnis zulässig. Vergleichbare widersprüchliche Preiswege sperren die betroffene Rechnung. Der jährliche AI-Widerspruchstest benötigt eindeutige AI-Einheiten und belegte Quantisierung; sonst sichtbar „Kuponmodell nicht prüfbar“. Kurzläufer bleiben als rundungssensitiv gekennzeichnet.
+
+Restlaufzeit, laufende Verzinsung, lokale YTM/Duration und lokale DV01 haben getrennte Voraussetzungen. Quellenprofil `structure-overview/v1`, Parser 2, hält feldbezogene Validität und Herkunft fest. Prozentkurs, Face Value und absolute AI sind Profilannahmen; **Berichtswährung, FX-Richtung, Stückzinswährung und Quantisierung bleiben unbestätigt**. Ohne vergleichbare EUR-Basis keine EUR-Aggregate, ohne vollständigen belegten Nenner keine volle EUR-Coverage. Lokale Kennzahlen, währungsgetrennte Nominalleiter und allgemeine Depotanalyse bleiben bei ausreichenden jeweiligen Eingangsdaten nutzbar. Allgemeine importierte Marktwerte werden deshalb nicht gelöscht; ihre bestehende Anzeige ist kein Nachweis des realen Währungsvertrags.
+
+Eigene Coverages für YTM, laufende Verzinsung, Modified, DV01 sowie Fälligkeitsdatum und nominalfähige Leiter. Der Coverage-Nenner enthält alle direkten Bonds; gültig einbezogen, manuell ausgeschlossen und sonst nicht berechenbar sind disjunkt. Gewichtete Durchschnitte verwenden nur das jeweilige gültige gewählte vergleichbare Subset. Ø YTM ist keine Portfolio-IRR. Nicht berechenbare Sensitivität bleibt null statt 0; echte Null bleibt Null.
+
+Checkbox-AUS verändert weder physischen Bestand noch Depotwert, Einzelkennzahlen oder vollständige Leiter. PLAN reduziert bei geeigneter Mengenbasis Wert, Nominal und absolute AI proportional, erhält per100-Kennzahlen und skaliert absolute DV01. Vollverkauf entfernt nur PLAN; Nullmarktwert mit positivem Nominal und überfällige Positionen bleiben sichtbar. Nominale verschiedener Währungen werden niemals zusammenaddiert. Fehlende Kaufstammdaten erzeugen keine erfundenen Bondzahlungen.
+
+UI-Reihenfolge: Überblick, Szenarien, Währungsleiter, physische Positionen, Modellannahmen. Excel und Druck exportieren ausschließlich **„Zins & Laufzeiten – IST (physischer Bestand)“** über denselben Datenbuilder/Rechenkern. Lange Tabellen sind vollständig und scrollbar; Paginierung/Virtualisierung und zusätzliche Drucknavigation bleiben Komfort-Finetuning.
 
 ## 6.4 Einstand & Ergebnis
 
@@ -1476,7 +1507,11 @@ Keine zufällig aus dem Internet beschafften Fontdateien verwenden.
 
 # 12. Technische / fachliche Kernzustände
 
-Persistenzschema: **10**. Alte Fälle bis Schema 9 werden beim Laden der aktiven Arbeitskopie über `normalizeImportedCase(...)` migriert. Historische Versionssnapshots bleiben unverändert gespeichert und werden erst bei Wiederherstellung normalisiert.
+Persistenzschema des V0.18.2-Feature-Stands: **11** (veröffentlichte V0.18.1: 10). `normalizeImportedCase(...)` migriert unterstützte ältere Fälle beim Laden/JSON-Import und beim Versionsrestore. Schema 11 ergänzt `bondSource` mit Profil-ID/-Version, Parser, Einheitensemantik, feldweiser Herkunft/Validität, Berichtsstichtagsart und offenem Quantisierungsstatus sowie `excludeFromBondAggregates` (fehlend ⇒ false). Unbekannte optionale Altfelder bleiben erhalten; unbelegte Null- und positive Altcoupons erhalten positionsbezogen `legacy-unverified`, ohne gültige Nachbarpositionen pauschal zu sperren. 11→11 erhält gültige Herkunft und Checkbox.
+
+Historische Snapshots bleiben bis zum Restore inhaltlich unverändert; neue Snapshots sind Schema 11. Künftige Schemawerte >11 werden abgelehnt, Originaldaten nicht überschrieben. Keine persistierten YTM-/Duration-/DV01-Werte, keine zweite Berechnungswahrheit, keine ContractTerms-/Bestätigungs-/Override-Felder. Fallweiser Recovery-Schutz erhält beschädigte Originale und gesunde Fälle getrennt.
+
+Folgepakete: V0.19 muss vom dann aktuellen Schema 11 ausgehen; seine Vergleichsauswahl benötigt weiterhin keine eigene Schemaerhöhung. Die frühere V0.20-Planung „10→11“ kollidiert mit dem bereits für Bond-V2 verwendeten Schema 11 und muss vor Umsetzung auf dem dann aktuellen Stand neu versioniert werden. Keine Auszahlplan-Fachlogik ist damit umgesetzt oder neu freigegeben.
 
 ## 12.1 Planvarianten
 
