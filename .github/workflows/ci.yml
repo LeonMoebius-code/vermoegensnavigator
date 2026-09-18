@@ -45,11 +45,23 @@ jobs:
       - name: Risiko V2 testen
         run: npm run test:risk-v2
 
-      - name: Multi Depot testen, sobald vorhanden
-        run: npm run --if-present test:multi-depot
+      - name: Multi Depot testen
+        run: npm run test:multi-depot
 
       - name: Modellportfolio-Semantik testen
         run: npm run test:modelportfolio
+
+      - name: CP1 Datenintegrität testen
+        run: npm run test:cp1
+
+      - name: Bond V2 testen
+        run: npm run test:bond-v2
+
+      - name: CP3 Bond-Aggregation testen
+        run: npm run test:cp3
+
+      - name: CP4 Gesamtpfade und Exporte testen
+        run: npm run test:cp4
 
       - name: Typen prüfen
         run: npm run typecheck

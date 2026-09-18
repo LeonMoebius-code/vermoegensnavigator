@@ -136,3 +136,30 @@ Abschlussbericht zwingend: Ausgangs-main-SHA, Work-Branch, Checkpoint-SHAs, Vers
 ## 7. Ausgeschlossene Folgefunktionen
 
 Kein V0.19-Planvergleich, V0.20-Auszahlplan, Vertiefungsframework, Retirement/Inflation, steuerliche Effektivrendite, bankfachliche Settlement-/Street-YTM ohne erforderliche Konventionen, externe Wertpapierstammdaten, Recovery-/Defaultwahrscheinlichkeiten, Kredit-/Bonitätsscores, Kurven- oder Spread-Risikomodell, Callable/YTW-/Floater-/Step-up-Pricing, FX-Stresstest, alle Bond-Sonderbedingungen, Portfolio-Cashflow-IRR, neues Backend, Benutzerverwaltung, Branding oder vollständiges Export-Redesign. Kein automatisches Ausschließen aufgrund Kurs oder Rendite, keine Pflichtbegründung von Ausschlüssen. Wenn notwendige Daten fehlen: **ehrlich `nicht berechenbar`, kein erdachter Zahlenwert**.
+
+## 8. CP4-Abschlussstand vom 18.09.2026
+
+Der [CP4-Gesamtabnahmenachweis](V0182_CP4_Gesamtabnahme.md) dokumentiert die
+Checkpoint-SHAs, alle zehn Ausgangsdefekte, die unveränderten und neuen
+Regressionen, den vollständigen178er-Referenzfall, den180er-Zwei-Depot-Lifecycle,
+Browserbedienung, echte XLSX-/JSON-Dateien sowie Druck-HTML und Methodengrenzen.
+Anwendungsversion0.18.2, Schema11; Master mit historischer V1-Abgrenzung und
+Hinweise auf Schemaannahmen der Folgepakete V0.19/V0.20 aktualisiert.
+
+CP4 ergänzt vier Testgruppen einschließlich Migration/Restore, tatsächlichem
+Export, Formel-/HTML-Injection und eng begrenzten Korrekturen expliziter
+Aktienanleihe-/Mischfonds-Klassifikation. Alle vorherigen Solltests bleiben
+Pflicht. Exakte finale Feature-SHA und CI-Run werden nach Commit/Push in PR #7
+verifiziert dokumentiert, keine Selbstreferenz oder vorweggenommene CI-Zusage.
+
+Nicht als geprüft behauptet: native PDF-Druckseiten/Paginierung, physischer
+Drucker, Excel-Desktopdarstellung und zusätzliche Mobil-/Browsergrößen. Die
+reale Berichtswährung, FX-Richtung, Stückzinswährung und Quantisierung bleiben
+unbestätigt. Neue Original-CSV-/agree21-Hinweise und tatsächliche
+Klassifikationscodes sind Teil der anschließenden fachlichen Abnahme; kein
+Freischalten von EUR-Kennzahlen aufgrund bloßer Zahlenpassung. Umfangreichere
+Tabellen-/Druckkomfortarbeiten bleiben Finetuning.
+
+Gemäß ausdrücklichem CP4-Auftrag endet diese Arbeit nach technischem Gate,
+separatem CP4-Commit, Push und PR-/Feature-CI-Aktualisierung. Abschnitt6 ist
+keine Merge-/Deployment-Erlaubnis: **kein Merge und keine Veröffentlichung**.

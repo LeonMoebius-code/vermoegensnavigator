@@ -5518,6 +5518,10 @@ input[inputmode="numeric"],
 .analysis-table td b,
 .analysis-table td small { display: block; }
 .analysis-table td small { margin-top: 3px; color: #9a5d49; }
+.bond-print-section { margin-top: 16px; }
+.bond-print-section dl { margin: 0; }
+.bond-print-section dl > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 12px; padding: 4px 0; border-bottom: 1px solid #e7ecf1; break-inside: avoid; }
+.bond-print-section dt, .bond-print-section dd { margin: 0; overflow-wrap: anywhere; }
 .result-table { min-width: 760px; }
 .sensitivity-value { display: flex; justify-content: space-between; gap: 20px; margin: 15px 0; color: #617086; font-size: 12px; }
 .sensitivity-value b { color: var(--navy); font-size: 18px; }
