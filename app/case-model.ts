@@ -1430,8 +1430,8 @@ export function replaceDepotAccount(
   const reconciled = imported.map((holding) => {
     const match = previousById.get(previousByNextId.get(holding.id) || "");
     return match
-      ? { ...holding, plannedSale: Math.max(0, Math.min(match.plannedSale, holding.value)) }
-      : { ...holding, plannedSale: 0 };
+      ? { ...holding, plannedSale: Math.max(0, Math.min(match.plannedSale, holding.value)), excludeFromBondAggregates: match.excludeFromBondAggregates === true }
+      : { ...holding, plannedSale: 0, excludeFromBondAggregates: false };
   });
   const depot = [
     ...state.depot.filter((holding) => holding.depotId !== depotId),

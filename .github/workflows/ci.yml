@@ -57,6 +57,9 @@ jobs:
       - name: Bond V2 testen
         run: npm run test:bond-v2
 
+      - name: CP3 Bond-Aggregation testen
+        run: npm run test:cp3
+
       - name: Typen prüfen
         run: npm run typecheck
 

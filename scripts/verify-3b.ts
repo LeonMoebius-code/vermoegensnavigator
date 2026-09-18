@@ -125,9 +125,14 @@ const rentenSubs = referenceTypes.sub.get("Renten")!;
 close(rentenSubs.find((item) => item.label === "Festverzinsliche Anleihen")!.value, 220_592.43, 0.01);
 const referenceBonds = bondPortfolioAnalysis(referencePositions, new Date(2026, 8, 1));
 close(referenceBonds.directValue, 291_692.54, 0.01);
-close(referenceBonds.maturityCoverage, 224_085.01 / 291_692.54, 0.0001);
+// CP3: legacy rows have no evidenced reporting currency. Date eligibility is
+// preserved, but the old EUR-coverage claim and unlabelled nominal sum are not.
+assert.equal(referenceBonds.maturityCoverage, null);
+close(referenceBonds.rows.filter((r) => r.position.classification.direct && r.remainingYears !== null).reduce((s, r) => s + r.position.value, 0), 224_085.01, .01);
 assert.equal(referenceBonds.calculableCoverage, null);
-assert.deepEqual(referenceBonds.ladder.map((item) => [item.year, item.nominal]), [[2031, 40_000], [2032, 50_000], [2033, 20_000], [2036, 50_000], [2040, 60_000], [2041, 5_000]]);
+assert.equal(referenceBonds.ladder.length, 0, "missing nominal currency must not imply EUR");
+const currencyLabelled = bondPortfolioAnalysis(referencePositions.map((p) => ({ ...p, currency: "EUR" })), new Date(2026, 8, 1));
+assert.deepEqual(currencyLabelled.ladder.map((item) => [item.year, item.currency, item.nominal]), [[2031, "EUR", 40_000], [2032, "EUR", 50_000], [2033, "EUR", 20_000], [2036, "EUR", 50_000], [2040, "EUR", 60_000], [2041, "EUR", 5_000]]);
 assert.equal(referenceBonds.portfolioModified, null);
 assert.equal(referenceBonds.portfolioDv01, null);
 assert.ok(referenceBonds.scenarios.every((scenario) => scenario.effect === null));

@@ -99,6 +99,7 @@ export function bondReasonLabel(code?: string) {
     "no-stable-solution": "Keine numerisch stabile Renditelösung",
     "missing-dirty-position-value": "Dirty-Positionswert in bekannter Währung fehlt",
     "position-amount-changed": "Positionsbetrag verändert; absolute Sensitivität ohne konsistente Mengenbasis nicht berechenbar",
+    "plan-quantity-unknown": "PLAN-Mengenbasis für diese Struktur nicht proportional ableitbar",
     "no-direct-bond": "Keine direkte Anleihe",
   };
   return code ? labels[code] || "Kennzahl nicht berechenbar" : undefined;
@@ -127,10 +128,18 @@ export function calculateBondModel(price: ReturnType<typeof resolveBondPrice>, v
   return { ytm, macaulay, modified, dv01, annualCheck, residual };
 }
 
-export function analyzeBondV2(position: DepotAnalysisPosition, fallbackDate = new Date()) {
+/** Code-supplied, documented convention; never accepted from saved customer data or UI.
+ * CP3 fixtures supply their explicit synthetic contract here. Production supplies none. */
+export type BondSourceConvention = {
+  evidence: string;
+  units: BondUnits;
+  accruedQuantizationPer100: number | null;
+};
+
+export function analyzeBondV2(position: DepotAnalysisPosition, fallbackDate = new Date(), convention?: BondSourceConvention) {
   const source = validBondSource(position.bondSource, position);
   const warnings = [BOND_MODEL_NOTICE];
-  if (source) warnings.push(BOND_PROFILE_NOTICE);
+  if (source) warnings.push(convention ? convention.evidence : BOND_PROFILE_NOTICE);
   const valuation = calendarDate(position.valuationEnd);
   const fallback = `${fallbackDate.getFullYear()}-${String(fallbackDate.getMonth() + 1).padStart(2, "0")}-${String(fallbackDate.getDate()).padStart(2, "0")}`;
   const maturity = calendarDate(position.maturity);
@@ -141,14 +150,14 @@ export function analyzeBondV2(position: DepotAnalysisPosition, fallbackDate = ne
   const couponFailure = !source ? fail("legacy-unverified", "coupon-origin-unverified") : fail(source.fields.coupon.status === "invalid" ? "invalid-data" : "missing-data", "invalid-or-missing-coupon");
   const running = !position.classification.direct ? fail("not-applicable", "no-direct-bond") : !nonnegative(coupon) ? couponFailure
     : !positive(clean) ? fail("missing-data", "invalid-or-missing-clean") : ok(coupon / clean);
-  const units = source?.units;
+  const units = source && (convention?.units || source.units);
   // EUR is NOT assigned as reporting currency: FX=1 only establishes an
   // invariant local price across the explicitly retained interpretations.
   const price = resolveBondPrice({ nominal: field("nominalOrUnits"), clean, accrued: field("accruedInterest"), market: field("value"), fxRate: field("fxRate"),
     bondCurrency: sourceFieldValid(source, "currency") ? position.currency?.trim().toUpperCase() : undefined,
     valuationDate: sourceFieldValid(source, "valuationEnd") ? valuation : undefined,
     units: units || { clean: "unknown", nominal: "unknown", accrued: "unknown", accruedCurrency: "unknown", market: "unknown", reportingCurrency: null, fx: "unknown" },
-    quality: source?.quality || "unknown", accruedQuantizationPer100: source?.accruedQuantizationPer100 ?? null });
+    quality: source && convention ? "documented" : source?.quality || "unknown", accruedQuantizationPer100: convention?.accruedQuantizationPer100 ?? source?.accruedQuantizationPer100 ?? null });
   let ytm: BondMetric;
   const sourceText = [position.name, position.securityType, position.sourceType, position.segment, position.investmentMedium, position.certificateClass].join(" ");
   if (!position.classification.direct || position.classification.bondKind !== "fixed") ytm = fail("unsupported-structure", "unsupported-cashflows");
@@ -174,6 +183,8 @@ export function analyzeBondV2(position: DepotAnalysisPosition, fallbackDate = ne
   return { remainingYears, currentYield: running, ytm, macaulay, modified, dv01, dv01Currency: price.currency,
     dirtyPrice: price.dirty, annualCheck, residual, warnings, valuationDate: valuation || null,
     excludeFromBondAggregates: position.excludeFromBondAggregates === true, sourceQuality: source?.quality || "unknown",
-    // This adapter has no independently documented common reporting currency.
-    reportingCurrency: null, reportingComparable: false };
+    reportingCurrency: units?.reportingCurrency || null,
+    reportingValueCurrency: sourceFieldValid(source, "value") && convention?.evidence && /^[A-Z]{3}$/.test(units?.reportingCurrency || "") ? units!.reportingCurrency : null,
+    reportingComparable: Boolean(sourceFieldValid(source, "value") && convention?.evidence && units?.reportingCurrency === "EUR"),
+    sourceEvidence: convention?.evidence || BOND_PROFILE_NOTICE };
 }

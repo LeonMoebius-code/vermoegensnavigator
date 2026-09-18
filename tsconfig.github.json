@@ -28,6 +28,7 @@
     "app/navigator-config.ts",
     "scripts/verify-cp1.tsx",
     "scripts/verify-modelportfolio.ts",
-    "scripts/verify-bond-v2.ts"
+    "scripts/verify-bond-v2.ts",
+    "scripts/verify-cp3.tsx"
   ]
 }

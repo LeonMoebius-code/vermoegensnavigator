@@ -1,4 +1,6 @@
-import { analyzeBondV2, bondReasonLabel } from "./bond-v2";
+import { analyzeBondV2, BondSourceConvention, bondReasonLabel } from "./bond-v2";
+import { calendarDate } from "./depot-validation";
+import { sourceFieldValid, validBondSource } from "./bond-source";
 import { DepotHolding, StructurePlan } from "./case-model";
 import { depotCountryName } from "./depot-country-codes";
 import { houseProducts, managedPortfolios } from "./investment-data";
@@ -28,6 +30,8 @@ export type DepotAnalysisPosition = Omit<DepotHolding, "id" | "value" | "depotId
   source: "holding" | "planned-purchase";
   value: number;
   classification: ProductClassification;
+  bondBase?: DepotAnalysisPosition;
+  quantityScale?: number | null;
 };
 
 export type DistributionItem = { label: string; value: number; share: number };
@@ -134,16 +138,33 @@ export function buildDepotAnalysisPositions(
   depot: DepotHolding[],
   plan: StructurePlan,
   state: AnalysisState,
+  physicalBonds = false,
 ): DepotAnalysisPosition[] {
   const holdings = depot
-    .map((holding) => ({
-      ...holding,
-      id: holding.id,
-      source: "holding" as const,
-      value: state === "ist" ? Math.max(0, holding.value) : Math.max(0, holding.value - holding.plannedSale),
-      classification: classifyDepotProduct(holding),
-    }))
-    .filter((position) => position.value > 0);
+    .map((holding): DepotAnalysisPosition => {
+      const base: DepotAnalysisPosition = {
+        ...holding,
+        id: holding.id,
+        source: "holding" as const,
+        value: Math.max(0, holding.value),
+        classification: classifyDepotProduct(holding),
+      };
+      if (state === "ist") return base;
+      const sale = Number.isFinite(holding.plannedSale) ? Math.max(0, holding.plannedSale) : 0;
+      const value = Math.max(0, base.value - sale);
+      const scale = base.value > 0 ? value / base.value : 1;
+      const source = validBondSource(base.bondSource, base);
+      const linear = ["fixed", "floater", "step-up"].includes(base.classification.bondKind || "") &&
+        source?.units.nominal === "face-in-bond-currency" && sourceFieldValid(source, "nominalOrUnits");
+      const quantityScale = scale === 1 ? 1 : linear ? scale : null;
+      const scaled = (n?: number) => quantityScale !== null && Number.isFinite(n) ? Number(n) * quantityScale : undefined;
+      return { ...base, value, bondBase: base, quantityScale,
+        nominalOrUnits: scaled(base.nominalOrUnits),
+        accruedInterest: source?.units.accrued === "per100" ? base.accruedInterest : scaled(base.accruedInterest),
+      };
+    })
+    .filter((position) => position.value > 0 || (physicalBonds && position.classification.main === "Renten" &&
+      position.classification.direct && (position.bondBase?.value ?? position.value) === 0));
   if (state === "ist") return holdings;
   const purchases = plan.allocations
     .filter((allocation) => allocation.amount > 0)
@@ -334,79 +355,125 @@ export type BondPositionAnalysis = {
   metrics: ReturnType<typeof analyzeBondV2>;
 };
 
-export function bondPortfolioAnalysis(positions: DepotAnalysisPosition[], fallbackDate = new Date()) {
+export type BondMetricKey = "ytm" | "currentYield" | "modified" | "dv01";
+export type BondInclusion = "includedAndCalculable" | "manuallyExcluded" | "notCalculable";
+export type BondCoverage = {
+  value: number | null;
+  status: "available" | "not-applicable" | "unknown-reporting-currency" | "invalid-value-basis";
+  basisEUR: number | null;
+  includedAndCalculable: { count: number; valueEUR: number | null };
+  manuallyExcluded: { count: number; valueEUR: number | null };
+  notCalculable: { count: number; valueEUR: number | null };
+};
+export type BondLadderItem = {
+  year: number; currency: string; overdue: boolean; nominal: number | null; marketValue: number | null; count: number;
+  excludedCount: number; excludedNominal: number | null; excludedMarketValue: number | null;
+  zeroValueCount: number; zeroValueNominal: number | null;
+};
+const finiteBondSum = (a: number | null, b: number) => a !== null && Number.isFinite(a + b) ? a + b : null;
+
+export function bondPortfolioAnalysis(positions: DepotAnalysisPosition[], fallbackDate = new Date(),
+  conventionFor?: (position: DepotAnalysisPosition) => BondSourceConvention | undefined) {
   const valuationDate = valuationDateFor(positions, fallbackDate);
-  const renten = positions.filter((position) => position.classification.main === "Renten");
-  const direct = renten.filter((position) => position.classification.direct);
+  const renten = positions.filter((p) => p.classification.main === "Renten");
   const rows: BondPositionAnalysis[] = renten.map((position) => {
-    const metrics = analyzeBondV2(position, fallbackDate);
-    return {
-      position, metrics,
-      remainingYears: metrics.remainingYears.value, currentYield: metrics.currentYield.value,
+    const base = position.bondBase || position;
+    const metrics = analyzeBondV2(base, fallbackDate, conventionFor?.(base));
+    if (position.bondBase) {
+      metrics.excludeFromBondAggregates = position.excludeFromBondAggregates === true;
+      if (position.quantityScale === null) metrics.dv01 = { value: null, status: "missing-data", reasonCode: "plan-quantity-unknown" };
+      else if (metrics.dv01.value !== null) metrics.dv01 = { ...metrics.dv01, value: metrics.dv01.value * (position.quantityScale ?? 1) };
+    }
+    return { position, metrics, remainingYears: metrics.remainingYears.value, currentYield: metrics.currentYield.value,
       ytm: metrics.ytm.value, macaulay: metrics.macaulay.value, modified: metrics.modified.value,
-      dv01: metrics.dv01.value, exclusionReason: bondReasonLabel(metrics.ytm.reasonCode),
-    };
+      dv01: metrics.dv01.value, exclusionReason: bondReasonLabel(metrics.ytm.reasonCode) };
   });
-  const reportingComparable = direct.length > 0 && rows.filter((row) => row.position.classification.direct).every((row) => row.metrics.reportingComparable);
-  const directValue = direct.reduce((sum, position) => sum + position.value, 0);
-  const maturityValue = rows.filter((row) => row.position.classification.direct && row.remainingYears !== null && row.remainingYears > 0)
-    .reduce((sum, row) => sum + row.position.value, 0);
-  const calculable = rows.filter((row) => row.modified !== null);
-  const calculableValue = calculable.reduce((sum, row) => sum + row.position.value, 0);
-  const ytmRows = rows.filter((row) => row.ytm !== null);
-  const ytmValue = ytmRows.reduce((sum, row) => sum + row.position.value, 0);
-  const averageModeledYtm = ytmValue
-    ? ytmRows.reduce(
-        (sum, row) => sum + row.position.value * Number(row.ytm),
-        0,
-      ) / ytmValue
-    : null;
-  const currentYieldRows = rows.filter((row) => row.currentYield !== null);
-  const currentYieldValue = currentYieldRows.reduce(
-    (sum, row) => sum + row.position.value,
-    0,
-  );
-  const averageCurrentYield = currentYieldValue
-    ? currentYieldRows.reduce(
-        (sum, row) => sum + row.position.value * Number(row.currentYield),
-        0,
-      ) / currentYieldValue
-    : null;
-  const portfolioModified = calculableValue
-    ? calculable.reduce((sum, row) => sum + row.position.value * Number(row.modified), 0) / calculableValue
-    : null;
-  const ladderMap = new Map<number, { year: number; nominal: number; marketValue: number; count: number }>();
-  for (const row of rows) {
-    const date = row.position.maturity ? localDate(row.position.maturity) : null;
-    if (!row.position.classification.direct || !date || row.remainingYears === null || row.remainingYears <= 0 || !Number.isFinite(row.position.nominalOrUnits) || Number(row.position.nominalOrUnits) < 0) continue;
-    const year = date.getUTCFullYear();
-    const item = ladderMap.get(year) || { year, nominal: 0, marketValue: 0, count: 0 };
-    item.nominal += Number(row.position.nominalOrUnits);
-    item.marketValue += row.position.value;
-    item.count += 1;
-    ladderMap.set(year, item);
+  const directRows = rows.filter((r) => r.position.classification.direct);
+  const directValue = directRows.reduce((sum, r) => sum + r.position.value, 0); // raw depot total; NOT an asserted EUR value
+  const comparable = (r: BondPositionAnalysis) => r.metrics.reportingComparable;
+  const reportingComparable = directRows.length > 0 && directRows.every(comparable);
+  const known = directRows.filter(comparable);
+  const knownValueEUR = known.reduce<number | null>((sum, r) => finiteBondSum(sum, r.position.value), 0);
+  const reportingAmounts = new Map<string, { currency: string; value: number | null; count: number }>();
+  for (const r of directRows) {
+    const currency = r.metrics.reportingValueCurrency;
+    if (!currency) continue;
+    const group = reportingAmounts.get(currency) || { currency, value: 0, count: 0 };
+    group.value = finiteBondSum(group.value, r.position.value); group.count++;
+    reportingAmounts.set(currency, group);
   }
-  return {
-    valuationDate,
-    rows,
-    directValue,
-    totalRentenValue: renten.reduce((sum, position) => sum + position.value, 0),
-    maturityCoverage: analysisCoverage(maturityValue, directValue),
-    calculableCoverage: reportingComparable ? analysisCoverage(calculableValue, directValue) : null,
-    ytmCoverage: reportingComparable ? analysisCoverage(ytmValue, directValue) : null,
-    ytmValue,
-    averageModeledYtm: reportingComparable ? averageModeledYtm : null,
-    currentYieldCoverage: reportingComparable ? analysisCoverage(currentYieldValue, directValue) : null,
-    currentYieldValue,
-    averageCurrentYield: reportingComparable ? averageCurrentYield : null,
-    calculableValue,
-    portfolioModified: reportingComparable ? portfolioModified : null,
-    portfolioDv01: reportingComparable && calculable.length ? calculable.reduce((sum, row) => sum + Number(row.dv01), 0) : null,
-    ladder: [...ladderMap.values()].sort((a, b) => a.year - b.year),
-    scenarios: [-0.01, -0.005, 0.005, 0.01].map((deltaYield) => ({
-      deltaYield,
-      effect: !reportingComparable || !calculable.length ? null : calculable.reduce((sum, row) => sum + interestScenarioEffect(row.position.value, Number(row.modified), deltaYield), 0),
-    })),
+  const valueEUR = (subset: BondPositionAnalysis[]) => {
+    const value = subset.every(comparable) ? subset.reduce((sum, r) => sum + r.position.value, 0) : null;
+    return value !== null && Number.isFinite(value) ? value : null;
+  };
+  const included = (r: BondPositionAnalysis, key: BondMetricKey) => comparable(r) && r.position.value > 0 && r[key] !== null &&
+    (key !== "dv01" || r.modified !== null);
+  const inclusion = (r: BondPositionAnalysis, key: BondMetricKey): BondInclusion => r.position.excludeFromBondAggregates ? "manuallyExcluded" :
+    included(r, key) ? "includedAndCalculable" : "notCalculable";
+  const coverage = (predicate: (r: BondPositionAnalysis) => boolean, exclusions: boolean): BondCoverage => {
+    const groups = { includedAndCalculable: [] as BondPositionAnalysis[], manuallyExcluded: [] as BondPositionAnalysis[], notCalculable: [] as BondPositionAnalysis[] };
+    for (const r of directRows) groups[exclusions && r.position.excludeFromBondAggregates ? "manuallyExcluded" : comparable(r) && predicate(r) ? "includedAndCalculable" : "notCalculable"].push(r);
+    const basisEUR = groups.includedAndCalculable.reduce((sum, r) => sum + r.position.value, 0);
+    const status = !directRows.length ? "not-applicable" : !reportingComparable ? "unknown-reporting-currency" : !Number.isFinite(directValue) || !Number.isFinite(basisEUR) ? "invalid-value-basis" : directValue <= 0 ? "not-applicable" : "available";
+    return { value: status === "available" ? basisEUR / directValue : null, status, basisEUR: Number.isFinite(basisEUR) ? basisEUR : null,
+      includedAndCalculable: { count: groups.includedAndCalculable.length, valueEUR: valueEUR(groups.includedAndCalculable) },
+      manuallyExcluded: { count: groups.manuallyExcluded.length, valueEUR: valueEUR(groups.manuallyExcluded) },
+      notCalculable: { count: groups.notCalculable.length, valueEUR: valueEUR(groups.notCalculable) } };
+  };
+  const keys: BondMetricKey[] = ["ytm", "currentYield", "modified", "dv01"];
+  const coverages = Object.fromEntries(keys.map((key) => [key, coverage((r) => included(r, key), true)])) as Record<BondMetricKey, BondCoverage>;
+  const subset = (key: BondMetricKey) => directRows.filter((r) => inclusion(r, key) === "includedAndCalculable");
+  const average = (key: BondMetricKey) => {
+    const selected = subset(key), basis = coverages[key].basisEUR;
+    const result = basis !== null && basis > 0 ? selected.reduce((sum, r) => sum + (r.position.value / basis) * r[key]!, 0) : null;
+    return result !== null && Number.isFinite(result) ? result : null;
+  };
+  const dated = (r: BondPositionAnalysis) => Boolean(calendarDate(r.position.maturity));
+  const nominal = (r: BondPositionAnalysis) => {
+    const base = r.position.bondBase || r.position, source = validBondSource(base.bondSource, base);
+    return Number.isFinite(r.position.nominalOrUnits) && Number(r.position.nominalOrUnits) > 0 &&
+      /^[A-Z]{3}$/.test(r.position.currency || "") && r.position.quantityScale !== null &&
+      (!source || (sourceFieldValid(source, "nominalOrUnits") && sourceFieldValid(source, "currency")));
+  };
+  const maturity = coverage(dated, false), ladderCoverage = coverage((r) => dated(r) && nominal(r), false);
+  const ladderMap = new Map<string, BondLadderItem>();
+  for (const r of directRows) {
+    if (!dated(r) || !nominal(r)) continue;
+    const year = Number(r.position.maturity!.slice(0, 4)), currency = r.position.currency!;
+    const overdue = r.remainingYears === 0;
+    const key = [year, currency, overdue].join("/");
+    const item: BondLadderItem = ladderMap.get(key) || { year, currency, overdue, nominal: 0, marketValue: 0, count: 0,
+      excludedCount: 0, excludedNominal: 0, excludedMarketValue: 0, zeroValueCount: 0, zeroValueNominal: 0 };
+    item.nominal = finiteBondSum(item.nominal, r.position.nominalOrUnits!); item.count++;
+    item.marketValue = comparable(r) ? finiteBondSum(item.marketValue, r.position.value) : null;
+    if (r.position.excludeFromBondAggregates) {
+      item.excludedCount++; item.excludedNominal = finiteBondSum(item.excludedNominal, r.position.nominalOrUnits!);
+      item.excludedMarketValue = comparable(r) ? finiteBondSum(item.excludedMarketValue, r.position.value) : null;
+    }
+    if (r.position.value === 0) { item.zeroValueCount++; item.zeroValueNominal = finiteBondSum(item.zeroValueNominal, r.position.nominalOrUnits!); }
+    ladderMap.set(key, item);
+  }
+  const dv01Rows = subset("dv01");
+  // Reporting DV01 uses the same V2 duration and the documented dirty EUR value.
+  const dv01Sum = dv01Rows.length ? dv01Rows.reduce((sum, r) => sum + bondDv01(r.position.value, r.modified!), 0) : null;
+  const portfolioDv01 = dv01Sum !== null && Number.isFinite(dv01Sum) ? dv01Sum : null;
+  return { valuationDate, valuationDates: valuationDatesFor(positions), mixedValuationDates: hasMixedValuationDates(positions),
+    rows, directValue, directCount: directRows.length, reportingComparable, knownValueEUR,
+    unknownReportingCount: directRows.length - known.length, directValueEUR: reportingComparable && Number.isFinite(directValue) ? directValue : null,
+    reportingAmounts: [...reportingAmounts.values()].sort((a, b) => a.currency.localeCompare(b.currency)),
+    totalRentenValue: renten.reduce((sum, p) => sum + p.value, 0), coverages, maturity, nominalLadder: ladderCoverage,
+    maturityCoverage: maturity.value, ladderCoverage: ladderCoverage.value,
+    calculableCoverage: coverages.modified.value, ytmCoverage: coverages.ytm.value, currentYieldCoverage: coverages.currentYield.value,
+    ytmValue: coverages.ytm.basisEUR, currentYieldValue: coverages.currentYield.basisEUR, calculableValue: coverages.modified.basisEUR,
+    averageModeledYtm: average("ytm"), averageCurrentYield: average("currentYield"), portfolioModified: average("modified"), portfolioDv01,
+    excludedCount: directRows.filter((r) => r.position.excludeFromBondAggregates).length,
+    excludedValueEUR: valueEUR(directRows.filter((r) => r.position.excludeFromBondAggregates)),
+    zeroValueCount: directRows.filter((r) => r.position.value === 0).length,
+    inclusion, ladder: [...ladderMap.values()].sort((a, b) => a.currency.localeCompare(b.currency) || a.year - b.year || Number(b.overdue) - Number(a.overdue)),
+    scenarios: [-0.01, -0.005, 0.005, 0.01].map((deltaYield) => {
+      const effect = portfolioDv01 === null ? null : -portfolioDv01 * deltaYield / 0.0001;
+      return { deltaYield, effect: effect !== null && Number.isFinite(effect) ? effect : null };
+    }),
   };
 }
 
