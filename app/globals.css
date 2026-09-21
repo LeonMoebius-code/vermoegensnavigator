@@ -1,5 +1,3 @@
-@import "tailwindcss";
-
 :root {
   --ink: #163a63;
   --muted: #5e6f83;
@@ -5341,6 +5339,8 @@ input[inputmode="numeric"],
 .analysis-kpis.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .analysis-kpis.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .analysis-kpis.six { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.analysis-kpis.bond-primary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.analysis-kpis.bond-secondary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .analysis-kpis article {
   min-width: 0;
   border: 1px solid #dce5ed;
@@ -5369,6 +5369,23 @@ input[inputmode="numeric"],
   background: #fff;
   padding: 17px;
 }
+.analysis-alert {
+  margin-top: 14px;
+  border-left: 4px solid var(--gold);
+  border-radius: 7px;
+  background: #fff8f2;
+  padding: 12px 15px;
+  color: #5d4a42;
+  font-size: 12px;
+}
+.analysis-alert h3 { margin: 0; color: var(--navy); font-size: 13px; }
+.analysis-alert ul { margin: 7px 0 0; padding-left: 18px; }
+.analysis-alert li + li { margin-top: 4px; }
+.analysis-table.compact { min-width: 760px; font-size: 11px; }
+.bond-technical > summary { cursor: pointer; color: var(--navy); font-weight: 800; }
+.bond-technical[open] > summary { margin-bottom: 16px; }
+.bond-technical h3 { margin-top: 20px; }
+.export-scope-note { font-weight: 700; }
 .analysis-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -5522,6 +5539,11 @@ input[inputmode="numeric"],
 .bond-print-section dl { margin: 0; }
 .bond-print-section dl > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 12px; padding: 4px 0; border-bottom: 1px solid #e7ecf1; break-inside: avoid; }
 .bond-print-section dt, .bond-print-section dd { margin: 0; overflow-wrap: anywhere; }
+.bond-print-table { overflow: hidden; }
+.bond-print-table table { width: 100%; border-collapse: collapse; font-size: 9px; }
+.bond-print-table th, .bond-print-table td { border-bottom: 1px solid #dce5ed; padding: 5px 4px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.bond-print-table th { color: var(--navy); }
+.bond-print-table tr { break-inside: avoid; }
 .result-table { min-width: 760px; }
 .sensitivity-value { display: flex; justify-content: space-between; gap: 20px; margin: 15px 0; color: #617086; font-size: 12px; }
 .sensitivity-value b { color: var(--navy); font-size: 18px; }

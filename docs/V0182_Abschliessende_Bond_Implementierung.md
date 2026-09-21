@@ -1,6 +1,6 @@
 # V0.18.2: abschließende Bond-Implementierung
 
-Stand: 21.09.2026. Ausgangscommit `2094233c0d8eaa05e358ecd1c067fad0dc79d608`, bestehender Branch `work/v0182-bond-hardening`, PR #7. CP0 bis CP4 bleiben abgeschlossen. Die vier unmittelbar betroffenen Fachunterlagen wurden vor der Codeänderung gezielt angepasst.
+Stand: 21.09.2026. Ausgangspunkt dieses Abschlussnachtrags: `ce9e5d666271b95cebd88c468f8f88dbf9878a33`, bestehender Branch `work/v0182-bond-hardening`, PR #7. CP0 bis CP4 bleiben abgeschlossen.
 
 ## Implementierter Umfang
 
@@ -23,11 +23,20 @@ Stand: 21.09.2026. Ausgangscommit `2094233c0d8eaa05e358ecd1c067fad0dc79d608`, be
 | Stückzins ungültig/negativ | Keine Freigabe als bloß fehlender Wert. Konkreter Fehlergrund. | Keine couponabhängigen Aggregate. |
 | Expliziter Nullkupon | Bei konsistenten Eingaben identischer positiver Rückzahlungsplan für alle Frequenzen. | Frequenzunabhängig verwendbar. |
 
-Laufende Verzinsung, Restlaufzeit, Marktwerte und Fälligkeitsleiter behalten eigene Voraussetzungen. Die Leiter bleibt nach Nominalwährung getrennt, unabhängig von der Aggregatcheckbox. Durchschnittswerte verwenden nur gültige vergleichbare ausgewählte Werte. Coverage verwendet den gesamten direkten EUR-Berichtsmarktwert einschließlich unberechenbarer und ausgeschlossener Positionen. PLAN skaliert Nominal, absoluten Stückzins und DV01 proportional, Einzel-YTM und Duration bleiben unverändert. UI, Excel und Druck nutzen denselben zentralen Datenbuilder, einschließlich sichtbarer Jahresmodellannahme, Frequenzstatus, Alternativen und Fehlgründen.
+Laufende Verzinsung, Restlaufzeit, Marktwerte und Fälligkeitsleiter behalten eigene Voraussetzungen. Die Leiter bleibt nach Nominalwährung getrennt, unabhängig von der Aggregatcheckbox. Durchschnittswerte verwenden nur gültige vergleichbare ausgewählte Werte. Coverage verwendet den gesamten direkten EUR-Berichtsmarktwert einschließlich unberechenbarer und ausgeschlossener Positionen. PLAN skaliert Nominal, absoluten Stückzins und DV01 proportional, Einzel-YTM und Duration bleiben unverändert. UI, Excel und Druck nutzen denselben zentralen Datenbuilder. Die Darstellung ist dabei bewusst gestuft: Kundenausgaben enthalten Ergebnisse und wesentliche Einschränkungen, während Frequenzstatus, Alternativen und vollständige Fehlgründe im technischen Nachweis verbleiben.
+
+## Kundenfähiger Abschlussnachtrag
+
+- Die Standardansicht zeigt als Hauptkennzahlen nur die indikative Rendite bis Fälligkeit und die laufende Verzinsung. Anzahl und wertbezogene Coverage stehen unmittelbar an der jeweiligen Kennzahl. Modified Duration, DV01, Szenarien, vollständige Coverage-Zerlegung und die Auswahlcheckbox liegen im standardmäßig geschlossenen Bereich `Fachliche Details und Datenprüfung`.
+- Wesentliche Einschränkungen werden einmalig und kompakt zusammengefasst. Die Kundentabelle enthält Depot, Wertpapier, Marktwert, Fälligkeit, indikative Rendite und einen verständlichen Status. Vollständige Modellalternativen, Stückzinsbänder, Quellenprofil und Einzelvoraussetzungen bleiben im Detailbereich erhalten; die Berechnungsquelle wurde nicht dupliziert.
+- Excel enthält ein kompaktes Hauptblatt `Zins & Laufzeiten` mit Überblick, Hinweisen, Fälligkeitsübersicht und Positionen. Das neue Blatt `Technische Nachweise` enthält die ausführlichen Diagnoseinformationen. Beide Blätter werden aus demselben IST-Builder erzeugt und als echte XLSX-Datei wieder eingelesen. Bestehender Schutz vor ausführbaren Formeln aus importiertem Text bleibt geprüft.
+- Der normale Druckbericht enthält nur den kompakten Überblick, wesentliche Hinweise, Fälligkeits- und Positionsübersicht. Redundante Coverage-Blöcke, Modellalternativen und technische Rohdiagnosen sind nicht Bestandteil der Kundenausgabe.
+- UI und Export weisen ausdrücklich darauf hin, dass Excel und Druck stets den IST-Bestand enthalten, auch wenn interaktiv PLAN gewählt ist. Die vorhandene IST-/PLAN-Fachlogik und sämtliche Berechnungsergebnisse blieben unverändert.
+- Stückzinsen werden beim validierten agree21-Profil v2 als `EUR-Berichtswährung` bezeichnet, auch bei USD-Nominal. Für Profilversion 1 oder gemischte/ungeklärte Konventionen lautet die Beschriftung profilabhängig und die Einzelzeile weist `Währungskonvention ungeklärt` aus. Es erfolgt keine Profilaufwertung und keine Betragsänderung.
 
 ## Gezielter Testnachweis
 
-Neue obligatorische Suite `npm run test:bond-final`, neun Gruppen, vollständig künstliche Namen, Kennungen und Beträge:
+Neue obligatorische Suite `npm run test:bond-final`, zwölf Gruppen, vollständig künstliche Namen, Kennungen und Beträge:
 
 1. Originalgetreue 29-Spalten-Signatur, positive AI bei EUR/FX leer, Profilabgrenzung und Evidenzvalidierung.
 2. Eindeutige Jahres-, Halbjahres- und Quartalsmodelle. Unabhängige Python-Decimal70-Sollpreise für fünf Tage Restlaufzeit und 5 % Rendite: 105,92917767817603 / 102,93118208351067 / 101,43218428617799 bei Jahreskupon 6 %. Macaulay 5/365 und Modified 0,01304631441617743. DV01 separat durch Finite Difference geprüft.
@@ -37,7 +46,10 @@ Neue obligatorische Suite `npm run test:bond-final`, neun Gruppen, vollständig 
 6. Monatsende, Schaltjahr, nichtmonatlicher Endtag ohne Drift, strikt zukünftige Zahlung, getrennte Tageszählung, Grundband und dokumentierte Quantisierungsanpassung.
 7. Doppelwährungsanleihen und Fonds-Sondertypen, Erhalt bisheriger Klassifikationskorrekturen.
 8. Marktwertgewichtung, Coverage, Szenarien, Ausschluss, IST/PLAN, Speicheradapter, JSON, Schema11-Snapshot und Replacement.
-9. Tatsächliche Excel-Datei erzeugt und erneut eingelesen. Alle Bondblatt-Zellen gegen den gemeinsamen Datenbuilder geprüft. Tatsächliches Export-/Druck-React-HTML und UI enthalten Quellenhinweise, abgeleitete Frequenz, Annahmen und Alternativen.
+9. Kundenfähige Standardansicht getrennt von weiterhin zugänglichen technischen Diagnosen und der funktionsfähigen Auswahlcheckbox.
+10. Profilabhängige Stückzins-Währungskennzeichnung für USD-Nominal im bestätigten EUR-Profil sowie ungeklärte Altkonvention ohne EUR-Aufwertung.
+11. Leerer, vollständig berechenbarer, teilweise berechenbarer, vollständig nicht berechenbarer und großer Bestand mit ehrlichen Präsentationszuständen.
+12. Tatsächliche Excel-Datei erzeugt und erneut eingelesen: kompaktes Hauptblatt und separates technisches Nachweisblatt. Tatsächliches Export-/Druck-React-HTML ist kundenfähig und enthält keine technischen Rohdiagnosen; technische Nachvollziehbarkeit und Formel-Injection-Schutz bleiben geprüft.
 
 Die bisherigen 22 Bond-V2-, neun CP3- und vier CP4-Gruppen bleiben erhalten. Fachlich geänderte Erwartungen sind explizit angepasst: Halbjahres-Kurzläufer wird jetzt gelöst statt pauschal verworfen. Unbekannte Rundungspräzision nutzt das vorläufige Grundband. Explizite AI=0 am gemeinsamen Kupontermin ist mehrdeutig. Die CP3-Referenz mit unveränderten unabhängigen Einjahres-Sollzahlen nutzt daher fehlende AI und die offengelegte Jahresannahme, nicht eine behauptete Frequenzbestätigung. Der neue Mehrdeutigkeitstest prüft den ehemaligen AI=0-Fall ausdrücklich.
 
@@ -45,7 +57,9 @@ Vollständiges lokales Release-Gate bestanden: `test:3b`, `test:4b`, `test:risk-
 
 ## Offene Abnahmegrenzen
 
-Der zusätzliche interaktive Test im lokalen Produktionsbuild wurde versucht. Der verwaltete Browser verweigerte die lokale HTTP-Adresse mit `net::ERR_BLOCKED_BY_CLIENT`. Daher **keine bestandene interaktive Browserabnahme** behauptet. Der Produktionsbuild selbst, gerenderte UI, Speicher-/Importpfade, tatsächliches XLSX und Druck-HTML wurden automatisiert geprüft. Native PDF-Paginierung, physischer Druck und Excel-Desktopdarstellung bleiben ungeprüft.
+Der statische Produktionsbuild wurde im verwalteten Browser mit einer synthetischen agree21-Profil-v2-CSV interaktiv geprüft. Import, Kundenansicht, IST/PLAN-Umschaltung, geschlossener und geöffneter Technikbereich, EUR-Stückzinskennzeichnung sowie der stets sichtbare IST-Exporthinweis wurden bestätigt; die Browserkonsole blieb ohne Warnungen oder Fehler. Der Aufruf der nativen Druckvorschau erzeugte im In-App-Browser kein zugängliches Vorschaufenster. Gedrucktes React-HTML wurde automatisiert geprüft. Native PDF-Paginierung, physischer Druck und Excel-Desktopdarstellung bleiben ungeprüft.
+
+Die bekannten npm-Sicherheitsbefunde bleiben offene Release-Voraussetzung: `esbuild 0.28.0` (LOW, Windows-Entwicklungsserver) und `xlsx 0.18.5` (HIGH, Prototype Pollution/ReDoS). Es erfolgte kein Dependency-Update, kein `npm audit fix --force` und keine Sicherheitsfreigabe.
 
 Frequenzpassung beweist weder Vertrag noch Kalender, Rückzahlung, Feiertagsregeln oder Bonität. Es gibt keine neue Behauptung über die endgültige Verteilung der 79 historischen Festzinspositionen. Die frühere 28/8/37/5/1-Aufteilung betrifft nur die damalige Jahr/Halbjahr-Diagnose. Drei rückgerechnete mögliche Zinsbeginne werden nicht verwendet. Keine Performance-CSV, keine zusätzlichen Pflichtdaten, keine Vertragseditoren.
 

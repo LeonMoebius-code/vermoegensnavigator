@@ -152,22 +152,71 @@ function button(node: ReactNode, label: string): (() => void) | undefined {
   if (!isValidElement<{children?:ReactNode;onClick?:()=>void}>(node)) return undefined;
   return node.type === "button" && renderToStaticMarkup(node).includes(label) ? node.props.onClick : button(node.props.children,label);
 }
-test("actual Excel and print/UI share model status, alternatives and computed EUR amounts", () => {
+test("customer UI is concise while technical diagnostics remain accessible", () => {
   const c=sample(); c.advisory.caseName="bond-final-synthetic";
   const d=data(c), ui=renderToStaticMarkup(<BondAnalysisView data={d} onInclusionChange={()=>{}} />);
+  const standard=ui.split('<details class="analysis-section bond-technical">')[0];
+  assert.match(standard,/Indikative Rendite bis Fälligkeit/);
+  assert.match(standard,/Laufende Verzinsung/);
+  assert.match(standard,/von 8 Anleihen und/);
+  assert.match(standard,/Fälligkeitsübersicht/);
+  assert.match(standard,/Fachlicher Status/);
+  assert.doesNotMatch(standard,/Modellalternative|Stückzinsband|Abdeckung und Ausschlüsse je Kennzahl/);
+  assert.match(ui,/Fachliche Details und Datenprüfung/);
+  assert.match(ui,/Abdeckung und Ausschlüsse je Kennzahl/);
+  assert.match(ui,/Modellalternative/);
+  assert.match(ui,/type="checkbox"/);
+});
+
+test("accrued-interest currency follows the validated profile without legacy promotion", () => {
+  const ref=shortReferences[1], eur=ref.dirty*100/1.25;
+  const usd=finalRow({ Währung:"USD", Devisenkurs:1.25, Kurs:ref.dirty-ref.ai, Stückzinsen:ref.ai*100/1.25, "Kurswert incl. Stückzinsen":eur });
+  const confirmed=data(sample([usd]));
+  assert.equal(confirmed.positionHeaders[4],"Stückzinsen (EUR-Berichtswährung)");
+  assert.match(confirmed.positionRows[0][4],/EUR-Berichtswährung/);
+  const c=sample([usd]);
+  c.depot[0]={...c.depot[0],bondSource:structureOverviewSource(c.depot[0],1)};
+  const legacy=data(c);
+  assert.equal(legacy.positionHeaders[4],"Stückzinsen (profilabhängige Währung)");
+  assert.match(legacy.positionRows[0][4],/Währungskonvention ungeklärt/);
+  assert.doesNotMatch(legacy.positionRows[0][4],/EUR-Berichtswährung/);
+});
+
+test("empty, complete, partial, unavailable and large portfolios have honest presentation states", () => {
+  const emptyCase=createCase(), empty=buildBondAnalysisData([],emptyCase.plans[0],"ist",[]);
+  assert.equal(empty.analysis.directCount,0); assert.equal(empty.primarySummary[0].value,"nicht berechenbar");
+  const complete=data(sample([finalRow()])); close(complete.analysis.ytmCoverage,1); assert.match(complete.primarySummary[0].coverageText,/1 von 1/);
+  const partial=data(sample([finalRow(),finalMatrix()[4]])); assert.ok(partial.analysis.ytmCoverage! > 0 && partial.analysis.ytmCoverage! < 1);
+  assert.match(partial.customerPositionRows[1][5],/widersprüchlich/);
+  const unavailable=data(sample([finalMatrix()[4]])); assert.equal(unavailable.analysis.averageModeledYtm,null); assert.match(unavailable.primarySummary[0].coverageText,/Anleihe nicht berechenbar/);
+  const largeRows=Array.from({length:120},(_,i)=>finalRow({Bezeichnung:`Synthetic bond ${i+1}`,WKN:`L${String(i).padStart(5,"0")}`}));
+  const large=data(sample(largeRows)); assert.equal(large.customerPositionRows.length,120); assert.equal(large.positionRows.length,120);
+});
+
+test("actual Excel separates customer report and technical evidence; print stays customer-facing", () => {
+  const c=sample(); c.advisory.caseName="bond-final-synthetic";
+  const d=data(c);
   const view=ExportCenter({item:c,preferredPlan:c.plans[0],setItem:()=>{},saveCase:()=>{},exportJson:()=>{},importJson:()=>{}});
   const print=renderToStaticMarkup(view);
-  for(const text of ["halbjährlich rechnerisch abgeleitet","vierteljährlich rechnerisch abgeleitet","Jahresmodellannahme","Mehrdeutig","fachlich vom Nutzer bestätigt","Keine Herstellerbestätigung","Modellalternative"]) {
-    assert.ok(ui.includes(text),text); assert.ok(print.includes(text),text);
-  }
+  assert.match(print,/Zins &amp; Laufzeiten – IST/);
+  assert.match(print,/von 8 Anleihen und/);
+  assert.match(print,/Fälligkeitsübersicht/);
+  assert.match(print,/Fachlicher Status/);
+  assert.doesNotMatch(print,/Modellalternative|Stückzinsband|Keine Herstellerbestätigung|Abdeckung: Indikative/);
   const cwd=process.cwd(), dir=mkdtempSync(join(tmpdir(),"bond-final-"));
   try {
     process.chdir(dir); button(view,"Excel-Arbeitsmappe")!();
     const wb=XLSX.read(readFileSync("bond-final-synthetic.xlsx"),{type:"buffer"});
     const rows=XLSX.utils.sheet_to_json<string[]>(wb.Sheets["Zins & Laufzeiten"],{header:1,defval:""});
-    assert.deepEqual(rows, d.exportRows.map((r) => [...r, ...Array(13-r.length).fill("")]));
+    const technical=XLSX.utils.sheet_to_json<string[]>(wb.Sheets["Technische Nachweise"],{header:1,defval:""});
+    assert.deepEqual(rows, d.exportRows.map((r) => [...r, ...Array(6-r.length).fill("")]));
     assert.equal(rows.find((r)=>r[0]==="Portfolio-DV01")?.[1],d.summary.find((s)=>s.key==="dv01")?.value);
-    assert.match(JSON.stringify(rows),/Mehrdeutig.*Jahresmodellannahme/);
+    assert.match(JSON.stringify(rows),/Überblick.*Fälligkeitsübersicht.*Positionen/);
+    assert.doesNotMatch(JSON.stringify(rows),/Modellalternative|Stückzinsband|Keine Herstellerbestätigung/);
+    assert.match(JSON.stringify(technical),/Mehrdeutig.*Jahresmodellannahme/);
+    assert.match(JSON.stringify(technical),/Modellalternative.*Stückzinsband/);
+    for(const sheet of [wb.Sheets["Zins & Laufzeiten"],wb.Sheets["Technische Nachweise"]])
+      for(const cell of Object.values(sheet) as any[]) assert.ok(!cell.f,"bond export text must not become a formula");
   } finally { process.chdir(cwd); rmSync(dir,{recursive:true}); }
 });
 console.log(`Bond final: ${groups} regression groups passed, synthetic data only.`);

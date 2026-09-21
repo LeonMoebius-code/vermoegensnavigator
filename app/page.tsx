@@ -6769,8 +6769,14 @@ export function ExportCenter({
       ),
       "Depot",
     );
-    if (exportBondData.analysis.directCount > 0)
-      XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(exportBondData.exportRows), "Zins & Laufzeiten");
+    if (exportBondData.analysis.directCount > 0) {
+      const bondSheet = XLSX.utils.aoa_to_sheet(exportBondData.exportRows);
+      bondSheet["!cols"] = [{ wch: 38 }, { wch: 24 }, { wch: 72 }, { wch: 24 }, { wch: 24 }, { wch: 48 }];
+      XLSX.utils.book_append_sheet(workbook, bondSheet, "Zins & Laufzeiten");
+      const technicalSheet = XLSX.utils.aoa_to_sheet(exportBondData.technicalExportRows);
+      technicalSheet["!cols"] = [{ wch: 42 }, { wch: 34 }, { wch: 34 }, { wch: 30 }, { wch: 34 }, { wch: 34 }, { wch: 34 }, { wch: 34 }, { wch: 34 }, { wch: 34 }, { wch: 34 }, { wch: 34 }, { wch: 90 }];
+      XLSX.utils.book_append_sheet(workbook, technicalSheet, "Technische Nachweise");
+    }
     XLSX.utils.book_append_sheet(
       workbook,
       XLSX.utils.json_to_sheet(
@@ -7008,8 +7014,11 @@ export function ExportCenter({
         </section>}
         {exportBondData.analysis.directCount > 0 && <section className="print-overview">
           <h2>{exportBondData.title}</h2>
-          {exportBondData.notices.map((notice) => <p key={notice}>{notice}</p>)}
-          {exportBondData.printSections.map((section, i) => <section className="bond-print-section" key={i}><h3>{section.title}</h3><dl>{section.rows.map(([label, value], j) => <div key={j}><dt>{label}</dt><dd>{value}</dd></div>)}</dl></section>)}
+          <p>Indikative Kennzahlen für den jeweils berechenbaren und gewählten Teilbestand der direkten Anleihen.</p>
+          <section className="bond-print-section"><h3>Überblick</h3><dl>{exportBondData.summary.map((entry) => <div key={entry.key}><dt>{entry.label}</dt><dd><strong>{entry.value}</strong><br />{entry.coverageText}</dd></div>)}</dl></section>
+          {exportBondData.customerNotices.length > 0 && <section className="bond-print-section"><h3>Wichtige Hinweise</h3><ul>{exportBondData.customerNotices.map((notice) => <li key={notice}>{notice}</li>)}</ul></section>}
+          <section className="bond-print-section"><h3>Fälligkeitsübersicht</h3><p>{exportBondData.customerLadderNotice}</p>{exportBondData.customerLadderRows.length > 0 ? <div className="bond-print-table"><table><thead><tr>{exportBondData.customerLadderHeaders.map((header) => <th key={header}>{header}</th>)}</tr></thead><tbody>{exportBondData.customerLadderRows.map((row, i) => <tr key={i}>{row.map((cell, j) => <td key={j}>{cell}</td>)}</tr>)}</tbody></table></div> : <p>Keine belastbare Nominaldarstellung.</p>}</section>
+          <section className="bond-print-section"><h3>Positionen</h3><div className="bond-print-table"><table><thead><tr>{exportBondData.customerPositionHeaders.map((header) => <th key={header}>{header}</th>)}</tr></thead><tbody>{exportBondData.customerPositionRows.map((row, i) => <tr key={i}>{row.map((cell, j) => <td key={j}>{cell}</td>)}</tr>)}</tbody></table></div></section>
         </section>}
         <section className="print-overview">
           <h2>Ziele und Gesprächsrahmen</h2>
