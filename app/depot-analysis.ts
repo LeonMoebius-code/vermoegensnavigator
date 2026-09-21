@@ -59,8 +59,10 @@ function classifyText(text: string, confidence: "source" | "derived"):
     return { main: "Renten", sub: "Geldmarktfonds", direct: false, confidence };
   const isFund = includesAny(text, ["fonds", "fund", "etf", "sicav"]);
   // An explicit multi-asset label takes precedence over broad equity/bond segments.
-  if (includesAny(text, ["mischfonds", "multi-asset", "multi asset", "balanced fund"]))
+  if (includesAny(text, ["mischfonds", "multi-asset", "multi asset", "balanced fund", "lebenszyklus", "lifecycle", "life cycle", "hybridfonds", "hybrid funds", "wertgesichert", "wertsicherung", "capital protection fund"]))
     return { main: "Mischfonds / Multi-Asset", sub: "Mischfonds / Multi-Asset", direct: false, confidence };
+  if (isFund && includesAny(text, ["rohstoff", "commodity", "commodities", "edelmetall"]))
+    return { main: "Alternative Anlagen", sub: "Rohstofffonds", direct: false, confidence };
   if (isFund && includesAny(text, ["geldmarkt", "money market"]))
     return { main: "Renten", sub: "Geldmarktfonds", direct: false, confidence };
   if (isFund && includesAny(text, ["renten", "anleihe", "bond", "credit"]))
@@ -81,6 +83,8 @@ function classifyText(text: string, confidence: "source" | "derived"):
     return { main: "Alternative Anlagen", sub: "Sonstige Alternative Anlagen", direct: false, confidence };
   if (includesAny(text, ["tagesgeld", "termingeld", "kontoguthaben", "sparkonto", "girokonto"]))
     return { main: "Liquidität", sub: "Kontoguthaben / Tagesgeld / Termingeld", direct: true, confidence };
+  if (!isFund && includesAny(text, ["doppelwährung", "doppelwaehrung", "dual currency", "dual-currency"]))
+    return { main: "Renten", sub: "Doppelwährungsanleihe", direct: true, bondKind: "other", confidence };
   if (includesAny(text, ["floater", "floating", "variabel", "variabel verzinslich", "variabelverzinslich"]))
     return { main: "Renten", sub: "Floater", direct: true, bondKind: "floater", confidence };
   if (includesAny(text, ["stufenzins", "step-up", "step up"]))
@@ -102,12 +106,13 @@ export function classifyDepotProduct(
   source: Partial<DepotHolding> & { productId?: string },
 ): ProductClassification {
   const sourceText = [source.securityType, source.sourceType, source.investmentMedium, source.segment, source.certificateClass].map(normalized).filter(Boolean).join(" ");
-  const classification = classifyText(sourceText, "source");
+  const specialFundName = /lebenszyklus|lifecycle|life cycle|hybridfonds|wertgesichert|wertsicherung|rohstofffonds/i.test(source.name || "") ? normalized(source.name) : "";
+  const classification = classifyText(`${sourceText} ${specialFundName}`.trim(), "source");
   if (classification) {
     // Names can veto standard-bond eligibility, never invent contractual terms.
     if (classification.bondKind === "fixed") {
       const name = normalized(source.name);
-      if (/\b(floater|floating|step-up|step up|stufenzins\w*|callable|convertible|wandelanleihe\w*|kündbar\w*|kuendbar\w*|perpetual|nachrang\w*|hybrid\w*|stripped|zertifikat\w*|certificate\w*|aktienanleihe\w*)\b/.test(name)) {
+      if (/\b(doppelwährung\w*|doppelwaehrung\w*|dual[- ]currency|floater|floating|step-up|step up|stufenzins\w*|callable|convertible|wandelanleihe\w*|kündbar\w*|kuendbar\w*|perpetual|nachrang\w*|hybrid\w*|stripped|zertifikat\w*|certificate\w*|aktienanleihe\w*)\b/.test(name)) {
         const restricted = classifyText(`${name} ${sourceText}`, "source");
         if (restricted?.main === "Strukturierte Produkte") return restricted;
         if (restricted?.bondKind && restricted.bondKind !== "fixed") return restricted;
@@ -408,7 +413,7 @@ export function bondPortfolioAnalysis(positions: DepotAnalysisPosition[], fallba
     return value !== null && Number.isFinite(value) ? value : null;
   };
   const included = (r: BondPositionAnalysis, key: BondMetricKey) => comparable(r) && r.position.value > 0 && r[key] !== null &&
-    (key !== "dv01" || r.modified !== null);
+    (key === "currentYield" || r.metrics.aggregateEligible) && (key !== "dv01" || r.modified !== null);
   const inclusion = (r: BondPositionAnalysis, key: BondMetricKey): BondInclusion => r.position.excludeFromBondAggregates ? "manuallyExcluded" :
     included(r, key) ? "includedAndCalculable" : "notCalculable";
   const coverage = (predicate: (r: BondPositionAnalysis) => boolean, exclusions: boolean): BondCoverage => {

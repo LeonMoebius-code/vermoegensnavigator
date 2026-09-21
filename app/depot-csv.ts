@@ -2,7 +2,7 @@ import { calendarDate, strictNumber, numberInRange, optionalNumberRules, Optiona
 import { ParsedDepotHolding } from "./case-model";
 import { AssetClass, assetClasses, houseProducts } from "./investment-data";
 import { depotRegionForCountry } from "./depot-country-codes";
-import { structureOverviewSource } from "./bond-source";
+import { isAgree21Profile, structureOverviewSource } from "./bond-source";
 import { classifyDepotProduct } from "./depot-analysis";
 
 export type DepotCsvFormat = "navigator" | "structure-overview";
@@ -118,6 +118,7 @@ function mapAssetClass(holding: Partial<ParsedDepotHolding>): AssetClass | null 
   const productKind = classifyDepotProduct(holding).main;
   if (productKind === "Mischfonds / Multi-Asset" || productKind === "Strukturierte Produkte")
     return null;
+  if (productKind === "Alternative Anlagen") return "Alternative Anlagen";
   const source = `${holding.segment} ${holding.investmentMedium} ${holding.securityType}`.toLowerCase();
   if (/liquid|tagesgeld|termingeld|kontoguthaben/.test(source))
     return "Liquidität";
@@ -270,7 +271,7 @@ export function parseDepotCsv(buffer: ArrayBuffer): DepotCsvResult {
       importIssues: issues.length ? issues : undefined,
     } satisfies ParsedDepotHolding;
     warnings.push(...issues.map((issue) => ({ row: index + 2, ...issue })));
-    return { ...parsedHolding, bondSource: structureOverviewSource(parsedHolding), excludeFromBondAggregates: false };
+    return { ...parsedHolding, bondSource: structureOverviewSource(parsedHolding, isAgree21Profile(headers) ? 2 : 1), excludeFromBondAggregates: false };
   });
   if (!Number.isFinite(parsed.reduce((sum, row) => sum + row.value, 0))) throw new Error("Ungültiger Depotgesamtwert.");
   return {

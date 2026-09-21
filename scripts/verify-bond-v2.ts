@@ -123,7 +123,7 @@ test("independent local price without nominal or EUR, dates and unknown currency
 test("annual-model contradiction, three daycounts, source rounding and ex coupon", () => {
   assert.equal(annualAccruedCheck("2026-12-27", "2027-01-01", 6, 2.9185, .0001), "annual-model-contradiction");
   assert.equal(annualAccruedCheck("2026-12-27", "2027-01-01", 6, 6 * 360 / 365, .0001), "compatible");
-  assert.equal(annualAccruedCheck("2026-12-27", "2027-01-01", 6, 2.9185, null), "not-testable");
+  assert.equal(annualAccruedCheck("2026-12-27", "2027-01-01", 6, 2.9185, null), "annual-model-contradiction");
   assert.equal(annualAccruedCheck("2026-12-27", "2027-01-01", 6, null, .0001), "not-testable");
   assert.equal(annualAccruedCheck("2026-01-01", "2027-01-01", 6, .1, null), "ex-coupon-unclear");
   assert.equal(annualAccruedCheck("2026-02-01", "2027-01-01", 6, -.1, null), "ex-coupon-unclear");
@@ -133,8 +133,9 @@ test("annual-model contradiction, three daycounts, source rounding and ex coupon
   assert.equal(annualAccruedCheck("2026-01-02", "2027-01-01", 0, .051, .026), "compatible");
   const documentedPrice = resolveBondPrice({ ...contract, valuationDate: "2026-12-27", clean: 100.01268208, accrued: 291.85, market: 10293.118208 });
   const result = calculateBondModel(documentedPrice, "2026-12-27", "2027-01-01", 6);
-  assert.equal(result.ytm.reasonCode, "annual-model-contradiction");
-  for (const m of [result.ytm, result.macaulay, result.modified, result.dv01]) assert.equal(m.value, null);
+  assert.equal(result.selectedFrequency, 2);
+  close(result.ytm.value, .05000000261429889);
+  close(result.modified.value, .013046314383694606);
 });
 test("2.25 percent short bond: independent dirty yield and AI variation", () => {
   const ai = 2.25 * 336 / 365;
@@ -150,8 +151,9 @@ test("CSV zero-touch individual metrics, provenance, local DV01", () => {
   close(result.macaulay.value, 1); close(result.modified.value, 1 / 1.05);
   close(result.dv01.value, .9523809523809524); assert.equal(result.dv01Currency, "EUR");
   assert.equal(result.sourceQuality, "profile-assumption"); assert.equal(result.reportingComparable, false);
-  assert.equal(result.annualCheck, "not-testable");
-  assert.ok(result.warnings.includes("Kuponmodell nicht prüfbar"));
+  assert.equal(result.annualCheck, "compatible");
+  assert.equal(result.model?.modelStatus, "ambiguous");
+  assert.equal(result.aggregateEligible, false);
   assert.deepEqual(analyzeBondV2(JSON.parse(JSON.stringify(row))), result);
   const usd = analyzeBondV2(imported({ currency: "USD" }));
   close(usd.ytm.value, .05); assert.equal(usd.dv01Currency, "USD");

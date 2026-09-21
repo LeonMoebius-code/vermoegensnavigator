@@ -29,7 +29,7 @@ const synthetic: BondSourceConvention = {
 };
 const contract = () => synthetic;
 function holding(extra: Partial<DepotHolding> = {}): DepotHolding {
-  const raw = csv(["Synthetic;Festverzinsliche;;;EUR;5;01.01.2027;10000;100;10000;0;1;01.01.2026"])[0];
+  const raw = csv(["Synthetic;Festverzinsliche;;;EUR;5;01.01.2027;10000;100;10000;;1;01.01.2026"])[0];
   const h = { ...raw, ...extra };
   return { ...h, bondSource: structureOverviewSource(h) };
 }
@@ -37,7 +37,9 @@ const plan = createCase().plans[0];
 const now = new Date(2026, 0, 1);
 const data = (depot: DepotHolding[], state: "ist" | "plan" = "ist", conventions: Parameters<typeof bondPortfolioAnalysis>[2] = contract) => buildBondAnalysisData(depot, plan, state, [], now, conventions);
 const analyze = (depot: DepotHolding[], state: "ist" | "plan" = "ist") => data(depot, state).analysis;
-const matrix = () => csv(Array.from({ length: 178 }, (_, i) => `Synthetic ${i};${i >= 100 ? "Aktien" : i >= 80 && i < 90 ? "Floater" : "Festverzinsliche"};;;EUR;${i >= 90 && i < 100 ? "n/a" : i >= 80 && i < 90 ? 4 : 5};01.01.2027;10000;100;10000;0;1;01.01.2026`));
+// Missing AI deliberately exercises the disclosed annual assumption with the same independent one-year constants.
+// AI=0 at a shared coupon date is now ambiguous and is covered by test:bond-final.
+const matrix = () => csv(Array.from({ length: 178 }, (_, i) => `Synthetic ${i};${i >= 100 ? "Aktien" : i >= 80 && i < 90 ? "Floater" : "Festverzinsliche"};;;EUR;${i >= 90 && i < 100 ? "n/a" : i >= 80 && i < 90 ? 4 : 5};01.01.2027;10000;100;10000;;1;01.01.2026`));
 
 test("178 CSV positions: independent full portfolio constants and exclusions", () => {
   const depot = matrix(), a = analyze(depot);
@@ -192,7 +194,7 @@ test("rendered UI ordering, single overview duration, checkbox event and model r
   const html = renderToStaticMarkup(view);
   assert.ok(html.indexOf("Zinsszenarien") < html.indexOf("Fälligkeitsleiter nach")); assert.ok(html.indexOf("Fälligkeitsleiter nach") < html.indexOf("Direkte Rentenpositionen"));
   assert.equal((html.match(/<span>Modified Duration<\/span>/g) || []).length, 1);
-  assert.match(html, /Kupon fehlt oder ist ungültig/); assert.match(html, /Jährliche Kuponzahlung/); assert.match(html, /type="checkbox" checked=""/);
+  assert.match(html, /Kupon fehlt oder ist ungültig/); assert.match(html, /halbjährliche und vierteljährliche Kuponkalender/); assert.match(html, /type="checkbox" checked=""/);
   findInput(view)!({ target: { checked: false } }); assert.equal(depot[0].excludeFromBondAggregates, true); close(analyze(depot).ytmCoverage, 0); close(analyze(depot).rows[0].ytm, .05);
 });
 

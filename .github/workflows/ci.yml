@@ -63,6 +63,9 @@ jobs:
       - name: CP4 Gesamtpfade und Exporte testen
         run: npm run test:cp4
 
+      - name: Abschließende Bondmodelle testen
+        run: npm run test:bond-final
+
       - name: Typen prüfen
         run: npm run typecheck
 

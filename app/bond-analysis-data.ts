@@ -1,12 +1,12 @@
 import { DepotAccount, DepotHolding, StructurePlan } from "./case-model";
 import { AnalysisState, BondCoverage, BondMetricKey, bondPortfolioAnalysis, buildDepotAnalysisPositions } from "./depot-analysis";
-import { BOND_MODEL_NOTICE, BondMetric, bondReasonLabel } from "./bond-v2";
+import { BOND_MODEL_NOTICE, BondMetric, bondReasonLabel, frequencyLabel } from "./bond-v2";
 
 const decimal = new Intl.NumberFormat("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 export const bondNumber = (n: number | null, suffix = "") => n === null || !Number.isFinite(n) ? "nicht berechenbar" : `${n > 0 && n < .01 ? "< 0,01" : decimal.format(n)}${suffix}`;
 export const bondCoverageLabel = (c: BondCoverage) => c.status === "not-applicable" ? "nicht anwendbar" : c.status === "invalid-value-basis" ? "Wertbasis numerisch nicht darstellbar" : c.value === null ? "EUR-Abdeckung nicht ermittelbar" : `${decimal.format(c.value * 100)} %`;
 export const bondMetricLabel = (m: BondMetric, suffix: string, factor = 1) => m.value === null ? `– (${bondReasonLabel(m.reasonCode) || "nicht berechenbar"})` : bondNumber(m.value * factor, suffix);
-export const BOND_CONVENTION_NOTICE = "Kalender: jährlicher Fälligkeitsanker mit Monatsendregel; effektive Jahresrendite, ACT/365F. Ø YTM ist ein Marktwertdurchschnitt, keine Portfolio-IRR. Coverage ist Datenabdeckung, keine Bestätigung der Vertragsbedingungen.";
+export const BOND_CONVENTION_NOTICE = "Kalender: jährlicher/halbjährlicher/vierteljährlicher Fälligkeitsanker mit Monatsendregel; effektive Jahresrendite, ACT/365F. Ø YTM ist ein Marktwertdurchschnitt, keine Portfolio-IRR. Coverage ist Datenabdeckung, keine Bestätigung der Vertragsbedingungen.";
 export const BOND_SCENARIO_NOTICE = "Lineare Verschiebung der modellierten Bondrenditen. Kein Kredit-, Ausfall-, Spread-, FX- oder Konvexitätsmodell; keine Prognose der risikofreien Zinskurve.";
 export const bondMetricNames: Record<BondMetricKey, string> = { ytm: "Ø indikative YTM", currentYield: "Ø laufende Verzinsung", modified: "Modified Duration", dv01: "Portfolio-DV01" };
 
@@ -20,8 +20,10 @@ export function buildBondAnalysisData(depot: DepotHolding[], plan: StructurePlan
     `EUR-Gesamtbasis nicht belegt; ${analysis.unknownReportingCount} Positionen ohne belegbaren EUR-Wert. Bekannter EUR-Teilbestand: ${bondNumber(analysis.knownValueEUR, " EUR")}.`;
   const exclusionNotice = `Kennzahlen für berechenbaren und gewählten Teilbestand; ${analysis.excludedCount} Positionen bewusst nicht berücksichtigt (${bondNumber(analysis.excludedValueEUR, " EUR")}).`;
   const dateNotice = `${analysis.mixedValuationDates ? "Gemischte Bewertungsstichtage" : "Bewertungsstichtage"}: ${analysis.valuationDates.join(", ") || "fehlen"}. ${rows.some((r) => !r.metrics.valuationDate) ? "Heute-Fallback ausschließlich für Restlaufzeit." : "Keine Aktualisierung der Kurse auf heute."}`;
+  const modelNotice = `Modellstatus: ${rows.filter((r) => r.metrics.model?.modelStatus === "identified").length} rechnerisch identifiziert, ${rows.filter((r) => r.metrics.model?.modelStatus === "ambiguous").length} mehrdeutig (keine Renditeaggregate), ${rows.filter((r) => r.metrics.model?.modelStatus === "assumed-annual").length} ungeprüfte Jahresmodellannahmen. Annahmen können im berechenbaren gewählten Teilbestand enthalten sein.`;
   const notices = [BOND_MODEL_NOTICE, BOND_CONVENTION_NOTICE, basisNotice, exclusionNotice, dateNotice,
     "Laufende Verzinsung: momentane Kupon-Kurs-Relation, bei Floater und Stufenzins nur eine Momentaufnahme; keine Gesamtrendite.",
+    modelNotice,
     ...new Set(rows.map((r) => r.metrics.sourceEvidence)),
     ...analysis.reportingAmounts.map((g) => `Belegter Marktwert-Teilbestand ${g.currency}: ${bondNumber(g.value, ` ${g.currency}`)} in ${g.count} Positionen; keine Addition verschiedener Berichtswährungen.`)];
   const summary = ([
@@ -43,12 +45,14 @@ export function buildBondAnalysisData(depot: DepotHolding[], plan: StructurePlan
     bondNumber(r.position.nominalOrUnits ?? null, ` ${r.position.currency || "Währung unbekannt"}`), bondNumber(r.position.accruedInterest ?? null),
     `${r.metrics.valuationDate || "fehlt"} / ${r.position.maturity || "fehlt"}`,
     r.remainingYears === 0 ? "Fälligkeit erreicht / überschritten" : bondNumber(r.remainingYears, " Jahre"),
-    bondMetricLabel(r.metrics.currentYield, " %", 100), bondMetricLabel(r.metrics.ytm, " %", 100),
+    bondMetricLabel(r.metrics.currentYield, " %", 100), `${bondMetricLabel(r.metrics.ytm, " %", 100)}${r.metrics.ytm.value !== null && ["ambiguous", "assumed-annual"].includes(r.metrics.model?.modelStatus || "") ? " (Jahresmodellannahme)" : ""}`,
     bondMetricLabel(r.metrics.macaulay, " Jahre"), bondMetricLabel(r.metrics.modified, " Jahre"),
     bondMetricLabel(r.metrics.dv01, ` ${r.metrics.dv01Currency || "Währung unbekannt"}`),
-    [r.position.classification.sub, r.position.value === 0 ? "Marktwert 0; Nominal bleibt separat sichtbar" : "", r.position.quantityScale === null ? "PLAN-Mengenbasis nicht berechenbar" : "",
+    [r.position.classification.sub, r.metrics.model?.modelLabel || "Kuponmodell nicht berechenbar",
+      ...(r.metrics.model?.candidates || []).filter((c) => c.compatible).map((c) => `${frequencyLabel(c.frequency)}: ${bondNumber(c.ytm === null ? null : c.ytm * 100, " %")} (Modellalternative), Stückzinsband ${c.band} pro100, ${c.variants.map((v) => `${v.dayCount}: erwartet ${bondNumber(v.expected)}, ${v.compatible ? "passt" : "passt nicht"}`).join(" / ")}`),
+      r.position.value === 0 ? "Marktwert 0; Nominal bleibt separat sichtbar" : "", r.position.quantityScale === null ? "PLAN-Mengenbasis nicht berechenbar" : "",
       ...(["ytm", "currentYield", "modified", "dv01"] as const).map((key) => `${bondMetricNames[key]}: ${r.metrics[key].status}${r.metrics[key].reasonCode ? ` (${bondReasonLabel(r.metrics[key].reasonCode)})` : ""}`),
-      ...r.metrics.warnings.filter((w) => w.includes("rundungssensitiv") || w.includes("nicht prüfbar") || w.includes("Fallback"))].filter(Boolean).join(" · ")]);
+      ...r.metrics.warnings.filter((w) => w.includes("rundungssensitiv") || w.includes("nicht prüfbar") || w.includes("Fallback") || w.includes("Grundband"))].filter(Boolean).join(" · ")]);
   const ladderNotice = `Datum-Coverage: ${bondCoverageLabel(analysis.maturity)}; Nominalleiter-Coverage: ${bondCoverageLabel(analysis.nominalLadder)}. ${analysis.zeroValueCount} Nullmarktwertpositionen. Nominale getrennt nach Währung; keine Rückzahlungsgarantie. Nominalbasis aus dem Quellenprofil, keine bestätigten Vertragszahlungen.`;
   const scenarioRows = analysis.scenarios.map((s) => [`Bondrendite ${s.deltaYield > 0 ? "+" : ""}${decimal.format(s.deltaYield * 100)} %-Pkt.`, bondNumber(s.effect, " EUR")]);
   // Flat tables serve Excel and printed HTML without a separate export calculation.

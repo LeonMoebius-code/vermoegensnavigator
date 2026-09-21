@@ -1,6 +1,6 @@
 import type { DepotAnalysisPosition } from "./depot-analysis";
 import { BondUnits, SourceQuality, sourceFieldValid, validBondSource } from "./bond-source";
-import { annualAccruedCheck, annualBondCalendar, civilDay, datedBondDuration, solveBondYield } from "./bond-math";
+import { annualAccruedCheck, couponAccruedDiagnostic, CouponFrequency, civilDay, datedBondDuration, solveBondYield } from "./bond-math";
 import { calendarDate } from "./depot-validation";
 
 export type MetricStatus = "calculable" | "missing-data" | "invalid-data" | "unsupported-structure" | "model-inconsistent" | "legacy-unverified" | "not-applicable";
@@ -38,6 +38,7 @@ export function resolveBondPrice(input: BondPriceInput) {
     : [];
   if (sameCurrency && input.fxRate !== undefined && input.fxRate !== 1) return missing("currency-fx-conflict", "model-inconsistent");
   if (u.reportingCurrency === null && fxCandidates.length) fxCandidates.push(1);
+  if (!sameCurrency && u.reportingCurrency && !positive(input.fxRate)) return missing("missing-required-fx");
   const nominal = u.nominal === "face-in-bond-currency" && positive(input.nominal) ? input.nominal : null;
   const clean = u.clean === "percent-of-par" && nonnegative(input.clean) ? input.clean : null;
   const aiValues: number[] = [];
@@ -72,8 +73,9 @@ export function resolveBondPrice(input: BondPriceInput) {
     currency: input.bondCurrency, quality: input.quality, accruedQuantizationPer100: input.accruedQuantizationPer100 };
 }
 
-export const BOND_MODEL_NOTICE = "Jährliche Kuponzahlung und Rückzahlung 100 % angenommen; tatsächliche Kuponfrequenz/-termine und Sonderbedingungen fehlen in der CSV. Indikative, nicht ausfallbereinigte Modellrendite.";
-export const BOND_PROFILE_NOTICE = "Quellprofil Strukturübersicht v1: Prozentkurs und Nominal sind Profilannahmen. Stückzinswährung, FX-Richtung und Berichtswährung sind nicht belegt. Keine gesicherte EUR-Gesamtbasis.";
+export const BOND_MODEL_NOTICE = "Indikative Modellrenditen: jährliche, halbjährliche und vierteljährliche Kuponkalender werden geprüft. Rückzahlung 100 % angenommen. Frequenz nur rechnerisch abgeleitet oder ausdrücklich angenommen, nie vertraglich bestätigt. Keine ausfallbereinigte Rendite.";
+export const BOND_PROFILE_NOTICE = "agree21-Strukturübersicht v2 (bestätigtes 29-Spalten-Profil): EUR-Berichtswährung fachlich vom Nutzer bestätigt. Prozentkurs, Nominal in Wertpapierwährung, Dirty-Marktwert und absolute Stückzinsen in EUR sowie FX als Wertpapierwährung je EUR empirisch durch CSV, Screenshot und Gegenrechnungen gestützt. Keine Herstellerbestätigung. Rundungspräzision unbekannt.";
+export const LEGACY_BOND_PROFILE_NOTICE = "Strukturübersicht v1: unbestätigte Profilannahmen, Berichtswährung und FX-/Stückzinskonvention unbekannt. Keine gesicherte EUR-Gesamtbasis.";
 
 export function bondReasonLabel(code?: string) {
   const labels: Record<string, string> = {
@@ -90,12 +92,16 @@ export function bondReasonLabel(code?: string) {
     "price-path-conflict": "Dirty-Gesamtwert und Clean plus Stückzinsen widersprechen sich",
     "missing-nominal-or-independent-price": "Nominal oder unabhängiger Preis je 100 fehlt",
     "unknown-dirty-price": "Keine eindeutige positive Dirty-Preisbasis",
-    "unsupported-cashflows": "Zahlungsstruktur für das Jahresmodell ungeeignet",
+    "unsupported-cashflows": "Zahlungsstruktur für reguläre Kuponmodelle ungeeignet",
     "special-payment-conditions": "Hinweis auf Sonderbedingungen oder Zahlungsstörung",
     "structure-origin-changed": "Strukturdaten stimmen nicht mit der Importherkunft überein",
     "matured": "Fälligkeit erreicht oder überschritten",
     "ex-coupon-unclear": "Negative Stückzinsen oder ungeklärte Cum-/Ex-Kupon-Lage",
     "annual-model-contradiction": "Stückzinsen widersprechen dem Jahreskuponmodell",
+    "coupon-model-contradiction": "Keines der drei Kuponmodelle passt zum Stückzins",
+    "coupon-model-ambiguous": "Mehrere Kuponmodelle passen, keine eindeutige Rendite",
+    "invalid-accrued": "Ungültiger Stückzins, Modellprüfung nicht verlässlich",
+    "missing-required-fx": "Erforderlicher Devisenkurs zur Wertpapierwährung fehlt",
     "no-stable-solution": "Keine numerisch stabile Renditelösung",
     "missing-dirty-position-value": "Dirty-Positionswert in bekannter Währung fehlt",
     "position-amount-changed": "Positionsbetrag verändert; absolute Sensitivität ohne konsistente Mengenbasis nicht berechenbar",
@@ -105,31 +111,39 @@ export function bondReasonLabel(code?: string) {
   return code ? labels[code] || "Kennzahl nicht berechenbar" : undefined;
 }
 
-/** One model path, also usable with independently documented synthetic units. */
+export const frequencyLabel = (f: CouponFrequency) => f === 1 ? "jährlich" : f === 2 ? "halbjährlich" : "vierteljährlich";
+/** Candidates are fixed before observing AI. No minimum-residual winner. */
 export function calculateBondModel(price: ReturnType<typeof resolveBondPrice>, valuation: string, maturity: string, coupon: number) {
-  const annualCheck = annualAccruedCheck(valuation, maturity, coupon, price.accruedPer100, price.accruedQuantizationPer100);
-  let ytm = price.dirty;
-  let macaulay: BondMetric = ytm, modified: BondMetric = ytm;
-  let residual: number | null = null;
-  if (annualCheck === "annual-model-contradiction" || annualCheck === "ex-coupon-unclear") ytm = fail("model-inconsistent", annualCheck);
-  else if (ytm.value !== null) {
-    const calendar = annualBondCalendar(valuation, maturity, coupon);
-    const flows = calendar?.cashflows.filter((cf) => cf.amount > 0) || [];
-    const solved = solveBondYield(price.dirty.value!, flows);
+  const candidates = ([1, 2, 4] as const).map((frequency) => {
+    const diagnostic = couponAccruedDiagnostic(valuation, maturity, coupon, frequency, price.accruedPer100, price.accruedQuantizationPer100);
+    const flows = diagnostic.calendar?.cashflows.filter((cf) => cf.amount > 0) || [];
+    const solved = price.dirty.value !== null ? solveBondYield(price.dirty.value, flows) : null;
     const duration = solved && datedBondDuration(price.dirty.value!, flows, solved.value);
-    ytm = solved && duration ? ok(solved.value) : fail("invalid-data", "no-stable-solution");
-    residual = solved?.residual ?? null;
-    macaulay = duration ? ok(duration.macaulay) : ytm;
-    modified = duration ? ok(duration.modified) : ytm;
-  }
-  if (ytm.value === null) { macaulay = ytm; modified = ytm; }
-  const dv01 = modified.value !== null && price.localDirtyValue !== null && price.currency
-    ? ok(price.localDirtyValue * modified.value * 0.0001) : modified.value === null ? modified : fail("missing-data", "missing-dirty-position-value");
-  return { ytm, macaulay, modified, dv01, annualCheck, residual };
+    return { frequency, ...diagnostic, ytm: solved && duration ? solved.value : null, residual: solved?.residual ?? null,
+      macaulay: duration?.macaulay ?? null, modified: duration?.modified ?? null };
+  });
+  const matches = candidates.filter((c) => c.compatible);
+  const testable = candidates.every((c) => c.testable);
+  const frequencyIndependent = coupon === 0 && (!testable || matches.length === 3);
+  const modelStatus = frequencyIndependent ? "frequency-independent" : !testable ? "assumed-annual" : matches.length === 1 ? "identified" : matches.length > 1 ? "ambiguous" : "inconsistent";
+  const selected = modelStatus === "identified" ? matches[0] : modelStatus === "assumed-annual" || frequencyIndependent ? candidates[0] : matches.find((c) => c.frequency === 1);
+  let ytm = price.dirty.value === null ? price.dirty : modelStatus === "inconsistent" ? fail("model-inconsistent", "coupon-model-contradiction") :
+    !selected ? fail("model-inconsistent", "coupon-model-ambiguous") : selected.ytm === null ? fail("invalid-data", "no-stable-solution") : ok(selected.ytm);
+  if (price.accruedPer100 !== null && price.accruedPer100 < 0) ytm = fail("model-inconsistent", "ex-coupon-unclear");
+  const macaulay = ytm.value !== null && selected?.macaulay !== null && selected?.macaulay !== undefined ? ok(selected.macaulay) : ytm;
+  const modified = ytm.value !== null && selected?.modified !== null && selected?.modified !== undefined ? ok(selected.modified) : ytm;
+  const dv01 = modified.value !== null && price.localDirtyValue !== null && price.currency ? ok(price.localDirtyValue * modified.value * .0001) : modified.value === null ? modified : fail("missing-data", "missing-dirty-position-value");
+  const modelLabel = modelStatus === "identified" ? `${frequencyLabel(selected!.frequency)} rechnerisch abgeleitet, nicht vertraglich bestätigt` : modelStatus === "ambiguous" ?
+    `Mehrdeutig: ${matches.map((c) => frequencyLabel(c.frequency)).join(", ")}.${selected ? " Angezeigte Rendite: Jahresmodellannahme." : " Keine eindeutige Modellrendite."} Nicht in Rendite-/Duration-/DV01-Aggregaten.` :
+    modelStatus === "assumed-annual" ? "Jahresmodellannahme, Kuponmodell nicht prüfbar (Stückzins fehlt oder Einheiten unklar)" : modelStatus === "frequency-independent" ? "Expliziter Nullkupon, Zahlungsplan frequenzunabhängig" : "Kein passendes Kuponmodell";
+  return { ytm, macaulay, modified, dv01, candidates, modelStatus, modelLabel,
+    selectedFrequency: modelStatus === "identified" ? selected!.frequency : null,
+    aggregateEligible: ytm.value !== null && modelStatus !== "ambiguous",
+    annualCheck: annualAccruedCheck(valuation, maturity, coupon, price.accruedPer100, price.accruedQuantizationPer100), residual: selected?.residual ?? null };
 }
 
 /** Code-supplied, documented convention; never accepted from saved customer data or UI.
- * CP3 fixtures supply their explicit synthetic contract here. Production supplies none. */
+ * CP3 fixtures supply their explicit synthetic contract here. Production uses the versioned importer profile. */
 export type BondSourceConvention = {
   evidence: string;
   units: BondUnits;
@@ -139,7 +153,8 @@ export type BondSourceConvention = {
 export function analyzeBondV2(position: DepotAnalysisPosition, fallbackDate = new Date(), convention?: BondSourceConvention) {
   const source = validBondSource(position.bondSource, position);
   const warnings = [BOND_MODEL_NOTICE];
-  if (source) warnings.push(convention ? convention.evidence : BOND_PROFILE_NOTICE);
+  const sourceEvidence = convention?.evidence || (source?.profileVersion === 2 ? BOND_PROFILE_NOTICE : LEGACY_BOND_PROFILE_NOTICE);
+  if (source) warnings.push(sourceEvidence);
   const valuation = calendarDate(position.valuationEnd);
   const fallback = `${fallbackDate.getFullYear()}-${String(fallbackDate.getMonth() + 1).padStart(2, "0")}-${String(fallbackDate.getDate()).padStart(2, "0")}`;
   const maturity = calendarDate(position.maturity);
@@ -151,8 +166,7 @@ export function analyzeBondV2(position: DepotAnalysisPosition, fallbackDate = ne
   const running = !position.classification.direct ? fail("not-applicable", "no-direct-bond") : !nonnegative(coupon) ? couponFailure
     : !positive(clean) ? fail("missing-data", "invalid-or-missing-clean") : ok(coupon / clean);
   const units = source && (convention?.units || source.units);
-  // EUR is NOT assigned as reporting currency: FX=1 only establishes an
-  // invariant local price across the explicitly retained interpretations.
+  // Only the confirmed v2 signature provides EUR without a synthetic test contract.
   const price = resolveBondPrice({ nominal: field("nominalOrUnits"), clean, accrued: field("accruedInterest"), market: field("value"), fxRate: field("fxRate"),
     bondCurrency: sourceFieldValid(source, "currency") ? position.currency?.trim().toUpperCase() : undefined,
     valuationDate: sourceFieldValid(source, "valuationEnd") ? valuation : undefined,
@@ -168,12 +182,17 @@ export function analyzeBondV2(position: DepotAnalysisPosition, fallbackDate = ne
   else if (!sourceFieldValid(source, "valuationEnd") || !valuation) ytm = fail("missing-data", "missing-valuation-date");
   else if ((remainingYears.value ?? 0) <= 0) ytm = fail("not-applicable", "matured");
   else if (position.importIssues?.some((i) => i.field === "accruedInterest" && i.code === "out-of-range")) ytm = fail("model-inconsistent", "ex-coupon-unclear");
+  else if (source?.fields.accruedInterest.status === "invalid") ytm = fail("invalid-data", "invalid-accrued");
   else ytm = price.dirty;
   let macaulay: BondMetric = ytm, modified: BondMetric = ytm;
   let annualCheck: ReturnType<typeof annualAccruedCheck> = "not-testable";
   let residual: number | null = null;
+  let model: ReturnType<typeof calculateBondModel> | null = null;
   if (ytm.value !== null && valuation && maturity && coupon !== undefined) {
-    ({ ytm, macaulay, modified, annualCheck, residual } = calculateBondModel(price, valuation, maturity, coupon));
+    model = calculateBondModel(price, valuation, maturity, coupon);
+    ({ ytm, macaulay, modified, annualCheck, residual } = model);
+    warnings.push(model.modelLabel);
+    warnings.push(price.accruedQuantizationPer100 === null ? "Stückzinsprüfung: vorläufiges diagnostisches Grundband 0,05 pro 100, Herstellerpräzision unbekannt" : "Stückzinsprüfung: Band max(0,05, zweifache nachgewiesene Quantisierung)");
   }
   if (ytm.value === null) { macaulay = ytm; modified = ytm; }
   if (annualCheck === "not-testable") warnings.push("Kuponmodell nicht prüfbar");
@@ -181,10 +200,10 @@ export function analyzeBondV2(position: DepotAnalysisPosition, fallbackDate = ne
   const dv01 = source?.fields.value.status === "invalid" ? fail("invalid-data", "position-amount-changed") : modified.value !== null && price.localDirtyValue !== null && price.currency
     ? ok(price.localDirtyValue * modified.value * 0.0001) : modified.value === null ? modified : fail("missing-data", "missing-dirty-position-value");
   return { remainingYears, currentYield: running, ytm, macaulay, modified, dv01, dv01Currency: price.currency,
-    dirtyPrice: price.dirty, annualCheck, residual, warnings, valuationDate: valuation || null,
+    model, aggregateEligible: model?.aggregateEligible === true, dirtyPrice: price.dirty, annualCheck, residual, warnings, valuationDate: valuation || null,
     excludeFromBondAggregates: position.excludeFromBondAggregates === true, sourceQuality: source?.quality || "unknown",
     reportingCurrency: units?.reportingCurrency || null,
-    reportingValueCurrency: sourceFieldValid(source, "value") && convention?.evidence && /^[A-Z]{3}$/.test(units?.reportingCurrency || "") ? units!.reportingCurrency : null,
-    reportingComparable: Boolean(sourceFieldValid(source, "value") && convention?.evidence && units?.reportingCurrency === "EUR"),
-    sourceEvidence: convention?.evidence || BOND_PROFILE_NOTICE };
+    reportingValueCurrency: sourceFieldValid(source, "value") && (convention?.evidence || source?.profileVersion === 2) && /^[A-Z]{3}$/.test(units?.reportingCurrency || "") ? units!.reportingCurrency : null,
+    reportingComparable: Boolean(sourceFieldValid(source, "value") && (convention?.evidence || source?.profileVersion === 2) && units?.reportingCurrency === "EUR"),
+    sourceEvidence };
 }

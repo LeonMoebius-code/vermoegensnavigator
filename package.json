@@ -18,7 +18,8 @@
     "test:cp1": "esbuild scripts/verify-cp1.tsx --bundle --platform=node --format=cjs --jsx=automatic --outfile=/tmp/vermoegensnavigator-verify-cp1.cjs && node /tmp/vermoegensnavigator-verify-cp1.cjs",
     "test:bond-v2": "esbuild scripts/verify-bond-v2.ts --bundle --platform=node --format=esm --outfile=/tmp/vermoegensnavigator-verify-bond-v2.mjs && node /tmp/vermoegensnavigator-verify-bond-v2.mjs",
     "test:cp3": "esbuild scripts/verify-cp3.tsx --bundle --platform=node --format=cjs --jsx=automatic --outfile=/tmp/vermoegensnavigator-verify-cp3.cjs && node /tmp/vermoegensnavigator-verify-cp3.cjs",
-    "test:cp4": "esbuild scripts/verify-cp4.tsx --bundle --platform=node --format=cjs --jsx=automatic --outfile=/tmp/vermoegensnavigator-verify-cp4.cjs && node /tmp/vermoegensnavigator-verify-cp4.cjs"
+    "test:cp4": "esbuild scripts/verify-cp4.tsx --bundle --platform=node --format=cjs --jsx=automatic --outfile=/tmp/vermoegensnavigator-verify-cp4.cjs && node /tmp/vermoegensnavigator-verify-cp4.cjs",
+    "test:bond-final": "esbuild scripts/verify-bond-final.tsx --bundle --platform=node --format=cjs --jsx=automatic --outfile=/tmp/vermoegensnavigator-verify-bond-final.cjs && node /tmp/vermoegensnavigator-verify-bond-final.cjs"
   },
   "dependencies": {
     "react": "19.2.6",
