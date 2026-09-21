@@ -5339,8 +5339,6 @@ input[inputmode="numeric"],
 .analysis-kpis.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .analysis-kpis.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .analysis-kpis.six { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.analysis-kpis.bond-primary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.analysis-kpis.bond-secondary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .analysis-kpis article {
   min-width: 0;
   border: 1px solid #dce5ed;
@@ -5369,23 +5367,10 @@ input[inputmode="numeric"],
   background: #fff;
   padding: 17px;
 }
-.analysis-alert {
-  margin-top: 14px;
-  border-left: 4px solid var(--gold);
-  border-radius: 7px;
-  background: #fff8f2;
-  padding: 12px 15px;
-  color: #5d4a42;
-  font-size: 12px;
-}
-.analysis-alert h3 { margin: 0; color: var(--navy); font-size: 13px; }
-.analysis-alert ul { margin: 7px 0 0; padding-left: 18px; }
-.analysis-alert li + li { margin-top: 4px; }
 .analysis-table.compact { min-width: 760px; font-size: 11px; }
 .bond-technical > summary { cursor: pointer; color: var(--navy); font-weight: 800; }
 .bond-technical[open] > summary { margin-bottom: 16px; }
 .bond-technical h3 { margin-top: 20px; }
-.export-scope-note { font-weight: 700; }
 .analysis-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

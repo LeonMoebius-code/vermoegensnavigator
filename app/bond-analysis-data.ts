@@ -20,25 +20,13 @@ const accruedConvention = (row: BondPositionAnalysis) => {
     ? "EUR-Berichtswährung" : "Währungskonvention ungeklärt";
 };
 
-const compactStatus = (row: BondPositionAnalysis) => {
-  if (row.position.excludeFromBondAggregates) return "Bewusst nicht berücksichtigt";
-  const code = row.metrics.ytm.reasonCode;
-  if (code === "missing-required-fx") return "Wechselkurs fehlt";
-  if (["price-path-conflict", "coupon-model-contradiction", "annual-model-contradiction", "invalid-accrued", "ex-coupon-unclear"].includes(code || "")) return "Stückzins- oder Preisangaben widersprüchlich";
-  if (["unsupported-cashflows", "special-payment-conditions"].includes(code || "")) return "Zahlungsstruktur nicht ausreichend bekannt";
-  if (code === "coupon-model-ambiguous" || row.metrics.model?.modelStatus === "ambiguous") return "Kuponmodell nicht eindeutig; nicht im Renditeüberblick";
-  if (row.metrics.model?.modelStatus === "assumed-annual") return "Berechenbar mit ungeprüfter Jahresmodellannahme";
-  if (row.metrics.ytm.value !== null) return row.metrics.model?.modelStatus === "identified"
-    ? "Berechenbar; Kuponfrequenz rechnerisch abgeleitet" : "Berechenbar";
-  return bondReasonLabel(code) || "Nicht berechenbar";
-};
-
-const coverageSentence = (label: string, coverage: BondCoverage, directCount: number) => {
-  const count = coverage.includedAndCalculable.count;
-  const universe = `${directCount} ${directCount === 1 ? "Anleihe" : "Anleihen"}`;
-  if (coverage.value === null) return `${label}: ${count} von ${universe}; wertbezogene EUR-Abdeckung nicht ermittelbar.`;
-  if (!count) return `${label}: ${directCount === 1 ? "für die Anleihe nicht" : `für keine der ${universe}`} berechenbar (0,0 % des direkten Rentenwerts).`;
-  return `${label}: ${count} von ${universe} und ${oneDecimal.format(coverage.value * 100)} % des direkten Rentenwerts.`;
+const compactCoverage = (coverage: BondCoverage) => `Berechenbarer Teilbestand: ${coverage.value === null ? bondCoverageLabel(coverage) : `${oneDecimal.format(coverage.value * 100)} %`}`;
+const assumedModel = (row: BondPositionAnalysis) => ["ambiguous", "assumed-annual"].includes(row.metrics.model?.modelStatus || "");
+const roundingSensitive = (row: BondPositionAnalysis) => row.metrics.warnings.some((w) => w.includes("rundungssensitiv"));
+const customerMetric = (row: BondPositionAnalysis, key: BondMetricKey, suffix: string, factor = 1) => {
+  const value = row.metrics[key].value;
+  if (value === null) return "–";
+  return `${bondNumber(value * factor, suffix)}${key !== "currentYield" && assumedModel(row) ? "*" : ""}${key === "ytm" && roundingSensitive(row) ? " · rundungssensitiv" : ""}`;
 };
 
 /** Shared analysis/presentation data. Only the V2 core computes bond metrics. */
@@ -60,19 +48,19 @@ export function buildBondAnalysisData(depot: DepotHolding[], plan: StructurePlan
   const summary = ([
     ["ytm", analysis.averageModeledYtm, " %", 100], ["currentYield", analysis.averageCurrentYield, " %", 100],
     ["modified", analysis.portfolioModified, " Jahre", 1], ["dv01", analysis.portfolioDv01, " EUR", 1],
-  ] as const).map(([key, value, suffix, factor]) => ({ key, label: bondMetricNames[key],
-    value: bondNumber(value === null ? null : value * factor, suffix), coverage: analysis.coverages[key],
-    coverageText: coverageSentence(bondMetricNames[key], analysis.coverages[key], analysis.directCount) }));
-  const primarySummary = summary.filter((s) => s.key === "ytm" || s.key === "currentYield");
-  const riskSummary = summary.filter((s) => s.key === "modified" || s.key === "dv01");
-  const customerNotices = [
-    analysis.mixedValuationDates ? `Die Positionen haben unterschiedliche Bewertungsstichtage (${analysis.valuationDates.join(", ")}).` : "",
-    !analysis.reportingComparable ? basisNotice : "",
-    rows.some((r) => r.metrics.model?.modelStatus === "assumed-annual") ? "Mindestens eine ausgewiesene Positionsrendite beruht auf einer ungeprüften Jahresmodellannahme." : "",
-    rows.some((r) => r.metrics.model?.modelStatus === "ambiguous") ? "Bei mindestens einer Position ist das Kuponmodell nicht eindeutig; sie fließt nicht in den Renditeüberblick ein." : "",
-    rows.some((r) => r.metrics.ytm.value === null) ? "Für einzelne Positionen fehlen Angaben oder die Zahlungsstruktur ist für eine belastbare Modellrendite nicht ausreichend bekannt." : "",
-    analysis.excludedCount ? `${analysis.excludedCount} Position${analysis.excludedCount === 1 ? " wurde" : "en wurden"} bewusst aus den aggregierten Rentenkennzahlen ausgeklammert.` : "",
-  ].filter(Boolean);
+  ] as const).map(([key, value, suffix, factor]) => {
+    const selected = rows.filter((r) => analysis.inclusion(r, key) === "includedAndCalculable");
+    const dates = [...new Set(selected.map((r) => r.metrics.valuationDate).filter(Boolean))];
+    return { key, label: bondMetricNames[key],
+      value: `${bondNumber(value === null ? null : value * factor, suffix)}${value !== null && key !== "currentYield" && selected.some(assumedModel) ? "*" : ""}`,
+      coverage: analysis.coverages[key], coverageText: compactCoverage(analysis.coverages[key]),
+      resultNote: value === null ? "" : [key === "ytm" ? "Modellrendite · Rückzahlung 100 %" : "",
+        !analysis.reportingComparable ? "Nur belegter EUR-Teilbestand" : "",
+        dates.length > 1 ? "Gemischte Bewertungsstichtage" : dates.length ? `Stand: ${dates[0]}` : "Stichtag unbekannt",
+        key === "ytm" && selected.some(roundingSensitive) ? "rundungssensitiv" : ""].filter(Boolean).join(" · "),
+    };
+  });
+  const modelFootnote = rows.some((r) => r.metrics.ytm.value !== null && assumedModel(r)) ? "* Ungeprüfte Jahresmodellannahme." : "";
   const coverageHeaders = ["Kennzahl", "EUR-Coverage", "Aggregatbasis EUR", "Gültig einbezogen: Anzahl / EUR", "Bewusst ausgeschlossen: Anzahl / EUR", "Sonst nicht berechenbar: Anzahl / EUR"];
   const coverageRows = summary.map((s) => [s.label, bondCoverageLabel(s.coverage), bondNumber(s.coverage.basisEUR, " EUR"),
     ...(["includedAndCalculable", "manuallyExcluded", "notCalculable"] as const).map((key) => `${s.coverage[key].count} / ${bondNumber(s.coverage[key].valueEUR, " EUR")}`)]);
@@ -99,31 +87,32 @@ export function buildBondAnalysisData(depot: DepotHolding[], plan: StructurePlan
       r.position.value === 0 ? "Marktwert 0; Nominal bleibt separat sichtbar" : "", r.position.quantityScale === null ? "PLAN-Mengenbasis nicht berechenbar" : "",
       ...(["ytm", "currentYield", "modified", "dv01"] as const).map((key) => `${bondMetricNames[key]}: ${r.metrics[key].status}${r.metrics[key].reasonCode ? ` (${bondReasonLabel(r.metrics[key].reasonCode)})` : ""}`),
       ...r.metrics.warnings.filter((w) => w.includes("rundungssensitiv") || w.includes("nicht prüfbar") || w.includes("Fallback") || w.includes("Grundband"))].filter(Boolean).join(" · ")]);
-  const customerPositionHeaders = ["Depot", "Wertpapier", "Marktwert", "Fälligkeit", "Indikative Rendite", "Fachlicher Status"];
+  const customerPositionHeaders = ["Depot", "Wertpapier", "Marktwert", "Stichtag / Fälligkeit", "Indikative Rendite", "Laufende Verzinsung", "Modified Duration", "DV01 (lokal)"];
   const customerPositionRows = rows.map((r) => [
     accounts.find((a) => a.id === r.position.depotId)?.name || "Ohne Depotzuordnung", r.position.name,
     r.metrics.reportingValueCurrency ? bondNumber(r.position.value, ` ${r.metrics.reportingValueCurrency}`) : `${bondNumber(r.position.value)} (Währung ungeklärt)`,
-    r.position.maturity || "nicht bekannt",
-    r.metrics.ytm.value === null ? "–" : `${bondNumber(r.metrics.ytm.value * 100, " %")}${["ambiguous", "assumed-annual"].includes(r.metrics.model?.modelStatus || "") ? " (Jahresmodellannahme)" : ""}`,
-    compactStatus(r),
+    `${r.metrics.valuationDate || "–"} / ${r.position.maturity || "–"}`,
+    customerMetric(r, "ytm", " %", 100), customerMetric(r, "currentYield", " %", 100),
+    customerMetric(r, "modified", " Jahre"), customerMetric(r, "dv01", ` ${r.metrics.dv01Currency || "Währung ungeklärt"}`),
   ]);
   const ladderNotice = `Datum-Coverage: ${bondCoverageLabel(analysis.maturity)}; Nominalleiter-Coverage: ${bondCoverageLabel(analysis.nominalLadder)}. ${analysis.zeroValueCount} Nullmarktwertpositionen. Nominale getrennt nach Währung; keine Rückzahlungsgarantie. Nominalbasis aus dem Quellenprofil, keine bestätigten Vertragszahlungen.`;
-  const customerLadderNotice = `Nominale werden getrennt nach Währung gezeigt. Die Übersicht ist für ${analysis.nominalLadder.includedAndCalculable.count} von ${analysis.directCount} ${analysis.directCount === 1 ? "Anleihe" : "Anleihen"} verfügbar${analysis.nominalLadder.value === null ? "; wertbezogene EUR-Abdeckung nicht ermittelbar" : ` (${oneDecimal.format(analysis.nominalLadder.value * 100)} % des direkten Rentenwerts)`}.`;
+  const customerLadderNotice = `Nominalabdeckung: ${bondCoverageLabel(analysis.nominalLadder)}`;
   const scenarioRows = analysis.scenarios.map((s) => [`Bondrendite ${s.deltaYield > 0 ? "+" : ""}${decimal.format(s.deltaYield * 100)} %-Pkt.`, bondNumber(s.effect, " EUR")]);
-  const exportRows: string[][] = [["Zins & Laufzeiten – IST (physischer Bestand)"], [BOND_EXPORT_SCOPE_NOTICE], [], ["Überblick"],
-    ["Kennzahl", "Ergebnis", "Datenabdeckung"], ...summary.map((s) => [s.label, s.value, s.coverageText]),
-    [], ["Wichtige Hinweise"], ...(customerNotices.length ? customerNotices.map((n) => [n]) : [["Keine wesentlichen zusätzlichen Einschränkungen."]]),
-    [], ["Fälligkeitsübersicht"], [customerLadderNotice], customerLadderHeaders,
+  const scenarioNotice = `Lineare Näherung · DV01-Teilbestand${summary.find((s) => s.key === "dv01")!.value.endsWith("*") ? "*" : ""}`;
+  const exportRows: string[][] = [["Zins & Laufzeiten – IST (physischer Bestand)"], [], ["Überblick"],
+    ["Kennzahl", "Ergebnis", "Datenabdeckung", "Ergebnisbasis"], ...summary.map((s) => [s.label, s.value, s.coverageText, s.resultNote]),
+    [], ["Zinsszenarien", scenarioNotice], ...scenarioRows,
+    [], ["Fälligkeitsübersicht nach Nominalwährung", customerLadderNotice], customerLadderHeaders,
     ...(customerLadderRows.length ? customerLadderRows : [["keine belastbare Nominaldarstellung"]]),
-    [], ["Positionen"], customerPositionHeaders, ...customerPositionRows];
+    [], ["Positionen"], customerPositionHeaders, ...customerPositionRows, ...(modelFootnote ? [[modelFootnote]] : [])];
   const technicalExportRows: string[][] = [["Technische Nachweise – Zins & Laufzeiten – IST"], ...notices.map((n) => [n]),
     ["Physische direkte Rentenpositionen", String(analysis.directCount)], ["Direkter Rentenwert EUR", bondNumber(analysis.directValueEUR, " EUR")],
     coverageHeaders, ...coverageRows, ["Zinsszenarien"], [BOND_SCENARIO_NOTICE], ...scenarioRows,
     ["Fälligkeitsleiter"], [ladderNotice], ladderHeaders, ...(ladderRows.length ? ladderRows : [["keine belastbare Nominaldarstellung"]]),
     positionHeaders, ...positionRows];
-  return { title, analysis, rows, notices, customerNotices, summary, primarySummary, riskSummary, coverageHeaders, coverageRows,
+  return { title, analysis, rows, notices, summary, modelFootnote, coverageHeaders, coverageRows,
     ladderHeaders, ladderRows, customerLadderHeaders, customerLadderRows, ladderNotice, customerLadderNotice,
-    positionHeaders, positionRows, customerPositionHeaders, customerPositionRows, scenarioRows, exportRows, technicalExportRows };
+    positionHeaders, positionRows, customerPositionHeaders, customerPositionRows, scenarioRows, scenarioNotice, exportRows, technicalExportRows };
 }
 
 /** Export deliberately fixes IST regardless of the selected/preferred plan. */

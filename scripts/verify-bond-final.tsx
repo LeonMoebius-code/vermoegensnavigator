@@ -156,12 +156,17 @@ test("customer UI is concise while technical diagnostics remain accessible", () 
   const c=sample(); c.advisory.caseName="bond-final-synthetic";
   const d=data(c), ui=renderToStaticMarkup(<BondAnalysisView data={d} onInclusionChange={()=>{}} />);
   const standard=ui.split('<details class="analysis-section bond-technical">')[0];
-  assert.match(standard,/Indikative Rendite bis Fälligkeit/);
-  assert.match(standard,/Laufende Verzinsung/);
-  assert.match(standard,/von 8 Anleihen und/);
+  for (const entry of d.summary) assert.ok(standard.includes(`<span>${entry.label}</span>`), entry.label);
+  assert.match(standard,/analysis-kpis four/);
+  assert.match(standard,/Berechenbarer Teilbestand: \d+,\d %/);
+  assert.match(standard,/Zinsszenarien/);
+  for (const [label, value] of d.scenarioRows) { assert.ok(standard.includes(label)); assert.ok(standard.includes(value)); }
+  assert.ok(standard.indexOf("Zinsszenarien") < standard.indexOf("Fälligkeitsübersicht"));
   assert.match(standard,/Fälligkeitsübersicht/);
-  assert.match(standard,/Fachlicher Status/);
-  assert.doesNotMatch(standard,/Modellalternative|Stückzinsband|Abdeckung und Ausschlüsse je Kennzahl/);
+  assert.doesNotMatch(standard,/Wichtige Hinweise|Fachlicher Status|Berechenbar;|Kennzahlen für den|Druck und Excel|Modellalternative|Stückzinsband|Abdeckung und Ausschlüsse je Kennzahl/);
+  assert.equal((standard.match(/Ungeprüfte Jahresmodellannahme/g) || []).length, 1);
+  assert.match(standard,/type="checkbox"/);
+  assert.doesNotMatch(ui,/<details[^>]* open/);
   assert.match(ui,/Fachliche Details und Datenprüfung/);
   assert.match(ui,/Abdeckung und Ausschlüsse je Kennzahl/);
   assert.match(ui,/Modellalternative/);
@@ -184,13 +189,41 @@ test("accrued-interest currency follows the validated profile without legacy pro
 
 test("empty, complete, partial, unavailable and large portfolios have honest presentation states", () => {
   const emptyCase=createCase(), empty=buildBondAnalysisData([],emptyCase.plans[0],"ist",[]);
-  assert.equal(empty.analysis.directCount,0); assert.equal(empty.primarySummary[0].value,"nicht berechenbar");
-  const complete=data(sample([finalRow()])); close(complete.analysis.ytmCoverage,1); assert.match(complete.primarySummary[0].coverageText,/1 von 1/);
+  assert.equal(empty.analysis.directCount,0); assert.equal(empty.summary[0].value,"nicht berechenbar");
+  assert.equal(empty.summary[0].coverageText,"Berechenbarer Teilbestand: nicht anwendbar");
+  const complete=data(sample([finalRow()])); close(complete.analysis.ytmCoverage,1); assert.equal(complete.summary[0].coverageText,"Berechenbarer Teilbestand: 100,0 %");
   const partial=data(sample([finalRow(),finalMatrix()[4]])); assert.ok(partial.analysis.ytmCoverage! > 0 && partial.analysis.ytmCoverage! < 1);
-  assert.match(partial.customerPositionRows[1][5],/widersprüchlich/);
-  const unavailable=data(sample([finalMatrix()[4]])); assert.equal(unavailable.analysis.averageModeledYtm,null); assert.match(unavailable.primarySummary[0].coverageText,/Anleihe nicht berechenbar/);
+  assert.equal(partial.customerPositionRows[1][4],"–");
+  assert.match(partial.positionRows[1][12],/Keines der drei Kuponmodelle passt/);
+  const unavailable=data(sample([finalMatrix()[4]])); assert.equal(unavailable.analysis.averageModeledYtm,null); assert.equal(unavailable.summary[0].coverageText,"Berechenbarer Teilbestand: 0,0 %");
   const largeRows=Array.from({length:120},(_,i)=>finalRow({Bezeichnung:`Synthetic bond ${i+1}`,WKN:`L${String(i).padStart(5,"0")}`}));
   const large=data(sample(largeRows)); assert.equal(large.customerPositionRows.length,120); assert.equal(large.positionRows.length,120);
+});
+
+test("only displayed affected results carry model and material limitation labels", () => {
+  const assumed = data(sample([finalMatrix()[5]]));
+  for (const key of ["ytm", "modified", "dv01"]) assert.match(assumed.summary.find((s) => s.key === key)!.value,/\*$/);
+  assert.doesNotMatch(assumed.summary[1].value,/\*/);
+  assert.match(assumed.scenarioNotice,/\*$/);
+  assert.equal(assumed.modelFootnote,"* Ungeprüfte Jahresmodellannahme.");
+  const excludedCase = sample([finalRow(), finalMatrix()[5]]); excludedCase.depot[1].excludeFromBondAggregates = true;
+  const excluded = data(excludedCase);
+  assert.ok(excluded.summary.every((s) => !s.value.includes("*")));
+  assert.match(excluded.customerPositionRows[1][4],/\*/); // individual result remains, outside aggregates
+  const ambiguous = data(sample([finalMatrix()[3]]));
+  assert.equal(ambiguous.summary[0].value,"nicht berechenbar");
+  assert.match(ambiguous.customerPositionRows[0][4],/\*/);
+  const identified = data(sample([finalRow()]));
+  assert.equal(identified.modelFootnote,"");
+  assert.match(identified.summary[0].resultNote,/rundungssensitiv/);
+  assert.match(identified.customerPositionRows[0][4],/rundungssensitiv/);
+  const mixed = data(sample([finalRow(), finalMatrix()[5]]));
+  assert.match(mixed.summary[0].resultNote,/Gemischte Bewertungsstichtage/);
+  const unknownCase = sample([finalRow(), finalRow({ WKN:"UNKNOWN" })]);
+  unknownCase.depot[1].bondSource = structureOverviewSource(unknownCase.depot[1], 1);
+  const unknown = data(unknownCase);
+  assert.match(unknown.summary[0].coverageText,/EUR-Abdeckung nicht ermittelbar/);
+  assert.match(unknown.summary[0].resultNote,/Nur belegter EUR-Teilbestand/);
 });
 
 test("actual Excel separates customer report and technical evidence; print stays customer-facing", () => {
@@ -199,20 +232,26 @@ test("actual Excel separates customer report and technical evidence; print stays
   const view=ExportCenter({item:c,preferredPlan:c.plans[0],setItem:()=>{},saveCase:()=>{},exportJson:()=>{},importJson:()=>{}});
   const print=renderToStaticMarkup(view);
   assert.match(print,/Zins &amp; Laufzeiten – IST/);
-  assert.match(print,/von 8 Anleihen und/);
+  assert.match(print,/Berechenbarer Teilbestand: \d+,\d %/);
   assert.match(print,/Fälligkeitsübersicht/);
-  assert.match(print,/Fachlicher Status/);
-  assert.doesNotMatch(print,/Modellalternative|Stückzinsband|Keine Herstellerbestätigung|Abdeckung: Indikative/);
+  for (const entry of d.summary) assert.ok(print.includes(`<span>${entry.label}</span>`),entry.label);
+  assert.match(print,/Zinsszenarien/);
+  for (const [label, value] of d.scenarioRows) { assert.ok(print.includes(label)); assert.ok(print.includes(value)); }
+  assert.ok(print.indexOf("Zinsszenarien") < print.indexOf("Fälligkeitsübersicht"));
+  assert.doesNotMatch(print,/Wichtige Hinweise|Fachlicher Status|Modellalternative|Stückzinsband|Keine Herstellerbestätigung|Fachliche Details und Datenprüfung|Abdeckung: Indikative/);
+  assert.match(print, /class="analysis-note no-print">Druck und Excel enthalten stets den IST-Bestand/);
   const cwd=process.cwd(), dir=mkdtempSync(join(tmpdir(),"bond-final-"));
   try {
     process.chdir(dir); button(view,"Excel-Arbeitsmappe")!();
     const wb=XLSX.read(readFileSync("bond-final-synthetic.xlsx"),{type:"buffer"});
     const rows=XLSX.utils.sheet_to_json<string[]>(wb.Sheets["Zins & Laufzeiten"],{header:1,defval:""});
     const technical=XLSX.utils.sheet_to_json<string[]>(wb.Sheets["Technische Nachweise"],{header:1,defval:""});
-    assert.deepEqual(rows, d.exportRows.map((r) => [...r, ...Array(6-r.length).fill("")]));
+    assert.deepEqual(rows, d.exportRows.map((r) => [...r, ...Array(8-r.length).fill("")]));
     assert.equal(rows.find((r)=>r[0]==="Portfolio-DV01")?.[1],d.summary.find((s)=>s.key==="dv01")?.value);
-    assert.match(JSON.stringify(rows),/Überblick.*Fälligkeitsübersicht.*Positionen/);
-    assert.doesNotMatch(JSON.stringify(rows),/Modellalternative|Stückzinsband|Keine Herstellerbestätigung/);
+    for (const entry of d.summary) assert.equal(rows.find((r)=>r[0]===entry.label)?.[1],entry.value);
+    for (const [label, value] of d.scenarioRows) assert.equal(rows.find((r)=>r[0]===label)?.[1],value);
+    assert.match(JSON.stringify(rows),/Überblick.*Zinsszenarien.*Fälligkeitsübersicht.*Positionen/);
+    assert.doesNotMatch(JSON.stringify(rows),/Wichtige Hinweise|Fachlicher Status|Druck und Excel|Modellalternative|Stückzinsband|Keine Herstellerbestätigung/);
     assert.match(JSON.stringify(technical),/Mehrdeutig.*Jahresmodellannahme/);
     assert.match(JSON.stringify(technical),/Modellalternative.*Stückzinsband/);
     for(const sheet of [wb.Sheets["Zins & Laufzeiten"],wb.Sheets["Technische Nachweise"]])

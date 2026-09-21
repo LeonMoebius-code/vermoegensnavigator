@@ -1,4 +1,4 @@
-import { buildBondAnalysisData, buildBondIstExportData } from "./bond-analysis-data";
+import { buildBondAnalysisData, buildBondIstExportData, BOND_EXPORT_SCOPE_NOTICE } from "./bond-analysis-data";
 import { BondAnalysisView } from "./bond-analysis-view";
 "use client";
 import { BOND_MODEL_NOTICE, BOND_PROFILE_NOTICE } from "./bond-v2";
@@ -6771,7 +6771,7 @@ export function ExportCenter({
     );
     if (exportBondData.analysis.directCount > 0) {
       const bondSheet = XLSX.utils.aoa_to_sheet(exportBondData.exportRows);
-      bondSheet["!cols"] = [{ wch: 38 }, { wch: 24 }, { wch: 72 }, { wch: 24 }, { wch: 24 }, { wch: 48 }];
+      bondSheet["!cols"] = [{ wch: 38 }, { wch: 28 }, { wch: 48 }, { wch: 48 }, { wch: 30 }, { wch: 24 }, { wch: 24 }, { wch: 24 }];
       XLSX.utils.book_append_sheet(workbook, bondSheet, "Zins & Laufzeiten");
       const technicalSheet = XLSX.utils.aoa_to_sheet(exportBondData.technicalExportRows);
       technicalSheet["!cols"] = [{ wch: 42 }, { wch: 34 }, { wch: 34 }, { wch: 30 }, { wch: 34 }, { wch: 34 }, { wch: 34 }, { wch: 34 }, { wch: 34 }, { wch: 34 }, { wch: 34 }, { wch: 34 }, { wch: 90 }];
@@ -6892,6 +6892,7 @@ export function ExportCenter({
           </button>
         </div>
       </div>
+      {exportBondData.analysis.directCount > 0 && <p className="analysis-note no-print">{BOND_EXPORT_SCOPE_NOTICE}</p>}
       <div className="export-actions no-print">
         <button onClick={() => print("customer")}>
           <span>PDF</span>
@@ -7014,11 +7015,10 @@ export function ExportCenter({
         </section>}
         {exportBondData.analysis.directCount > 0 && <section className="print-overview">
           <h2>{exportBondData.title}</h2>
-          <p>Indikative Kennzahlen für den jeweils berechenbaren und gewählten Teilbestand der direkten Anleihen.</p>
-          <section className="bond-print-section"><h3>Überblick</h3><dl>{exportBondData.summary.map((entry) => <div key={entry.key}><dt>{entry.label}</dt><dd><strong>{entry.value}</strong><br />{entry.coverageText}</dd></div>)}</dl></section>
-          {exportBondData.customerNotices.length > 0 && <section className="bond-print-section"><h3>Wichtige Hinweise</h3><ul>{exportBondData.customerNotices.map((notice) => <li key={notice}>{notice}</li>)}</ul></section>}
-          <section className="bond-print-section"><h3>Fälligkeitsübersicht</h3><p>{exportBondData.customerLadderNotice}</p>{exportBondData.customerLadderRows.length > 0 ? <div className="bond-print-table"><table><thead><tr>{exportBondData.customerLadderHeaders.map((header) => <th key={header}>{header}</th>)}</tr></thead><tbody>{exportBondData.customerLadderRows.map((row, i) => <tr key={i}>{row.map((cell, j) => <td key={j}>{cell}</td>)}</tr>)}</tbody></table></div> : <p>Keine belastbare Nominaldarstellung.</p>}</section>
-          <section className="bond-print-section"><h3>Positionen</h3><div className="bond-print-table"><table><thead><tr>{exportBondData.customerPositionHeaders.map((header) => <th key={header}>{header}</th>)}</tr></thead><tbody>{exportBondData.customerPositionRows.map((row, i) => <tr key={i}>{row.map((cell, j) => <td key={j}>{cell}</td>)}</tr>)}</tbody></table></div></section>
+          <section className="bond-print-section"><h3>Überblick</h3><div className="analysis-kpis four">{exportBondData.summary.map((entry) => <article key={entry.key}><span>{entry.label}</span><b>{entry.value}</b><small>{entry.coverageText}</small>{entry.resultNote && <small>{entry.resultNote}</small>}</article>)}</div></section>
+          <section className="bond-print-section"><h3>Zinsszenarien</h3><dl>{exportBondData.scenarioRows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl><small>{exportBondData.scenarioNotice}</small></section>
+          <section className="bond-print-section"><h3>Fälligkeitsübersicht nach Nominalwährung</h3><small>{exportBondData.customerLadderNotice}</small>{exportBondData.customerLadderRows.length > 0 ? <div className="bond-print-table"><table><thead><tr>{exportBondData.customerLadderHeaders.map((header) => <th key={header}>{header}</th>)}</tr></thead><tbody>{exportBondData.customerLadderRows.map((row, i) => <tr key={i}>{row.map((cell, j) => <td key={j}>{cell}</td>)}</tr>)}</tbody></table></div> : <p>Keine belastbare Nominaldarstellung.</p>}</section>
+          <section className="bond-print-section"><h3>Positionen</h3><div className="bond-print-table"><table><thead><tr>{exportBondData.customerPositionHeaders.map((header) => <th key={header}>{header}</th>)}</tr></thead><tbody>{exportBondData.customerPositionRows.map((row, i) => <tr key={i}>{row.map((cell, j) => <td key={j}>{cell}</td>)}</tr>)}</tbody></table></div>{exportBondData.modelFootnote && <small>{exportBondData.modelFootnote}</small>}</section>
         </section>}
         <section className="print-overview">
           <h2>Ziele und Gesprächsrahmen</h2>

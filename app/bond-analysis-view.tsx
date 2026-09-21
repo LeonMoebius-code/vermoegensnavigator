@@ -1,4 +1,5 @@
-import { buildBondAnalysisData, BOND_EXPORT_SCOPE_NOTICE, BOND_SCENARIO_NOTICE } from "./bond-analysis-data";
+import { buildBondAnalysisData } from "./bond-analysis-data";
+import { bondReasonLabel } from "./bond-v2";
 
 export function BondAnalysisView({ data, onInclusionChange }: {
   data: ReturnType<typeof buildBondAnalysisData>;
@@ -6,18 +7,21 @@ export function BondAnalysisView({ data, onInclusionChange }: {
 }) {
   const table = (headers: string[], rows: string[][], compact = false) => <div className="analysis-table-wrap"><table className={`analysis-table${compact ? " compact" : ""}`}><thead><tr>{headers.map((h) => <th key={h}>{h}</th>)}</tr></thead><tbody>{rows.map((r, i) => <tr key={i}>{r.map((c, j) => <td key={j}>{c}</td>)}</tr>)}</tbody></table></div>;
   return <>
-    <p className="analysis-context">Kennzahlen für den berechenbaren und gewählten Teilbestand der direkten Anleihen.</p>
-    <div className="analysis-kpis bond-primary">{data.primarySummary.map((s) => <article key={s.key}><span>{s.label}</span><b>{s.value}</b><small>{s.coverageText}</small></article>)}</div>
-    {data.customerNotices.length > 0 && <div className="analysis-alert"><h3>Wichtige Hinweise</h3><ul>{data.customerNotices.map((notice) => <li key={notice}>{notice}</li>)}</ul></div>}
-    <div className="analysis-section"><h3>Fälligkeitsübersicht</h3><p className="analysis-note">{data.customerLadderNotice}</p>{data.customerLadderRows.length ? table(data.customerLadderHeaders, data.customerLadderRows, true) : <p>Keine belastbare Nominaldarstellung.</p>}</div>
-    <div className="analysis-section"><h3>Positionen</h3>{table(data.customerPositionHeaders, data.customerPositionRows, true)}</div>
-    <p className="analysis-note export-scope-note">{BOND_EXPORT_SCOPE_NOTICE}</p>
+    <div className="analysis-kpis four">{data.summary.map((s) => <article key={s.key}><span>{s.label}</span><b>{s.value}</b><small>{s.coverageText}</small>{s.resultNote && <small>{s.resultNote}</small>}</article>)}</div>
+    <div className="analysis-section"><h3>Zinsszenarien</h3><div className="scenario-list">{data.scenarioRows.map(([label, value]) => <span key={label}><b>{label}</b><em>{value}</em></span>)}</div><small className="analysis-note">{data.scenarioNotice}</small></div>
+    <div className="analysis-section"><h3>Fälligkeitsübersicht nach Nominalwährung</h3><small className="analysis-note">{data.customerLadderNotice}</small>{data.customerLadderRows.length ? table(data.customerLadderHeaders, data.customerLadderRows, true) : <p>Keine belastbare Nominaldarstellung.</p>}</div>
+    <div className="analysis-section"><h3>Positionen</h3>
+      <div className="analysis-table-wrap"><table className="analysis-table compact"><thead><tr><th>Einbeziehen</th>{data.customerPositionHeaders.map((h) => <th key={h}>{h}</th>)}</tr></thead><tbody>{data.rows.map((row, i) => <tr key={row.position.id}>
+        <td>{row.position.source === "holding" && <input type="checkbox" aria-label={`In aggregierten Rentenkennzahlen berücksichtigen: ${row.position.name}`} checked={!row.position.excludeFromBondAggregates} onChange={(e) => onInclusionChange(row.position.id, e.target.checked)} />}</td>
+        {data.customerPositionRows[i].map((cell, j) => <td key={j} title={j >= 4 && cell === "–" ? bondReasonLabel(row.metrics[(["ytm", "currentYield", "modified", "dv01"] as const)[j - 4]].reasonCode) || "Nicht berechenbar" : undefined}>{cell}</td>)}
+      </tr>)}</tbody></table></div>
+      {data.modelFootnote && <small className="analysis-note">{data.modelFootnote}</small>}
+    </div>
     <details className="analysis-section bond-technical"><summary>Fachliche Details und Datenprüfung</summary>
-      <div className="analysis-kpis bond-secondary">{data.riskSummary.map((s) => <article key={s.key}><span>{s.label}</span><b>{s.value}</b><small>{s.coverageText}</small></article>)}</div>
       <h3>Abdeckung und Ausschlüsse je Kennzahl</h3>{table(data.coverageHeaders, data.coverageRows)}
-      <h3>Zinsszenarien</h3><div className="scenario-list">{data.scenarioRows.map(([label, value]) => <span key={label}><b>{label}</b><em>{value}</em></span>)}</div><p className="analysis-note">{BOND_SCENARIO_NOTICE}</p>
+      <h3>Vollständige Fälligkeitsprüfung</h3><p className="analysis-note">{data.ladderNotice}</p>{table(data.ladderHeaders, data.ladderRows)}
       <h3>Vollständige Positionsprüfung</h3>
-      <div className="analysis-table-wrap"><table className="analysis-table"><thead><tr>{data.positionHeaders.map((h) => <th key={h}>{h}</th>)}</tr></thead><tbody>{data.rows.map((row, i) => <tr key={row.position.id}>{data.positionRows[i].map((cell, j) => <td key={j}>{j === 2 && row.position.source === "holding" ? <><label><input type="checkbox" checked={!row.position.excludeFromBondAggregates} onChange={(e) => onInclusionChange(row.position.id, e.target.checked)} />In aggregierten Rentenkennzahlen berücksichtigen</label><small>{cell}</small></> : j === 12 ? <details><summary>{row.metrics.model?.modelLabel || "Datenstatus und Modellhinweise"}</summary>{cell}</details> : cell}</td>)}</tr>)}</tbody></table></div>
+      {table(data.positionHeaders, data.positionRows)}
       <h3>Modell, Quellen und Konventionen</h3>{data.notices.map((n) => <p className="analysis-note" key={n}>{n}</p>)}
     </details>
   </>;

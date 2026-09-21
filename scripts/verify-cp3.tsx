@@ -193,9 +193,12 @@ test("rendered UI ordering, single overview duration, checkbox event and model r
   const view = BondAnalysisView({ data: data(depot), onInclusionChange: (id, included) => { depot = depot.map((h) => h.id === id ? { ...h, excludeFromBondAggregates: !included } : h); } });
   const html = renderToStaticMarkup(view);
   assert.ok(html.indexOf("Fälligkeitsübersicht") < html.indexOf("<h3>Positionen")); assert.ok(html.indexOf("<h3>Positionen") < html.indexOf("Fachliche Details und Datenprüfung"));
-  assert.ok(html.indexOf("Fachliche Details und Datenprüfung") < html.indexOf("Zinsszenarien"));
+  assert.ok(html.indexOf("Zinsszenarien") < html.indexOf("Fälligkeitsübersicht"));
+  const standard = html.split('<details class="analysis-section bond-technical">')[0];
+  for (const label of ["Indikative Rendite bis Fälligkeit", "Laufende Verzinsung", "Modified Duration", "Portfolio-DV01", "Zinsszenarien"]) assert.ok(standard.includes(label), label);
+  assert.doesNotMatch(standard, /Wichtige Hinweise|Fachlicher Status|Stückzinsband/);
   assert.equal((html.match(/<span>Modified Duration<\/span>/g) || []).length, 1);
-  assert.match(html, /Kupon fehlt oder ist ungültig/); assert.match(html, /halbjährliche und vierteljährliche Kuponkalender/); assert.match(html, /type="checkbox" checked=""/);
+  assert.match(html, /Kupon fehlt oder ist ungültig/); assert.match(html, /halbjährliche und vierteljährliche Kuponkalender/); assert.match(standard, /type="checkbox"[^>]*checked=""/);
   findInput(view)!({ target: { checked: false } }); assert.equal(depot[0].excludeFromBondAggregates, true); close(analyze(depot).ytmCoverage, 0); close(analyze(depot).rows[0].ytm, .05);
 });
 
@@ -216,8 +219,8 @@ test("actual IST workbook and print HTML include zero values, currencies, reason
       if (!allZero) item = setCaseDepot(item, [...item.depot, { ...holding({ id: "sale", name: "IST trotz Vollverkauf", plannedSale: 10000 }), depotId: item.depotAccounts[0].id }]);
       const view = ExportCenter({ item, preferredPlan: item.plans[0], setItem: noop, saveCase: noop, exportJson: noop, importJson: noop });
       const html = renderToStaticMarkup(view);
-      assert.match(html, /IST \(physischer Bestand\)/); assert.match(html, /Bewusst nicht berücksichtigt/); assert.match(html, /USD/); assert.match(html, /EUR-Abdeckung nicht ermittelbar/);
-      assert.match(html, /Modified Duration/); assert.match(html, /Fälligkeitsübersicht/); assert.doesNotMatch(html, /Zinsszenarien|Stückzinsband/);
+      assert.match(html, /IST \(physischer Bestand\)/); assert.match(html, /USD/); assert.match(html, /EUR-Abdeckung nicht ermittelbar/);
+      assert.match(html, /Modified Duration/); assert.match(html, /Fälligkeitsübersicht/); assert.match(html, /Zinsszenarien/); assert.doesNotMatch(html, /Wichtige Hinweise|Fachlicher Status|Stückzinsband/);
       if (!allZero) assert.match(html, /IST trotz Vollverkauf/);
       findButton(view)!();
       const workbook = XLSX.read(readFileSync("cp3-synthetic.xlsx"), { type: "buffer" });
@@ -225,7 +228,7 @@ test("actual IST workbook and print HTML include zero values, currencies, reason
       const rows = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: "" });
       assert.equal(rows[0][0], "Zins & Laufzeiten – IST (physischer Bestand)");
       assert.equal(rows.find((r) => r[0] === "Portfolio-DV01")![1], "nicht berechenbar");
-      assert.ok(rows.some((r) => r.includes("=1+1") && r.includes("Bewusst nicht berücksichtigt")));
+      assert.ok(rows.some((r) => r.includes("=1+1")));
       assert.ok(Object.values(sheet).some((c: any) => c.v === "=1+1" && c.t === "s" && !c.f));
       const technical = workbook.Sheets["Technische Nachweise"]; assert.ok(technical);
       const technicalRows = XLSX.utils.sheet_to_json<string[]>(technical, { header: 1, defval: "" });
