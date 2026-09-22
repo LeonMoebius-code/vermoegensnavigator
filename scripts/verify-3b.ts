@@ -1,6 +1,6 @@
+import { solveBondYield, datedBondDuration } from "../app/bond-math";
 import assert from "node:assert/strict";
 import {
-  bondDurationMetrics,
   bondDv01,
   bondPortfolioAnalysis,
   buildDepotAnalysisPositions,
@@ -11,21 +11,21 @@ import {
   entryResultAnalysis,
   industryAnalysis,
   productTypeAnalysis,
-  solveModeledYtm,
 } from "../app/depot-analysis";
 import { DepotHolding, StructurePlan } from "../app/case-model";
 
 const close = (actual: number, expected: number, tolerance = 1e-6) =>
   assert.ok(Math.abs(actual - expected) <= tolerance, `${actual} ≉ ${expected}`);
 
-const parYtm = solveModeledYtm(100, 5, 5);
+const fixedFlows = (coupon: number) => Array.from({ length: 5 }, (_, i) => ({ time: i + 1, amount: coupon + (i === 4 ? 100 : 0) }));
+const parYtm = solveBondYield(100, fixedFlows(5))?.value;
 assert.notEqual(parYtm, null);
 close(parYtm!, 0.05, 1e-8);
-const duration = bondDurationMetrics(100, 5, 5, parYtm);
+const duration = datedBondDuration(100, fixedFlows(5), parYtm!);
 assert.ok(duration && duration.macaulay < 5 && duration.modified > 0);
 assert.ok(bondDv01(100000, duration!.modified) > 0);
-assert.ok(solveModeledYtm(95, 3, 5)! > 0.03);
-assert.ok(solveModeledYtm(105, 5, 5)! < 0.05);
+assert.ok(solveBondYield(95, fixedFlows(3))!.value > 0.03);
+assert.ok(solveBondYield(105, fixedFlows(5))!.value < 0.05);
 
 const holding = (id: string, value: number, extra: Partial<DepotHolding> = {}): DepotHolding => ({
   id, name: id, value, assetClass: "Geldwerte", region: "Nicht zugeordnet", risk: 2, plannedSale: 0, note: "", ...extra,
@@ -69,11 +69,13 @@ close(industries.coverage, 1);
 assert.ok(countryAnalysis(ist, "direct").distribution.some((entry) => entry.label === "Deutschland"));
 assert.ok(currencyAnalysis(ist).distribution.some((entry) => entry.label === "Nicht zugeordnet"));
 const bonds = bondPortfolioAnalysis(ist, new Date(2026, 0, 1));
-assert.equal(bonds.rows.find((row) => row.position.id === "bond")?.ytm !== null, true);
+// Historical hand-built numbers lack strict CSV provenance: no V1 fallback.
+assert.equal(bonds.rows.find((row) => row.position.id === "bond")?.metrics.ytm.status, "legacy-unverified");
 assert.equal(bonds.rows.find((row) => row.position.id === "floater")?.ytm, null);
 assert.equal(bonds.rows.find((row) => row.position.id === "step")?.modified, null);
 assert.equal(bonds.rows.find((row) => row.position.id === "fund")?.ytm, null);
-assert.ok(bonds.ladder.length > 0 && bonds.portfolioDv01 > 0);
+assert.ok(bonds.ladder.length > 0);
+assert.equal(bonds.portfolioDv01, null);
 const weightedBondPositions = buildDepotAnalysisPositions([
   holding("YTM 4", 100_000, { securityType: "Festverzinsliche", coupon: 4, currentPrice: 100, maturity: "2031-01-01", nominalOrUnits: 100_000, valuationEnd: "2026-01-01" }),
   holding("YTM 6", 300_000, { securityType: "Festverzinsliche", coupon: 6, currentPrice: 100, maturity: "2031-01-01", nominalOrUnits: 300_000, valuationEnd: "2026-01-01" }),
@@ -81,12 +83,14 @@ const weightedBondPositions = buildDepotAnalysisPositions([
   holding("Rentenfonds ohne Einzeltitel-Cashflows", 100_000, { securityType: "Rentenfonds" }),
 ], { ...plan, allocations: [], investmentPlans: [] }, "ist");
 const weightedBonds = bondPortfolioAnalysis(weightedBondPositions, new Date(2026, 0, 1));
-close(weightedBonds.averageModeledYtm!, (100_000 * 0.04 + 300_000 * 0.06) / 400_000, 0.00002);
-close(weightedBonds.ytmCoverage, 400_000 / 500_000, 1e-8);
-assert.equal(weightedBonds.ytmValue, 400_000);
-close(weightedBonds.averageCurrentYield!, (100_000 * 0.04 + 300_000 * 0.06 + 100_000 * 0.05) / 500_000, 1e-8);
-close(weightedBonds.currentYieldCoverage, 1, 1e-8);
-assert.notEqual(weightedBonds.currentYieldCoverage, weightedBonds.ytmCoverage);
+// No common EUR currency is evidenced by these legacy fixtures. Independent
+// V2 local reference results and the 178-row CSV contract live in test:bond-v2.
+assert.equal(weightedBonds.averageModeledYtm, null);
+assert.equal(weightedBonds.ytmCoverage, null);
+assert.equal(weightedBonds.ytmValue, 0);
+assert.equal(weightedBonds.averageCurrentYield, null);
+assert.equal(weightedBonds.currentYieldCoverage, null);
+assert.ok(weightedBonds.rows.filter((row) => row.position.classification.direct).every((row) => row.metrics.currentYield.status === "legacy-unverified"));
 assert.equal(weightedBonds.rows.find((row) => row.position.name === "Floater 5")?.ytm, null);
 assert.equal(weightedBonds.rows.find((row) => row.position.name === "Rentenfonds ohne Einzeltitel-Cashflows")?.currentYield, null);
 const results = entryResultAnalysis(depot);
@@ -121,12 +125,18 @@ const rentenSubs = referenceTypes.sub.get("Renten")!;
 close(rentenSubs.find((item) => item.label === "Festverzinsliche Anleihen")!.value, 220_592.43, 0.01);
 const referenceBonds = bondPortfolioAnalysis(referencePositions, new Date(2026, 8, 1));
 close(referenceBonds.directValue, 291_692.54, 0.01);
-close(referenceBonds.maturityCoverage, 224_085.01 / 291_692.54, 0.0001);
-close(referenceBonds.calculableCoverage, 220_592.43 / 291_692.54, 0.0001);
-assert.deepEqual(referenceBonds.ladder.map((item) => [item.year, item.nominal]), [[2031, 40_000], [2032, 50_000], [2033, 20_000], [2036, 50_000], [2040, 60_000], [2041, 5_000]]);
-close(referenceBonds.portfolioModified!, 6.872959, 0.000001);
-close(referenceBonds.portfolioDv01, 151.612276, 0.000001);
-assert.ok(referenceBonds.scenarios.every((scenario) => scenario.effect !== 0));
+// CP3: legacy rows have no evidenced reporting currency. Date eligibility is
+// preserved, but the old EUR-coverage claim and unlabelled nominal sum are not.
+assert.equal(referenceBonds.maturityCoverage, null);
+close(referenceBonds.rows.filter((r) => r.position.classification.direct && r.remainingYears !== null).reduce((s, r) => s + r.position.value, 0), 224_085.01, .01);
+assert.equal(referenceBonds.calculableCoverage, null);
+assert.equal(referenceBonds.ladder.length, 0, "missing nominal currency must not imply EUR");
+const currencyLabelled = bondPortfolioAnalysis(referencePositions.map((p) => ({ ...p, currency: "EUR" })), new Date(2026, 8, 1));
+assert.deepEqual(currencyLabelled.ladder.map((item) => [item.year, item.currency, item.nominal]), [[2031, "EUR", 40_000], [2032, "EUR", 50_000], [2033, "EUR", 20_000], [2036, "EUR", 50_000], [2040, "EUR", 60_000], [2041, "EUR", 5_000]]);
+assert.equal(referenceBonds.portfolioModified, null);
+assert.equal(referenceBonds.portfolioDv01, null);
+assert.ok(referenceBonds.scenarios.every((scenario) => scenario.effect === null));
+assert.ok(referenceBonds.rows.filter((row) => row.position.classification.bondKind === "fixed").every((row) => row.metrics.ytm.status === "legacy-unverified"));
 assert.equal(referenceBonds.rows.find((row) => row.position.name === "Floater")?.ytm, null);
 assert.equal(referenceBonds.rows.find((row) => row.position.name === "Stufenzins")?.modified, null);
 assert.equal(referenceBonds.rows.find((row) => row.position.name === "Rentenfonds")?.ytm, null);
@@ -135,7 +145,7 @@ close(countryAnalysis(referencePositions, "direct").total, 291_692.54 + 96_389.6
 console.log(
   "Depotcheck-3B-Analyseengine inklusive realitätsnahem Bond-Regressionstest erfolgreich:",
   `Produktarten-Coverage ${(referenceTypes.coverage * 100).toFixed(1)} %,`,
-  `YTM-/Duration-Coverage ${(referenceBonds.calculableCoverage * 100).toFixed(1)} %,`,
+  `Legacy-EUR-Coverage ${referenceBonds.calculableCoverage},`,
   `Modified Duration ${referenceBonds.portfolioModified?.toFixed(2)},`,
-  `DV01 ${referenceBonds.portfolioDv01.toFixed(2)} €.`,
+  `Legacy-DV01 ${referenceBonds.portfolioDv01}.`,
 );

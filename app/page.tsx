@@ -1,4 +1,7 @@
+import { buildBondAnalysisData, buildBondIstExportData, BOND_EXPORT_SCOPE_NOTICE } from "./bond-analysis-data";
+import { BondAnalysisView } from "./bond-analysis-view";
 "use client";
+import { BOND_MODEL_NOTICE, BOND_PROFILE_NOTICE } from "./bond-v2";
 
 import {
   ChangeEvent,
@@ -11,6 +14,8 @@ import {
   useState,
 } from "react";
 import * as XLSX from "xlsx";
+import { importIssueLabel } from "./depot-validation";
+import { CASE_STORAGE_KEY, readCaseStore, writeCaseStore, recoveryBackups } from "./case-storage";
 import {
   AdvisoryData,
   emptyAdvisory,
@@ -46,6 +51,11 @@ import {
 } from "./investment-data";
 import {
   AdvisoryCase,
+  enforceCaseDepotValue,
+  withDepotValue,
+  setCaseDepot,
+  updateCaseAdvisory,
+  positiveStrategicPot,
   addDepotAccount,
   AdvisorId,
   allocationAmountInCapitalPot,
@@ -95,7 +105,6 @@ import {
   plannerIstHoldingValue,
   plannerPlanHoldingValue,
   reconcileCasePlans,
-  reconcileDepotHoldingSelections,
   renameDepotAccount,
   replaceDepotAccount,
   reconcilePlanCapitalPots,
@@ -346,11 +355,13 @@ function AmountField({
   value,
   onChange,
   hint,
+  readOnly = false,
 }: {
   label: string;
   value: number;
   onChange: (value: number) => void;
   hint?: string;
+  readOnly?: boolean;
 }) {
   return (
     <label className="field amount-field">
@@ -360,7 +371,8 @@ function AmountField({
           inputMode="numeric"
           value={value ? value.toLocaleString("de-DE") : ""}
           placeholder="0"
-          onChange={(event) => onChange(parseAmount(event.target.value))}
+          readOnly={readOnly}
+          onChange={(event) => { if (!readOnly) onChange(parseAmount(event.target.value)); }}
         />
         <b>€</b>
       </div>
@@ -521,9 +533,15 @@ function CustomerChecklistEditor({
 
 export default function Home() {
   const [view, setView] = useState<View>("home");
-  const [activeCase, setActiveCase] = useState<AdvisoryCase>(() =>
+  const [activeCase, setActiveCaseState] = useState<AdvisoryCase>(() =>
     createCase(),
   );
+  const setActiveCase: Dispatch<SetStateAction<AdvisoryCase>> = (action) =>
+    setActiveCaseState((current) => enforceCaseDepotValue(typeof action === "function" ? action(current) : action));
+  const [storageNotice, setStorageNotice] = useState("");
+  const recoveryOriginal = useRef<string | null>(null);
+  const [backups, setBackups] = useState<ReturnType<typeof recoveryBackups>>([]);
+  const storageLoaded = useRef(false);
   const [newCaseAdvisorId, setNewCaseAdvisorId] =
     useState<AdvisorId>(defaultAdvisorId);
   const [savedCases, setSavedCases] = useState<AdvisoryCase[]>([]);
@@ -533,6 +551,7 @@ export default function Home() {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       try {
+        setBackups(recoveryBackups(window.localStorage));
         const storedAdvisor = window.localStorage.getItem(
           "vermoegensnavigator-advisor",
         ) as AdvisorId | null;
@@ -544,16 +563,17 @@ export default function Home() {
           }));
         }
         const stored = window.localStorage.getItem(
-          "vermoegensnavigator-cases-v2",
+          CASE_STORAGE_KEY,
         );
-        if (stored) {
-          const parsed = JSON.parse(stored) as AdvisoryCase[];
-          if (Array.isArray(parsed))
-            setSavedCases(
-              parsed
-                .map((entry) => normalizeImportedCase(entry, false))
-                .filter((entry): entry is AdvisoryCase => Boolean(entry)),
-            );
+        if (stored !== null) {
+          const loaded = readCaseStore(stored);
+          setSavedCases(loaded.cases);
+          if (loaded.recoveryNeeded) {
+            recoveryOriginal.current = stored;
+            setStorageNotice(loaded.malformed
+              ? "Der lokale Fallbestand konnte nicht gelesen werden. Die Originaldaten bleiben unverändert. Speichern ist zum Schutz des Bestands gesperrt."
+              : `${loaded.protectedEntries.length} beschädigte Fälle geschützt. Gesunde Fälle sind verfügbar. Fehlerhafte optionale Positionsdaten werden nicht ausgewertet. Die Originaldaten bleiben wiederherstellbar.`);
+          }
         } else {
           const old = window.localStorage.getItem("vermoegensnavigator-draft");
           if (old) {
@@ -565,24 +585,30 @@ export default function Home() {
             }
           }
         }
+        storageLoaded.current = true;
       } catch {
-        window.localStorage.removeItem("vermoegensnavigator-cases-v2");
+        setStorageNotice("Lokale Fälle konnten nicht vollständig geladen werden. Es wurden keine Originaldaten gelöscht.");
       }
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
 
   const persist = (items: AdvisoryCase[]) => {
-    setSavedCases(items);
-    window.localStorage.setItem(
-      "vermoegensnavigator-cases-v2",
-      JSON.stringify(items),
-    );
+    try {
+      if (!storageLoaded.current) throw new Error("Der lokale Fallbestand ist noch nicht sicher geladen. Speichern wurde abgebrochen.");
+      const saved = writeCaseStore(window.localStorage, items);
+      setSavedCases(saved);
+      setBackups(recoveryBackups(window.localStorage));
+      return true;
+    } catch (error) {
+      setStorageNotice(error instanceof Error ? error.message : "Speichern fehlgeschlagen. Der vorhandene Bestand bleibt erhalten.");
+      return false;
+    }
   };
 
   const saveCase = (withVersion = false) => {
     const updated: AdvisoryCase = {
-      ...clone(activeCase),
+      ...clone(enforceCaseDepotValue(activeCase)),
       updatedAt: new Date().toISOString(),
     };
     if (withVersion) {
@@ -597,12 +623,12 @@ export default function Home() {
       ];
     }
     const exists = savedCases.some((item) => item.id === updated.id);
-    persist(
+    const saved = persist(
       exists
         ? savedCases.map((item) => (item.id === updated.id ? updated : item))
         : [updated, ...savedCases],
     );
-    setActiveCase(updated);
+    if (saved) setActiveCase(updated);
   };
 
   const start = (scope?: Scope, scenarioId?: string) => {
@@ -637,7 +663,7 @@ export default function Home() {
           JSON.stringify(
             {
               exportedAt: new Date().toISOString(),
-              case: activeCase,
+              case: enforceCaseDepotValue(activeCase),
               dataSources,
             },
             null,
@@ -767,13 +793,25 @@ export default function Home() {
         </nav>
         <div className="sidebar-foot">
           <p>
-            <strong>Prototyp V0.18.1</strong>
+            <strong>Prototyp V0.18.2</strong>
             <br />
             Browser-lokal, keine revisionssichere Speicherung.
           </p>
         </div>
       </aside>
       <section className="workspace">
+        {storageNotice && <div className="csv-error" role="alert">
+          <p>{storageNotice}</p>
+          {recoveryOriginal.current !== null && <button onClick={() => download(
+            new Blob([recoveryOriginal.current!], { type: "application/json" }), "fallbestand-original-wiederherstellung.json",
+          )}>Originalbestand zur Wiederherstellung herunterladen</button>}
+        </div>}
+        {backups.length > 0 && <details className="csv-privacy-note">
+          <summary>Originalsicherungen zur Wiederherstellung ({backups.length})</summary>
+          {backups.map((backup, index) => <button key={backup.key} onClick={() => download(
+            new Blob([backup.original], { type: "application/json" }), `fallbestand-original-${index + 1}.json`,
+          )}>Originalsicherung {index + 1} herunterladen</button>)}
+        </details>}
         {view === "home" && (
           <HomeView
             start={start}
@@ -1008,35 +1046,7 @@ function WizardView({
     key: K,
     value: AdvisoryData[K],
   ) =>
-    setItem((current) => {
-      const nextAdvisory = { ...current.advisory, [key]: value };
-      const liquidAssets =
-        key === "liquidAssets"
-          ? Number(value) || 0
-          : nextAdvisory.liquidAssets;
-      const updatedPlans = current.plans.map((plan) =>
-        key === "liquidAssets" && plan.capitalMode === "linked"
-          ? { ...plan, total: liquidAssets, updatedAt: new Date().toISOString() }
-          : plan,
-      );
-      return {
-        ...current,
-        advisory: nextAdvisory,
-        plans: reconcileCasePlans(
-          nextAdvisory,
-          updatedPlans,
-          current.createdAt,
-          current.savingsGoals,
-        ),
-        vvFilters: {
-          ...current.vvFilters,
-          amount:
-            current.vvFilters.amount === current.advisory.liquidAssets
-              ? liquidAssets
-              : current.vvFilters.amount,
-        },
-      };
-    });
+    setItem((current) => updateCaseAdvisory(current, key, value));
   const go = (next: number) => {
     setItem({ ...item, currentStep: Math.max(1, Math.min(6, next)) });
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1139,20 +1149,7 @@ function WizardView({
               depot={item.depot}
               depotAccounts={item.depotAccounts}
               setDepot={(depot) =>
-                setItem((current) => ({
-                  ...current,
-                  advisory: {
-                    ...current.advisory,
-                    depotValue: depot.reduce((sum, entry) => sum + entry.value, 0),
-                    hasDepot: depot.length > 0 || current.advisory.hasDepot,
-                  },
-                  depot,
-                  plans: reconcileDepotHoldingSelections(
-                    current.plans,
-                    current.depot,
-                    depot,
-                  ),
-                }))
+                setItem((current) => setCaseDepot(current, depot))
               }
               applyDepotImport={(mode, rows, value) =>
                 setItem((current) => ({
@@ -1338,11 +1335,12 @@ function useDepotCsvImport(
   };
   const applyCsv = (mode: "newDepot" | "replaceDepot") => {
     if (!csvPreview) return;
-    applyImport(
-      mode,
-      csvPreview.result.rows,
-      mode === "newDepot" ? depotName : targetDepotId,
-    );
+    try {
+      applyImport(mode, csvPreview.result.rows, mode === "newDepot" ? depotName : targetDepotId);
+    } catch {
+      setCsvError("Import abgebrochen. Der bisherige Bestand bleibt unverändert.");
+      return;
+    }
     setCsvPreview(null);
   };
   return {
@@ -1394,6 +1392,10 @@ function useDepotCsvImport(
                 Zuordnungen offen
               </span>
             </div>
+            {csvPreview.result.warnings.length > 0 && <div role="status">
+              <p>{csvPreview.result.warnings.length} optionale Felder sind ungültig und werden nicht ausgewertet.</p>
+              <ul>{csvPreview.result.warnings.map((issue, index) => <li key={index}>Zeile {issue.row}, {importIssueLabel(issue)}</li>)}</ul>
+            </div>}
             {csvPreview.result.ignoredPersonalColumns && (
               <p className="csv-privacy-note">
                 Depotnummer und Depotinhaber wurden erkannt, werden aber bewusst
@@ -1433,7 +1435,7 @@ function useDepotCsvImport(
   };
 }
 
-function SituationStep({
+export function SituationStep({
   data,
   update,
   depot,
@@ -1546,8 +1548,10 @@ function SituationStep({
         />
         <AmountField
           label="Wertpapierdepot"
-          value={data.depotValue}
+          value={withDepotValue(data, depot).depotValue}
+          readOnly={depot.length > 0}
           onChange={(value) => {
+            if (depot.length > 0) return;
             update("depotValue", value);
             update("hasDepot", value > 0);
           }}
@@ -1565,7 +1569,8 @@ function SituationStep({
         <label className="check-row full">
           <input
             type="checkbox"
-            checked={data.hasDepot}
+            checked={depot.length > 0 || data.hasDepot}
+            disabled={depot.length > 0}
             onChange={(event) => update("hasDepot", event.target.checked)}
           />
           <span>
@@ -3052,10 +3057,8 @@ function PlannerView({
     if (!modelDialog) return;
     const model = modelPortfolios.find((entry) => entry.id === modelDialog.id);
     if (!model) return;
-    const modelPot =
-      visibleCapitalPots.find((pot) => pot.id === "strategic") ||
-      fallbackCapitalPot;
-    if (!modelPot) return;
+    const modelPot = positiveStrategicPot(visibleCapitalPots);
+    if (!modelPot || !Number.isFinite(modelDialog.amount) || modelDialog.amount <= 0) return;
     const modelAllocations: PlannerAllocation[] = model.holdings.map(
       (holding): PlannerAllocation => {
         const amount = Math.round((modelDialog.amount * holding.weight) / 100);
@@ -3100,7 +3103,7 @@ function PlannerView({
     }
     if (action === "supplement")
       updatePlan({
-        ...supplementPlanWithModelPortfolio(plan, modelAllocations),
+        ...supplementPlanWithModelPortfolio(plan, modelAllocations, visibleCapitalPots),
         modelId: model.id,
         modelAmount: modelDialog.amount,
       });
@@ -4719,7 +4722,8 @@ function PlannerView({
               value={modelDialog.amount}
               onChange={(amount) => setModelDialog({ ...modelDialog, amount })}
             />
-            <button className="primary" onClick={() => applyModel(modelDialog.action)}>
+            {!positiveStrategicPot(visibleCapitalPots) && <p role="alert">Kein positives strategisches Kapital verfügbar. Modellportfolios können nicht angewendet werden.</p>}
+            <button className="primary" disabled={!positiveStrategicPot(visibleCapitalPots) || !Number.isFinite(modelDialog.amount) || modelDialog.amount <= 0} onClick={() => applyModel(modelDialog.action)}>
               Ausgewählte Aktion anwenden
             </button>
           </section>
@@ -4824,7 +4828,7 @@ function CapitalPotStructure({
   );
 }
 
-function WealthHouse({
+export function WealthHouse({
   plan,
   plans = [plan],
   depot,
@@ -4870,6 +4874,8 @@ function WealthHouse({
     (sum, value) => sum + value,
     0,
   );
+  const combinedUnresolved = breakdown.unresolved + (includeInTotal ? depotBreakdown.unresolved : 0);
+  const combinedTotal = combinedKnown + combinedUnresolved;
   const colors: Record<AssetClass, string> = {
     Liquidität: "#96bee6",
     Geldwerte: "#327dc8",
@@ -4962,11 +4968,11 @@ function WealthHouse({
     0,
   );
   const shownTotal =
-    shownKnown + (context === "depot" ? shown.unresolved : 0);
+    shownKnown + shown.unresolved;
   const istTotal =
-    istKnown + (context === "depot" ? istSnapshot.unresolved : 0);
+    istKnown + istSnapshot.unresolved;
   const comparisonTotal =
-    comparisonKnown + (context === "depot" ? comparison.unresolved : 0);
+    comparisonKnown + comparison.unresolved;
   const holdingContributors = (
     holdings: DepotHolding[],
     asset: AssetClass,
@@ -5242,8 +5248,8 @@ function WealthHouse({
                   {euro.format(combinedAmounts[name])}
                   <small>
                     Quote {percent.format(
-                      combinedKnown
-                        ? (combinedAmounts[name] / combinedKnown) * 100
+                      combinedTotal
+                        ? (combinedAmounts[name] / combinedTotal) * 100
                         : 0,
                     )} %
                   </small>
@@ -5252,14 +5258,14 @@ function WealthHouse({
             ))}
             <div className="unresolved-row">
               <strong>Nicht durchgeschaut</strong>
-              <span>–</span>
+              <span>{euro.format(includeInTotal ? depotBreakdown.unresolved : 0)}</span>
               <span>{euro.format(breakdown.unresolved)}</span>
               <b>
-                {euro.format(breakdown.unresolved)}
+                {euro.format(combinedUnresolved)}
                 <small>
                   Quote {percent.format(
-                    combinedKnown
-                      ? (breakdown.unresolved / combinedKnown) * 100
+                    combinedTotal
+                      ? (combinedUnresolved / combinedTotal) * 100
                       : 0,
                   )} %
                 </small>
@@ -6046,39 +6052,12 @@ function DiversificationAnalysis({ depot, plan }: { depot: DepotHolding[]; plan:
   </section>;
 }
 
-function BondAnalysis({ depot, plan, depotAccounts }: { depot: DepotHolding[]; plan: StructurePlan; depotAccounts: DepotAccount[] }) {
+function BondAnalysis({ depot, plan, depotAccounts, onInclusionChange }: { depot: DepotHolding[]; plan: StructurePlan; depotAccounts: DepotAccount[]; onInclusionChange: (id: string, included: boolean) => void }) {
   const [state, setState] = useState<AnalysisState>("ist");
-  const positions = buildDepotAnalysisPositions(depot, plan, state);
-  if (!positions.length) return <section className="panel analysis-panel"><div className="analysis-heading"><div><p className="eyebrow">RENTENPORTFOLIO</p><h2>Zins &amp; Laufzeiten</h2></div><AnalysisToggle value={state} onChange={setState} label="Analysezustand" options={[{ value: "ist", label: "IST" }, { value: "plan", label: "PLAN" }]} /></div><AnalysisEmpty>Für diese Analyse sind noch keine Depotpositionen vorhanden.</AnalysisEmpty></section>;
-  const analysis = bondPortfolioAnalysis(positions);
-  const directRows = analysis.rows.filter((row) => row.position.classification.direct);
-  if (!directRows.length) return <section className="panel analysis-panel"><div className="analysis-heading"><h2>Zins &amp; Laufzeiten</h2><AnalysisToggle value={state} onChange={setState} label="Analysezustand" options={[{ value: "ist", label: "IST" }, { value: "plan", label: "PLAN" }]} /></div><AnalysisEmpty>Im Depot sind keine direkten Rentenwerte für eine Laufzeitenanalyse vorhanden.</AnalysisEmpty></section>;
-  const totalValue = positions.reduce((sum, position) => sum + position.value, 0);
-  const ladderMax = Math.max(1, ...analysis.ladder.map((item) => item.nominal));
+  const data = buildBondAnalysisData(depot, plan, state, depotAccounts);
   return <section className="panel analysis-panel">
-    <div className="analysis-heading"><div><p className="eyebrow">RENTENPORTFOLIO</p><h2>Zins &amp; Laufzeiten</h2></div><AnalysisToggle value={state} onChange={setState} label="Analysezustand" options={[{ value: "ist", label: "IST" }, { value: "plan", label: "PLAN" }]} /></div>
-    <p className="analysis-context">Restlaufzeiten verwenden den jeweiligen gültigen Positionsstichtag. Ohne eigenen Datenstand gilt als Fallback {analysis.valuationDate.toLocaleDateString("de-DE")}.</p>
-    <div className="analysis-kpis six">
-      <article><span>Direkte Rentenwerte</span><b>{euro.format(analysis.directValue)}</b><small>{totalValue ? percent.format(analysis.directValue / totalValue * 100) : "0"} % des Depots</small></article>
-      <article><span>Mit gültiger Fälligkeit</span><b>{percent.format(analysis.maturityCoverage * 100)} %</b><small>der direkten Rentenwerte</small></article>
-      <article><span>Ø modellierte YTM</span><b>{analysis.averageModeledYtm === null ? "–" : `${depotDecimal.format(analysis.averageModeledYtm * 100)} %`}</b><small>marktwertgewichtet · {percent.format(analysis.ytmCoverage * 100)} % Abdeckung des direkten Anleihebestands</small></article>
-      <article><span>Ø laufende Verzinsung</span><b>{analysis.averageCurrentYield === null ? "–" : `${depotDecimal.format(analysis.averageCurrentYield * 100)} %`}</b><small>marktwertgewichtet · {percent.format(analysis.currentYieldCoverage * 100)} % Abdeckung des direkten Anleihebestands</small></article>
-      <article><span>Modified Duration</span><b>{analysis.portfolioModified === null ? "–" : `${depotDecimal.format(analysis.portfolioModified)} Jahre`}</b><small>{percent.format(analysis.calculableCoverage * 100)} % Abdeckung des direkten Anleihebestands</small></article>
-      <article><span>Portfolio-DV01</span><b>{analysis.calculableValue ? euro.format(analysis.portfolioDv01) : "–"}</b><small>berechenbarer Teilbestand</small></article>
-    </div>
-    <div className="analysis-section">
-      <h3>Fälligkeitsleiter</h3>
-      {!analysis.ladder.length ? <AnalysisEmpty>Für die direkten Rentenwerte liegen keine gültigen Fälligkeits- und Nominaldaten vor.</AnalysisEmpty> : <div className="maturity-ladder">{analysis.ladder.map((item) => <div key={item.year}><b>{item.year}</b><i><em style={{ width: `${item.nominal / ladderMax * 100}%` }} /></i><strong>{depotDecimal.format(item.nominal)} nominal</strong><small>{item.count} {item.count === 1 ? "Position" : "Positionen"} · Marktwert {euro.format(item.marketValue)}</small></div>)}</div>}
-    </div>
-    <div className="analysis-section">
-      <h3>Direkte Rentenpositionen</h3>
-      <div className="analysis-table-wrap"><table className="analysis-table"><thead><tr><th>Depot</th><th>Position</th><th>Typ</th><th>Nominal</th><th>Coupon</th><th>Fälligkeit</th><th>Restlaufzeit</th><th>Kurs</th><th>Laufende Verzinsung auf aktuellen Kurs</th><th>Modellierte YTM</th><th>Macaulay Duration</th><th>Modified Duration</th><th>DV01</th></tr></thead><tbody>{directRows.map((row) => <tr key={row.position.id}><td>{depotAccounts.find((account) => account.id === row.position.depotId)?.name || "Neukauf"}</td><td><b>{row.position.name}</b>{row.exclusionReason && <small>{row.exclusionReason}</small>}</td><td>{row.position.classification.sub}</td><td>{Number.isFinite(row.position.nominalOrUnits) ? depotDecimal.format(Number(row.position.nominalOrUnits)) : "–"}</td><td>{Number.isFinite(row.position.coupon) ? `${depotDecimal.format(Number(row.position.coupon))} %` : "–"}</td><td>{formatDepotDate(row.position.maturity) || "–"}</td><td>{row.remainingYears === null ? "–" : row.remainingYears <= 0 ? "fällig / Daten prüfen" : `${depotDecimal.format(row.remainingYears)} Jahre`}</td><td>{Number.isFinite(row.position.currentPrice) ? depotDecimal.format(Number(row.position.currentPrice)) : "–"}</td><td>{row.currentYield === null ? "–" : `${depotDecimal.format(row.currentYield * 100)} %`}</td><td>{row.ytm === null ? "–" : `${depotDecimal.format(row.ytm * 100)} %`}</td><td>{row.macaulay === null ? "–" : `${depotDecimal.format(row.macaulay)} Jahre`}</td><td>{row.modified === null ? "–" : `${depotDecimal.format(row.modified)} Jahre`}</td><td>{row.dv01 === null ? "–" : euro.format(row.dv01)}</td></tr>)}</tbody></table></div>
-    </div>
-    <div className="analysis-grid">
-      <div className="analysis-section"><h3>Portfolio-Sensitivität</h3><div className="sensitivity-value"><span>Marktwertgewichtete Modified Duration</span><b>{analysis.portfolioModified === null ? "–" : `${depotDecimal.format(analysis.portfolioModified)} Jahre`}</b></div><p className="analysis-note">DV01 ist der näherungsweise Wertgewinn/-verlust des berechenbaren Rentenbestands bei einer parallelen Renditeänderung um einen Basispunkt.</p></div>
-      <div className="analysis-section"><h3>Zinsszenarien</h3><div className="scenario-list">{analysis.scenarios.map((scenario) => <span key={scenario.deltaYield}><b>Rendite {scenario.deltaYield > 0 ? "+" : ""}{depotDecimal.format(scenario.deltaYield * 100)} %-Pkt.</b><em className={scenario.effect < 0 ? "negative" : "positive"}>{scenario.effect >= 0 ? "+" : ""}{euro.format(scenario.effect)}</em></span>)}</div><p className="analysis-note">Lineare Durationsnäherung. Größere Zinsbewegungen, Spreadänderungen, Bonitätsänderungen und nichtlineare Effekte werden nicht vollständig abgebildet.</p></div>
-    </div>
-    <div className="analysis-section"><h3>Annahmen und ausgeschlossene Positionen</h3><p className="analysis-note">Modellierte YTM: Rückzahlung zu 100, jährliche Couponzahlung, aktueller Kurs als Clean-Preis in % des Nominals, keine Steuern, Transaktionskosten, Ausfälle oder exakte Stückzinstageszählung; vereinfachter Cashflow-Zeitplan anhand der Restlaufzeit.</p><div className="exclusion-list">{analysis.rows.filter((row) => row.exclusionReason).map((row) => <span key={row.position.id}><b>{row.position.name}</b>{row.exclusionReason}</span>)}</div></div>
+    <div className="analysis-heading"><div><p className="eyebrow">RENTENPORTFOLIO</p><h2>{data.title}</h2></div><AnalysisToggle value={state} onChange={setState} label="Analysezustand" options={[{ value: "ist", label: "IST" }, { value: "plan", label: "PLAN" }]} /></div>
+    {!data.analysis.directCount ? <AnalysisEmpty>Keine direkten Rentenpositionen in dieser Sicht vorhanden.</AnalysisEmpty> : <BondAnalysisView data={data} onInclusionChange={onInclusionChange} />}
   </section>;
 }
 
@@ -6149,16 +6128,7 @@ function DepotOptimizer({
     setItem((current) => ({ ...current, ...deleteDepotAccount(current, account.id) }));
   };
   const setDepotPositions = (next: DepotHolding[]) =>
-    setItem((current) => ({
-      ...current,
-      advisory: {
-        ...current.advisory,
-        depotValue: next.reduce((sum, entry) => sum + entry.value, 0),
-        hasDepot: next.length > 0 || current.advisory.hasDepot,
-      },
-      depot: next,
-      plans: reconcileDepotHoldingSelections(current.plans, current.depot, next),
-    }));
+    setItem((current) => setCaseDepot(current, next));
   const applyDepotImport = (
     mode: "newDepot" | "replaceDepot",
     rows: DepotCsvResult["rows"],
@@ -6378,6 +6348,7 @@ function DepotOptimizer({
                         .join(" · ")}
                     </small>
                   )}
+                  {holding.importIssues?.length ? <small role="status">Nicht ausgewertet: {holding.importIssues.map(importIssueLabel).join(", ")}</small> : null}
                   {holding.classificationStatus === "unresolved" && <small className="classification-open">Durchschau ungeklärt</small>}
                 </div>
                 <div className="inline-amount">
@@ -6502,7 +6473,7 @@ function DepotOptimizer({
       )}
       {section === "house" && depot.length === 0 && <section className="panel analysis-panel"><AnalysisEmpty>Für diese Analyse sind noch keine Depotpositionen vorhanden.</AnalysisEmpty></section>}
       {section === "diversification" && <DiversificationAnalysis depot={depot} plan={plan} />}
-      {section === "bonds" && <BondAnalysis depot={depot} plan={plan} depotAccounts={item.depotAccounts} />}
+      {section === "bonds" && <BondAnalysis depot={depot} plan={plan} depotAccounts={item.depotAccounts} onInclusionChange={(id, included) => updateHolding(id, { excludeFromBondAggregates: !included })} />}
       {section === "results" && <EntryResultAnalysis depot={depot} depotAccounts={item.depotAccounts} />}
       <p className="tool-legal">
         Die Simulation ermittelt ausschließlich rechnerische Auswirkungen. Sie
@@ -6513,8 +6484,8 @@ function DepotOptimizer({
   );
 }
 
-function ExportCenter({
-  item,
+export function ExportCenter({
+  item: sourceItem,
   setItem,
   preferredPlan,
   saveCase,
@@ -6528,6 +6499,7 @@ function ExportCenter({
   exportJson: () => void;
   importJson: () => void;
 }) {
+  const item = enforceCaseDepotValue(sourceItem);
   const breakdown = planAssetAmounts(preferredPlan);
   const exportPots = capitalPots(
     item.advisory,
@@ -6536,9 +6508,16 @@ function ExportCenter({
   );
   const advisor = advisorFor(item.advisorId);
   const exportRiskAssessment = completeRiskAssessment(item.advisory.riskAssessmentV2);
-  const exportBondAnalysis = bondPortfolioAnalysis(
-    buildDepotAnalysisPositions(item.depot, preferredPlan, "ist"),
-  );
+  const exportBondData = buildBondIstExportData(item.depot, preferredPlan, item.depotAccounts);
+  const economicAssetLabel = (entry: DepotHolding) => {
+    const mix = entry.productId ? productAssetMix(entry.productId) : null;
+    if (mix) {
+      const classes = assetClasses.filter((asset) => mix[asset] > 0);
+      return classes.length === 1 ? classes[0]
+        : classes.map((asset) => `${asset}: ${percent.format(mix[asset])} %`).join(" · ");
+    }
+    return entry.classificationStatus === "unresolved" ? "Nicht durchgeschaut" : entry.assetClass;
+  };
   const exportTargetLabel = (entry: SavingsPlan): string => {
     if (!entry.targetRef) return "";
     if (entry.targetRef.kind === "savingsGoal") {
@@ -6589,6 +6568,7 @@ function ExportCenter({
             : "Abweichender Planungsbetrag",
         ],
         ["Depotmodus", preferredPlan.depotMode],
+        ["Depotwert", item.advisory.depotValue],
       ]),
       "Fall",
     );
@@ -6755,7 +6735,7 @@ function ExportCenter({
           Dynamischer_Depotanteil: depotExport.totalMarketValue
             ? entry.value / depotExport.totalMarketValue
             : 0,
-          Anlageklasse: entry.assetClass,
+          Anlageklasse: economicAssetLabel(entry),
           Region: entry.region,
           Verkauf: entry.plannedSale,
           WKN: entry.wkn || "",
@@ -6789,21 +6769,14 @@ function ExportCenter({
       ),
       "Depot",
     );
-    if (exportBondAnalysis.directValue > 0)
-      XLSX.utils.book_append_sheet(
-        workbook,
-        XLSX.utils.aoa_to_sheet([
-          ["Zins & Laufzeiten – IST-Bestand"],
-          ["Direkte Rentenwerte", exportBondAnalysis.directValue],
-          ["Ø modellierte YTM", exportBondAnalysis.averageModeledYtm ?? "nicht berechenbar"],
-          ["YTM-Abdeckung des direkten Anleihebestands", exportBondAnalysis.ytmCoverage],
-          ["Ø laufende Verzinsung", exportBondAnalysis.averageCurrentYield ?? "nicht berechenbar"],
-          ["Current-Yield-Abdeckung des direkten Anleihebestands", exportBondAnalysis.currentYieldCoverage],
-          ["Marktwertgewichtete Modified Duration", exportBondAnalysis.portfolioModified ?? "nicht berechenbar"],
-          ["Portfolio-DV01", exportBondAnalysis.calculableValue ? exportBondAnalysis.portfolioDv01 : "nicht berechenbar"],
-        ]),
-        "Zins & Laufzeiten",
-      );
+    if (exportBondData.analysis.directCount > 0) {
+      const bondSheet = XLSX.utils.aoa_to_sheet(exportBondData.exportRows);
+      bondSheet["!cols"] = [{ wch: 38 }, { wch: 28 }, { wch: 48 }, { wch: 48 }, { wch: 30 }, { wch: 24 }, { wch: 24 }, { wch: 24 }];
+      XLSX.utils.book_append_sheet(workbook, bondSheet, "Zins & Laufzeiten");
+      const technicalSheet = XLSX.utils.aoa_to_sheet(exportBondData.technicalExportRows);
+      technicalSheet["!cols"] = [{ wch: 42 }, { wch: 34 }, { wch: 34 }, { wch: 30 }, { wch: 34 }, { wch: 34 }, { wch: 34 }, { wch: 34 }, { wch: 34 }, { wch: 34 }, { wch: 34 }, { wch: 34 }, { wch: 90 }];
+      XLSX.utils.book_append_sheet(workbook, technicalSheet, "Technische Nachweise");
+    }
     XLSX.utils.book_append_sheet(
       workbook,
       XLSX.utils.json_to_sheet(
@@ -6919,6 +6892,7 @@ function ExportCenter({
           </button>
         </div>
       </div>
+      {exportBondData.analysis.directCount > 0 && <p className="analysis-note no-print">{BOND_EXPORT_SCOPE_NOTICE}</p>}
       <div className="export-actions no-print">
         <button onClick={() => print("customer")}>
           <span>PDF</span>
@@ -7039,12 +7013,12 @@ function ExportCenter({
             return <p key={account.id}><span>{account.name}</span><strong>{euro.format(positions.reduce((sum, holding) => sum + holding.value, 0))} · {positions.length} Positionen{dates.length === 1 ? ` · Stand ${formatDepotDate(dates[0])}` : ""}</strong></p>;
           })}</div>
         </section>}
-        {exportBondAnalysis.directValue > 0 && <section className="print-overview">
-          <h2>Zins &amp; Laufzeiten · IST-Bestand</h2>
-          <div>
-            <p><span>Ø modellierte YTM</span><strong>{exportBondAnalysis.averageModeledYtm === null ? "Nicht berechenbar" : `${depotDecimal.format(exportBondAnalysis.averageModeledYtm * 100)} %`}</strong><small>marktwertgewichtet · {percent.format(exportBondAnalysis.ytmCoverage * 100)} % Abdeckung des direkten Anleihebestands</small></p>
-            <p><span>Ø laufende Verzinsung</span><strong>{exportBondAnalysis.averageCurrentYield === null ? "Nicht berechenbar" : `${depotDecimal.format(exportBondAnalysis.averageCurrentYield * 100)} %`}</strong><small>marktwertgewichtet · {percent.format(exportBondAnalysis.currentYieldCoverage * 100)} % Abdeckung des direkten Anleihebestands</small></p>
-          </div>
+        {exportBondData.analysis.directCount > 0 && <section className="print-overview">
+          <h2>{exportBondData.title}</h2>
+          <section className="bond-print-section"><h3>Überblick</h3><div className="analysis-kpis four">{exportBondData.summary.map((entry) => <article key={entry.key}><span>{entry.label}</span><b>{entry.value}</b><small>{entry.coverageText}</small>{entry.resultNote && <small>{entry.resultNote}</small>}</article>)}</div></section>
+          <section className="bond-print-section"><h3>Zinsszenarien</h3><dl>{exportBondData.scenarioRows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl><small>{exportBondData.scenarioNotice}</small></section>
+          <section className="bond-print-section"><h3>Fälligkeitsübersicht nach Nominalwährung</h3><small>{exportBondData.customerLadderNotice}</small>{exportBondData.customerLadderRows.length > 0 ? <div className="bond-print-table"><table><thead><tr>{exportBondData.customerLadderHeaders.map((header) => <th key={header}>{header}</th>)}</tr></thead><tbody>{exportBondData.customerLadderRows.map((row, i) => <tr key={i}>{row.map((cell, j) => <td key={j}>{cell}</td>)}</tr>)}</tbody></table></div> : <p>Keine belastbare Nominaldarstellung.</p>}</section>
+          <section className="bond-print-section"><h3>Positionen</h3><div className="bond-print-table"><table><thead><tr>{exportBondData.customerPositionHeaders.map((header) => <th key={header}>{header}</th>)}</tr></thead><tbody>{exportBondData.customerPositionRows.map((row, i) => <tr key={i}>{row.map((cell, j) => <td key={j}>{cell}</td>)}</tr>)}</tbody></table></div>{exportBondData.modelFootnote && <small>{exportBondData.modelFootnote}</small>}</section>
         </section>}
         <section className="print-overview">
           <h2>Ziele und Gesprächsrahmen</h2>
