@@ -18,6 +18,7 @@ export function BondAnalysisView({ data, onInclusionChange }: {
       {data.modelFootnote && <small className="analysis-note">{data.modelFootnote}</small>}
     </div>
     <details className="analysis-section bond-technical"><summary>Fachliche Details und Datenprüfung</summary>
+      <h3>Modellabdeckung nach Qualität</h3>{table(data.modelCoverageHeaders, data.modelCoverageRows, true)}
       <h3>Abdeckung und Ausschlüsse je Kennzahl</h3>{table(data.coverageHeaders, data.coverageRows)}
       <h3>Vollständige Fälligkeitsprüfung</h3><p className="analysis-note">{data.ladderNotice}</p>{table(data.ladderHeaders, data.ladderRows)}
       <h3>Vollständige Positionsprüfung</h3>

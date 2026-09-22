@@ -60,18 +60,38 @@ test("unique annual/half/quarter: independent Decimal70 short-bond yields and DV
   const semi = metric(finalMatrix()[1]); assert.ok(semi.ytm.value! < .051); // never 753.9% annual overpayment
 });
 
-test("ambiguous models: no residual winner, alternatives and no aggregate contamination", () => {
+test("ambiguous models: annual baseline aggregates without residual winner", () => {
   const r = finalMatrix()[3], m = metric(r), a = data(sample([r])).analysis;
-  assert.equal(m.model?.modelStatus, "ambiguous"); assert.equal(m.model?.selectedFrequency, null);
+  assert.equal(m.model?.modelStatus, "ambiguous"); assert.equal(m.model?.selectedFrequency, 1);
   assert.equal(m.model?.candidates.filter((c) => c.compatible).length, 3);
   close(m.ytm.value, .06); assert.match(m.model!.modelLabel, /Jahresmodellannahme/);
   assert.ok(Math.max(...m.model!.candidates.map((c) => c.ytm!)) - Math.min(...m.model!.candidates.map((c) => c.ytm!)) > .001);
-  close(a.ytmCoverage, 0); assert.equal(a.averageModeledYtm, null); assert.equal(a.portfolioDv01, null);
+  close(a.ytmCoverage, 1); close(a.averageModeledYtm, .06); close(a.portfolioDv01, 1 / 1.06);
   close(a.currentYieldCoverage, 1); close(a.maturityCoverage, 1); close(a.ladderCoverage, 1);
+  const twoWayAi = 6 * 119 / 365;
+  const twoWay = metric(finalRow({ Bewertungsende: "30.04.2026", Stückzinsen: twoWayAi * 100,
+    Kurs: 100 - twoWayAi, "Kurswert incl. Stückzinsen": 10000 }));
+  assert.deepEqual(twoWay.model?.candidates.filter((c) => c.compatible).map((c) => c.frequency), [1,2]);
+  assert.equal(twoWay.model?.selectedFrequency, 1); assert.equal(twoWay.aggregateEligible, true);
   // At this date half/quarter match but annual does not: no annual assumption.
   const x = metric(finalRow({ Bewertungsende: "02.07.2026", Stückzinsen: 6/365*100, Kurs: 100-6/365, "Kurswert incl. Stückzinsen": 10000 }));
   assert.equal(x.model?.modelStatus, "ambiguous"); assert.equal(x.ytm.value, null);
   assert.deepEqual(x.model?.candidates.filter((c) => c.compatible).map((c) => c.frequency), [2,4]);
+});
+
+test("synthetic short first annual period is modeled, aggregated and never reads valuation start", () => {
+  const stub = finalRow({ Bezeichnung: "Synthetic short first annual", WKN: "ZZSTUB", Bewertungsanfang: "01.01.1999",
+    Bewertungsende: "18.09.2026", Endfälligkeit: "27.01.2032", Zinssatz: 4.125, "Stück/Nominal": 2000,
+    Kurs: 98.25, "Kurswert incl. Stückzinsen": 1990.77, Stückzinsen: 25.77 });
+  const m = metric(stub), d = data(sample([stub]));
+  assert.equal(m.model?.modelStatus, "short-first-annual"); assert.equal(m.aggregateEligible, true);
+  assert.equal(m.model?.shortFirstAnnual?.stubStart, "2026-05-27");
+  close(m.model?.selectedCashflows[0].amount, 2.768835616438356);
+  close(m.ytm.value, .04497385868331072); close(m.modified.value, 4.641896780274053);
+  close(d.analysis.ytmCoverage, 1); close(d.analysis.averageModeledYtm, .04497385868331072);
+  close(d.analysis.portfolioDv01, .9240948853266179); close(d.analysis.scenarios[0].effect, 92.40948853266179);
+  assert.equal(d.analysis.modelCategories.find((entry) => entry.category === "short-first-annual")?.count, 1);
+  assert.match(d.positionRows[0][12], /Modellbeginn 2026-05-27/);
 });
 
 test("none/missing/invalid AI, explicit zero coupon and independent metrics", () => {
@@ -130,11 +150,11 @@ test("dual currency and fund labels preserve economic uncertainty and existing c
 
 test("aggregation, exclusion, PLAN, persistence, JSON and replacement", () => {
   let c = sample(); const a = data(c).analysis, refs = shortReferences;
-  const selectedValue = refs.reduce((s,r)=>s+r.dirty*100,0)+10000;
-  const total = selectedValue + 20000 + 2*refs[0].dirty*100;
+  const selectedValue = refs.reduce((s,r)=>s+r.dirty*100,0)+20000;
+  const total = selectedValue + 10000 + 2*refs[0].dirty*100;
   close(a.directValueEUR,total); close(a.ytmCoverage,selectedValue/total);
-  close(a.averageModeledYtm,(refs.reduce((s,r)=>s+r.dirty*100*.05,0)+600)/selectedValue);
-  const dv01 = refs.reduce((s,r)=>s+r.dirty*100*.01304631441617743*.0001,0)+1/1.06;
+  close(a.averageModeledYtm,(refs.reduce((s,r)=>s+r.dirty*100*.05,0)+1200)/selectedValue);
+  const dv01 = refs.reduce((s,r)=>s+r.dirty*100*.01304631441617743*.0001,0)+2/1.06;
   close(a.portfolioDv01,dv01); close(a.scenarios[0].effect,dv01*100);
   c = setCaseDepot(c, c.depot.map((h,i)=>i===0?{...h,plannedSale:h.value/2}:h));
   close(data(c,"plan").analysis.rows[0].ytm,.05); close(data(c,"plan").analysis.rows[0].dv01,a.rows[0].dv01!/2);
@@ -167,10 +187,12 @@ test("customer UI is concise while technical diagnostics remain accessible", () 
   assert.ok(standard.indexOf("Zinsszenarien") < standard.indexOf("Fälligkeitsübersicht"));
   assert.match(standard,/Fälligkeitsübersicht/);
   assert.doesNotMatch(standard,/Wichtige Hinweise|Fachlicher Status|Berechenbar;|Kennzahlen für den|Druck und Excel|Modellalternative|Stückzinsband|Abdeckung und Ausschlüsse je Kennzahl/);
-  assert.equal((standard.match(/Ungeprüfte Jahresmodellannahme/g) || []).length, 1);
+  assert.equal((standard.match(/Indikative Modellannahme/g) || []).length, 1);
   assert.match(standard,/type="checkbox"/);
   assert.doesNotMatch(ui,/<details[^>]* open/);
   assert.match(ui,/Fachliche Details und Datenprüfung/);
+  assert.match(ui,/Modellabdeckung nach Qualität/);
+  assert.match(ui,/Einbezogene Jahresannahme bei mehrdeutiger Frequenz/);
   assert.match(ui,/Abdeckung und Ausschlüsse je Kennzahl/);
   assert.match(ui,/Modellalternative/);
   assert.match(ui,/type="checkbox"/);
@@ -208,13 +230,13 @@ test("only displayed affected results carry model and material limitation labels
   for (const key of ["ytm", "modified", "dv01"]) assert.match(assumed.summary.find((s) => s.key === key)!.value,/\*$/);
   assert.doesNotMatch(assumed.summary[1].value,/\*/);
   assert.match(assumed.scenarioNotice,/\*$/);
-  assert.equal(assumed.modelFootnote,"* Ungeprüfte Jahresmodellannahme.");
+  assert.equal(assumed.modelFootnote,"* Indikative Modellannahme; Frequenz bzw. verkürzte erste Kuponperiode nicht vertraglich bestätigt.");
   const excludedCase = sample([finalRow(), finalMatrix()[5]]); excludedCase.depot[1].excludeFromBondAggregates = true;
   const excluded = data(excludedCase);
   assert.ok(excluded.summary.every((s) => !s.value.includes("*")));
   assert.match(excluded.customerPositionRows[1][4],/\*/); // individual result remains, outside aggregates
   const ambiguous = data(sample([finalMatrix()[3]]));
-  assert.equal(ambiguous.summary[0].value,"nicht berechenbar");
+  assert.match(ambiguous.summary[0].value,/\*$/);
   assert.match(ambiguous.customerPositionRows[0][4],/\*/);
   const identified = data(sample([finalRow()]));
   assert.equal(identified.modelFootnote,"");

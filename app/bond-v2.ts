@@ -1,6 +1,6 @@
 import type { DepotAnalysisPosition } from "./depot-analysis";
 import { BondUnits, SourceQuality, sourceFieldValid, validBondSource } from "./bond-source";
-import { annualAccruedCheck, couponAccruedDiagnostic, CouponFrequency, civilDay, datedBondDuration, solveBondYield } from "./bond-math";
+import { annualAccruedCheck, couponAccruedDiagnostic, CouponFrequency, civilDay, datedBondDuration, shortFirstAnnualCouponDiagnostic, solveBondYield } from "./bond-math";
 import { calendarDate } from "./depot-validation";
 
 export type MetricStatus = "calculable" | "missing-data" | "invalid-data" | "unsupported-structure" | "model-inconsistent" | "legacy-unverified" | "not-applicable";
@@ -73,7 +73,7 @@ export function resolveBondPrice(input: BondPriceInput) {
     currency: input.bondCurrency, quality: input.quality, accruedQuantizationPer100: input.accruedQuantizationPer100 };
 }
 
-export const BOND_MODEL_NOTICE = "Indikative Modellrenditen: jährliche, halbjährliche und vierteljährliche Kuponkalender werden geprüft. Rückzahlung 100 % angenommen. Frequenz nur rechnerisch abgeleitet oder ausdrücklich angenommen, nie vertraglich bestätigt. Keine ausfallbereinigte Rendite.";
+export const BOND_MODEL_NOTICE = "Indikative Modellrenditen: jährliche, halbjährliche und vierteljährliche Kuponkalender sowie eine eng begrenzte verkürzte erste Jahresperiode werden geprüft. Rückzahlung 100 % angenommen. Frequenz und Periodenbeginn sind nur rechnerisch abgeleitet oder ausdrücklich angenommen, nie vertraglich bestätigt. Keine ausfallbereinigte Rendite.";
 export const BOND_PROFILE_NOTICE = "agree21-Strukturübersicht v2 (bestätigtes 29-Spalten-Profil): EUR-Berichtswährung fachlich vom Nutzer bestätigt. Prozentkurs, Nominal in Wertpapierwährung, Dirty-Marktwert und absolute Stückzinsen in EUR sowie FX als Wertpapierwährung je EUR empirisch durch CSV, Screenshot und Gegenrechnungen gestützt. Keine Herstellerbestätigung. Rundungspräzision unbekannt.";
 export const LEGACY_BOND_PROFILE_NOTICE = "Strukturübersicht v1: unbestätigte Profilannahmen, Berichtswährung und FX-/Stückzinskonvention unbekannt. Keine gesicherte EUR-Gesamtbasis.";
 
@@ -99,7 +99,7 @@ export function bondReasonLabel(code?: string) {
     "ex-coupon-unclear": "Negative Stückzinsen oder ungeklärte Cum-/Ex-Kupon-Lage",
     "annual-model-contradiction": "Stückzinsen widersprechen dem Jahreskuponmodell",
     "coupon-model-contradiction": "Keines der drei Kuponmodelle passt zum Stückzins",
-    "coupon-model-ambiguous": "Mehrere Kuponmodelle passen, keine eindeutige Rendite",
+    "coupon-model-ambiguous": "Mehrere ausschließlich unterjährige Kuponmodelle passen; kein Basismodell beschlossen",
     "invalid-accrued": "Ungültiger Stückzins, Modellprüfung nicht verlässlich",
     "missing-required-fx": "Erforderlicher Devisenkurs zur Wertpapierwährung fehlt",
     "no-stable-solution": "Keine numerisch stabile Renditelösung",
@@ -125,8 +125,19 @@ export function calculateBondModel(price: ReturnType<typeof resolveBondPrice>, v
   const matches = candidates.filter((c) => c.compatible);
   const testable = candidates.every((c) => c.testable);
   const frequencyIndependent = coupon === 0 && (!testable || matches.length === 3);
-  const modelStatus = frequencyIndependent ? "frequency-independent" : !testable ? "assumed-annual" : matches.length === 1 ? "identified" : matches.length > 1 ? "ambiguous" : "inconsistent";
-  const selected = modelStatus === "identified" ? matches[0] : modelStatus === "assumed-annual" || frequencyIndependent ? candidates[0] : matches.find((c) => c.frequency === 1);
+  const shortFirstAnnual = matches.length === 0 && testable
+    ? shortFirstAnnualCouponDiagnostic(valuation, maturity, coupon, price.accruedPer100, price.accruedQuantizationPer100)
+    : null;
+  const shortFlows = shortFirstAnnual?.calendar?.cashflows.filter((cf) => cf.amount > 0) || [];
+  const shortSolved = shortFirstAnnual?.compatible && price.dirty.value !== null ? solveBondYield(price.dirty.value, shortFlows) : null;
+  const shortDuration = shortSolved && datedBondDuration(price.dirty.value!, shortFlows, shortSolved.value);
+  const shortCandidate = shortFirstAnnual?.compatible ? { frequency: 1 as const, ...shortFirstAnnual,
+    ytm: shortSolved && shortDuration ? shortSolved.value : null, residual: shortSolved?.residual ?? null,
+    macaulay: shortDuration?.macaulay ?? null, modified: shortDuration?.modified ?? null } : null;
+  const modelStatus = frequencyIndependent ? "frequency-independent" : !testable ? "assumed-annual" : matches.length === 1 ? "identified" :
+    matches.length > 1 ? "ambiguous" : shortCandidate ? "short-first-annual" : "inconsistent";
+  const selected = modelStatus === "identified" ? matches[0] : modelStatus === "assumed-annual" || frequencyIndependent ? candidates[0] :
+    modelStatus === "short-first-annual" ? shortCandidate : matches.find((c) => c.frequency === 1);
   let ytm = price.dirty.value === null ? price.dirty : modelStatus === "inconsistent" ? fail("model-inconsistent", "coupon-model-contradiction") :
     !selected ? fail("model-inconsistent", "coupon-model-ambiguous") : selected.ytm === null ? fail("invalid-data", "no-stable-solution") : ok(selected.ytm);
   if (price.accruedPer100 !== null && price.accruedPer100 < 0) ytm = fail("model-inconsistent", "ex-coupon-unclear");
@@ -134,11 +145,12 @@ export function calculateBondModel(price: ReturnType<typeof resolveBondPrice>, v
   const modified = ytm.value !== null && selected?.modified !== null && selected?.modified !== undefined ? ok(selected.modified) : ytm;
   const dv01 = modified.value !== null && price.localDirtyValue !== null && price.currency ? ok(price.localDirtyValue * modified.value * .0001) : modified.value === null ? modified : fail("missing-data", "missing-dirty-position-value");
   const modelLabel = modelStatus === "identified" ? `${frequencyLabel(selected!.frequency)} rechnerisch abgeleitet, nicht vertraglich bestätigt` : modelStatus === "ambiguous" ?
-    `Mehrdeutig: ${matches.map((c) => frequencyLabel(c.frequency)).join(", ")}.${selected ? " Angezeigte Rendite: Jahresmodellannahme." : " Keine eindeutige Modellrendite."} Nicht in Rendite-/Duration-/DV01-Aggregaten.` :
+    `Mehrdeutig: ${matches.map((c) => frequencyLabel(c.frequency)).join(", ")}.${selected ? " Verwendetes Basismodell: Jahresmodellannahme; in indikativen Aggregaten enthalten." : " Kein fachlich beschlossenes Basismodell; nicht in Rendite-/Duration-/DV01-Aggregaten."}` :
+    modelStatus === "short-first-annual" ? `Indikative verkürzte erste Jahresperiode: Modellbeginn ${shortCandidate!.stubStart}, erste Zahlung ${shortCandidate!.firstCoupon}; in indikativen Aggregaten enthalten, nicht vertraglich bestätigt` :
     modelStatus === "assumed-annual" ? "Jahresmodellannahme, Kuponmodell nicht prüfbar (Stückzins fehlt oder Einheiten unklar)" : modelStatus === "frequency-independent" ? "Expliziter Nullkupon, Zahlungsplan frequenzunabhängig" : "Kein passendes Kuponmodell";
   return { ytm, macaulay, modified, dv01, candidates, modelStatus, modelLabel,
-    selectedFrequency: modelStatus === "identified" ? selected!.frequency : null,
-    aggregateEligible: ytm.value !== null && modelStatus !== "ambiguous",
+    selectedFrequency: selected?.frequency ?? null, selectedCashflows: selected?.calendar?.cashflows || [], shortFirstAnnual,
+    aggregateEligible: ytm.value !== null && (modelStatus !== "ambiguous" || selected?.frequency === 1),
     annualCheck: annualAccruedCheck(valuation, maturity, coupon, price.accruedPer100, price.accruedQuantizationPer100), residual: selected?.residual ?? null };
 }
 
@@ -176,7 +188,7 @@ export function analyzeBondV2(position: DepotAnalysisPosition, fallbackDate = ne
   const sourceText = [position.name, position.securityType, position.sourceType, position.segment, position.investmentMedium, position.certificateClass].join(" ");
   if (!position.classification.direct || position.classification.bondKind !== "fixed") ytm = fail("unsupported-structure", "unsupported-cashflows");
   else if (source && ["name", "securityType", "sourceType", "investmentMedium", "segment", "certificateClass"].some((field) => source.fields[field as keyof typeof source.fields].status === "invalid")) ytm = fail("invalid-data", "structure-origin-changed");
-  else if (/ausfall|default|zahlungsgestört|zahlungsverzug|payment delay|ex[- ]coupon|flat|gross|inflation|index.link|amortis|sink|puttable/i.test(sourceText)) ytm = fail("unsupported-structure", "special-payment-conditions");
+  else if (/ausfall|default|zahlungsgestört|zahlungsverzug|payment delay|(?:cum|ex)[- ]coupon|flat|gross|inflation|index.link|amortis|sink|puttable/i.test(sourceText)) ytm = fail("unsupported-structure", "special-payment-conditions");
   else if (!nonnegative(coupon)) ytm = couponFailure;
   else if (!sourceFieldValid(source, "maturity") || !maturity) ytm = fail("missing-data", "missing-maturity");
   else if (!sourceFieldValid(source, "valuationEnd") || !valuation) ytm = fail("missing-data", "missing-valuation-date");

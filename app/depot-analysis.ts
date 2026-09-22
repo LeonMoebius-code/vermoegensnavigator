@@ -376,6 +376,8 @@ export type BondLadderItem = {
   excludedCount: number; excludedNominal: number | null; excludedMarketValue: number | null;
   zeroValueCount: number; zeroValueNominal: number | null;
 };
+export type BondModelCoverageCategory = "identified" | "ambiguous-annual" | "short-first-annual" | "assumed-annual" | "not-modeled-or-excluded";
+export type BondModelCoverageItem = { category: BondModelCoverageCategory; count: number; valueEUR: number | null };
 const finiteBondSum = (a: number | null, b: number) => a !== null && Number.isFinite(a + b) ? a + b : null;
 
 export function bondPortfolioAnalysis(positions: DepotAnalysisPosition[], fallbackDate = new Date(),
@@ -463,6 +465,20 @@ export function bondPortfolioAnalysis(positions: DepotAnalysisPosition[], fallba
   // Reporting DV01 uses the same V2 duration and the documented dirty EUR value.
   const dv01Sum = dv01Rows.length ? dv01Rows.reduce((sum, r) => sum + bondDv01(r.position.value, r.modified!), 0) : null;
   const portfolioDv01 = dv01Sum !== null && Number.isFinite(dv01Sum) ? dv01Sum : null;
+  const modelCategory = (r: BondPositionAnalysis): BondModelCoverageCategory => {
+    if (r.position.excludeFromBondAggregates) return "not-modeled-or-excluded";
+    const status = r.metrics.model?.modelStatus;
+    if (status === "identified" || status === "frequency-independent") return "identified";
+    if (status === "ambiguous" && r.metrics.aggregateEligible) return "ambiguous-annual";
+    if (status === "short-first-annual" && r.metrics.aggregateEligible) return "short-first-annual";
+    if (status === "assumed-annual" && r.metrics.aggregateEligible) return "assumed-annual";
+    return "not-modeled-or-excluded";
+  };
+  const modelCategories = (["identified", "ambiguous-annual", "short-first-annual", "assumed-annual", "not-modeled-or-excluded"] as const)
+    .map((category): BondModelCoverageItem => {
+      const selected = directRows.filter((row) => modelCategory(row) === category);
+      return { category, count: selected.length, valueEUR: valueEUR(selected) };
+    });
   return { valuationDate, valuationDates: valuationDatesFor(positions), mixedValuationDates: hasMixedValuationDates(positions),
     rows, directValue, directCount: directRows.length, reportingComparable, knownValueEUR,
     unknownReportingCount: directRows.length - known.length, directValueEUR: reportingComparable && Number.isFinite(directValue) ? directValue : null,
@@ -475,7 +491,7 @@ export function bondPortfolioAnalysis(positions: DepotAnalysisPosition[], fallba
     excludedCount: directRows.filter((r) => r.position.excludeFromBondAggregates).length,
     excludedValueEUR: valueEUR(directRows.filter((r) => r.position.excludeFromBondAggregates)),
     zeroValueCount: directRows.filter((r) => r.position.value === 0).length,
-    inclusion, ladder: [...ladderMap.values()].sort((a, b) => a.currency.localeCompare(b.currency) || a.year - b.year || Number(b.overdue) - Number(a.overdue)),
+    inclusion, modelCategories, ladder: [...ladderMap.values()].sort((a, b) => a.currency.localeCompare(b.currency) || a.year - b.year || Number(b.overdue) - Number(a.overdue)),
     scenarios: [-0.01, -0.005, 0.005, 0.01].map((deltaYield) => {
       const effect = portfolioDv01 === null ? null : -portfolioDv01 * deltaYield / 0.0001;
       return { deltaYield, effect: effect !== null && Number.isFinite(effect) ? effect : null };
