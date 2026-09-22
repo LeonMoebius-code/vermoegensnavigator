@@ -5,11 +5,14 @@ import { join } from "node:path";
 import { isValidElement, ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import * as XLSX from "xlsx";
+import * as fs from "node:fs";
 import { parseDepotCsv } from "../app/depot-csv";
 import { addDepotAccount, createCase, depotAssetAmounts, depotPlanAssetAmounts, normalizeImportedCase, plannerPlanHoldingValue } from "../app/case-model";
 import { buildDepotAnalysisPositions, classifyDepotProduct } from "../app/depot-analysis";
 import { houseProducts } from "../app/investment-data";
 import { ExportCenter, WealthHouse } from "../app/page";
+
+XLSX.set_fs(fs);
 
 const known = houseProducts.find((p) => p.id === "urak-konservativ")!;
 const header = "Bezeichnung;WKN;Anlagesegment;Anlagemedium;Wertpapiertyp;Zertifikateklasse;Kurswert incl. Stückzinsen";

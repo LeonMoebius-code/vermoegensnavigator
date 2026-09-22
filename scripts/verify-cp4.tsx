@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { isValidElement, ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import * as XLSX from "xlsx";
+import * as fs from "node:fs";
 import { cp4Header, cp4MatrixCsv, cp4SecondCsv, cp4ConflictCsv, cp4InvalidCsv } from "./cp4-fixtures";
 import { parseDepotCsv } from "../app/depot-csv";
 import { addDepotAccount, AdvisoryCase, caseSnapshot, createCase, deleteDepotAccount, duplicateStructurePlan, normalizeImportedCase, replaceDepotAccount, setCaseDepot } from "../app/case-model";
@@ -13,6 +14,8 @@ import { CASE_STORAGE_KEY, readCaseStore, writeCaseStore } from "../app/case-sto
 import { buildBondAnalysisData } from "../app/bond-analysis-data";
 import { ExportCenter } from "../app/page";
 import { classifyDepotProduct } from "../app/depot-analysis";
+
+XLSX.set_fs(fs);
 
 const csv = (s: string) => parseDepotCsv(new TextEncoder().encode(s).buffer).rows;
 let groups = 0;

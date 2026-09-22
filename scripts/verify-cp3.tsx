@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { createElement, isValidElement, ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import * as XLSX from "xlsx";
+import * as fs from "node:fs";
 import { parseDepotCsv } from "../app/depot-csv";
 import { structureOverviewSource } from "../app/bond-source";
 import { BondSourceConvention } from "../app/bond-v2";
@@ -14,6 +15,8 @@ import { buildDepotAnalysisPositions, bondPortfolioAnalysis, productTypeAnalysis
 import { addDepotAccount, AdvisoryCase, caseSnapshot, createCase, deleteDepotAccount, DepotHolding, normalizeImportedCase, renameDepotAccount, replaceDepotAccount, setCaseDepot } from "../app/case-model";
 import { CASE_STORAGE_KEY, readCaseStore, writeCaseStore } from "../app/case-storage";
 import { ExportCenter } from "../app/page";
+
+XLSX.set_fs(fs);
 
 let count = 0;
 const test = (label: string, run: () => void) => { run(); count++; console.log(`PASS CP3 ${label}`); };

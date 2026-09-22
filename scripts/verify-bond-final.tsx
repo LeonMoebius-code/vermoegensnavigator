@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { isValidElement, ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import * as XLSX from "xlsx";
+import * as fs from "node:fs";
 import { finalCsv, finalHeaders, finalMatrix, finalRow, shortReferences, SyntheticRow } from "./bond-final-fixtures";
 import { parseDepotCsv } from "../app/depot-csv";
 import { bondCouponCalendar, couponAccruedDiagnostic } from "../app/bond-math";
@@ -16,6 +17,8 @@ import { classifyDepotProduct, buildDepotAnalysisPositions } from "../app/depot-
 import { addDepotAccount, createCase, normalizeImportedCase, caseSnapshot, replaceDepotAccount, setCaseDepot } from "../app/case-model";
 import { writeCaseStore, readCaseStore, CASE_STORAGE_KEY } from "../app/case-storage";
 import { ExportCenter } from "../app/page";
+
+XLSX.set_fs(fs);
 
 let groups = 0;
 const test = (name: string, run: () => void) => { run(); groups++; console.log(`PASS final ${name}`); };
@@ -243,9 +246,15 @@ test("actual Excel separates customer report and technical evidence; print stays
   const cwd=process.cwd(), dir=mkdtempSync(join(tmpdir(),"bond-final-"));
   try {
     process.chdir(dir); button(view,"Excel-Arbeitsmappe")!();
-    const wb=XLSX.read(readFileSync("bond-final-synthetic.xlsx"),{type:"buffer"});
-    const rows=XLSX.utils.sheet_to_json<string[]>(wb.Sheets["Zins & Laufzeiten"],{header:1,defval:""});
-    const technical=XLSX.utils.sheet_to_json<string[]>(wb.Sheets["Technische Nachweise"],{header:1,defval:""});
+    const wb=XLSX.read(readFileSync("bond-final-synthetic.xlsx"),{type:"buffer",cellStyles:true});
+    const bondSheet=wb.Sheets["Zins & Laufzeiten"], technicalSheet=wb.Sheets["Technische Nachweise"];
+    const bondIndex=wb.SheetNames.indexOf("Zins & Laufzeiten");
+    assert.deepEqual(wb.SheetNames.slice(bondIndex,bondIndex+2),["Zins & Laufzeiten","Technische Nachweise"]);
+    assert.deepEqual((bondSheet["!cols"] || []).map((column) => column.wch),[38,28,48,48,30,24,24,24]);
+    assert.deepEqual((technicalSheet["!cols"] || []).map((column) => column.wch),[42,34,34,30,34,34,34,34,34,34,34,34,90]);
+    assert.equal(bondSheet.A1.t,"s"); assert.equal(technicalSheet.A1.t,"s");
+    const rows=XLSX.utils.sheet_to_json<string[]>(bondSheet,{header:1,defval:""});
+    const technical=XLSX.utils.sheet_to_json<string[]>(technicalSheet,{header:1,defval:""});
     assert.deepEqual(rows, d.exportRows.map((r) => [...r, ...Array(8-r.length).fill("")]));
     assert.equal(rows.find((r)=>r[0]==="Portfolio-DV01")?.[1],d.summary.find((s)=>s.key==="dv01")?.value);
     for (const entry of d.summary) assert.equal(rows.find((r)=>r[0]===entry.label)?.[1],entry.value);
@@ -254,7 +263,7 @@ test("actual Excel separates customer report and technical evidence; print stays
     assert.doesNotMatch(JSON.stringify(rows),/Wichtige Hinweise|Fachlicher Status|Druck und Excel|Modellalternative|Stückzinsband|Keine Herstellerbestätigung/);
     assert.match(JSON.stringify(technical),/Mehrdeutig.*Jahresmodellannahme/);
     assert.match(JSON.stringify(technical),/Modellalternative.*Stückzinsband/);
-    for(const sheet of [wb.Sheets["Zins & Laufzeiten"],wb.Sheets["Technische Nachweise"]])
+    for(const sheet of [bondSheet,technicalSheet])
       for(const cell of Object.values(sheet) as any[]) assert.ok(!cell.f,"bond export text must not become a formula");
   } finally { process.chdir(cwd); rmSync(dir,{recursive:true}); }
 });

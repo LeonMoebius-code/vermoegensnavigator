@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { createElement, isValidElement, ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import * as XLSX from "xlsx";
+import * as fs from "node:fs";
 import {
   AdvisoryCase, CapitalPot, DepotHolding, ParsedDepotHolding, PlannerAllocation,
   addDepotAccount, buildMultiDepotExportData, capitalPots, caseSnapshot, createCase,
@@ -16,6 +17,8 @@ import {
 } from "../app/case-model";
 import { CASE_STORAGE_KEY, RECOVERY_PREFIX, readCaseStore, writeCaseStore, recoveryBackups } from "../app/case-storage";
 import { parseDepotCsv, parseGermanNumber } from "../app/depot-csv";
+
+XLSX.set_fs(fs);
 import { calendarDate } from "../app/depot-validation";
 import { bondPortfolioAnalysis, buildDepotAnalysisPositions, classifyDepotProduct } from "../app/depot-analysis";
 import { ExportCenter, SituationStep } from "../app/page";
