@@ -8,7 +8,7 @@ const oneDecimal = new Intl.NumberFormat("de-DE", { minimumFractionDigits: 1, ma
 export const bondNumber = (n: number | null, suffix = "") => n === null || !Number.isFinite(n) ? "nicht berechenbar" : `${n > 0 && n < .01 ? "< 0,01" : decimal.format(n)}${suffix}`;
 export const bondCoverageLabel = (c: BondCoverage) => c.status === "not-applicable" ? "nicht anwendbar" : c.status === "invalid-value-basis" ? "Wertbasis numerisch nicht darstellbar" : c.value === null ? "EUR-Abdeckung nicht ermittelbar" : `${decimal.format(c.value * 100)} %`;
 export const bondMetricLabel = (m: BondMetric, suffix: string, factor = 1) => m.value === null ? `– (${bondReasonLabel(m.reasonCode) || "nicht berechenbar"})` : bondNumber(m.value * factor, suffix);
-export const BOND_CONVENTION_NOTICE = "Kalender: jährlicher/halbjährlicher/vierteljährlicher Fälligkeitsanker mit Monatsendregel; effektive Jahresrendite, ACT/365F. Ø YTM ist ein Marktwertdurchschnitt, keine Portfolio-IRR. Coverage ist Datenabdeckung, keine Bestätigung der Vertragsbedingungen.";
+export const BOND_CONVENTION_NOTICE = "Kalender: jährlicher/halbjährlicher/vierteljährlicher Fälligkeitsanker mit Monatsendregel; eng begrenzte verkürzte erste Jahresperiode nach ACT/365F-Ganzmonatsanker; effektive Jahresrendite, ACT/365F. Ø YTM ist ein Marktwertdurchschnitt, keine Portfolio-IRR. Coverage ist Datenabdeckung, keine Bestätigung der Vertragsbedingungen.";
 export const BOND_SCENARIO_NOTICE = "Lineare Verschiebung der modellierten Bondrenditen. Kein Kredit-, Ausfall-, Spread-, FX- oder Konvexitätsmodell; keine Prognose der risikofreien Zinskurve.";
 export const BOND_EXPORT_SCOPE_NOTICE = "Druck und Excel enthalten stets den IST-Bestand – unabhängig von der aktuell angezeigten IST-/PLAN-Sicht.";
 export const bondMetricNames: Record<BondMetricKey, string> = { ytm: "Indikative Rendite bis Fälligkeit", currentYield: "Laufende Verzinsung", modified: "Modified Duration", dv01: "Portfolio-DV01" };
@@ -21,7 +21,7 @@ const accruedConvention = (row: BondPositionAnalysis) => {
 };
 
 const compactCoverage = (coverage: BondCoverage) => `Berechenbarer Teilbestand: ${coverage.value === null ? bondCoverageLabel(coverage) : `${oneDecimal.format(coverage.value * 100)} %`}`;
-const assumedModel = (row: BondPositionAnalysis) => ["ambiguous", "assumed-annual"].includes(row.metrics.model?.modelStatus || "");
+const assumedModel = (row: BondPositionAnalysis) => ["ambiguous", "assumed-annual", "short-first-annual"].includes(row.metrics.model?.modelStatus || "");
 const roundingSensitive = (row: BondPositionAnalysis) => row.metrics.warnings.some((w) => w.includes("rundungssensitiv"));
 const customerMetric = (row: BondPositionAnalysis, key: BondMetricKey, suffix: string, factor = 1) => {
   const value = row.metrics[key].value;
@@ -39,7 +39,7 @@ export function buildBondAnalysisData(depot: DepotHolding[], plan: StructurePlan
     `EUR-Gesamtbasis nicht belegt; ${analysis.unknownReportingCount} Positionen ohne belegbaren EUR-Wert. Bekannter EUR-Teilbestand: ${bondNumber(analysis.knownValueEUR, " EUR")}.`;
   const exclusionNotice = `Kennzahlen für berechenbaren und gewählten Teilbestand; ${analysis.excludedCount} Positionen bewusst nicht berücksichtigt (${bondNumber(analysis.excludedValueEUR, " EUR")}).`;
   const dateNotice = `${analysis.mixedValuationDates ? "Gemischte Bewertungsstichtage" : "Bewertungsstichtage"}: ${analysis.valuationDates.join(", ") || "fehlen"}. ${rows.some((r) => !r.metrics.valuationDate) ? "Heute-Fallback ausschließlich für Restlaufzeit." : "Keine Aktualisierung der Kurse auf heute."}`;
-  const modelNotice = `Modellstatus: ${rows.filter((r) => r.metrics.model?.modelStatus === "identified").length} rechnerisch identifiziert, ${rows.filter((r) => r.metrics.model?.modelStatus === "ambiguous").length} mehrdeutig (keine Renditeaggregate), ${rows.filter((r) => r.metrics.model?.modelStatus === "assumed-annual").length} ungeprüfte Jahresmodellannahmen. Annahmen können im berechenbaren gewählten Teilbestand enthalten sein.`;
+  const modelNotice = `Modellstatus: ${rows.filter((r) => ["identified", "frequency-independent"].includes(r.metrics.model?.modelStatus || "")).length} rechnerisch identifiziert/frequenzunabhängig, ${rows.filter((r) => r.metrics.model?.modelStatus === "ambiguous" && r.metrics.aggregateEligible).length} einbezogene Jahresbasismodelle bei Mehrdeutigkeit, ${rows.filter((r) => r.metrics.model?.modelStatus === "short-first-annual").length} einbezogene verkürzte erste Jahresperioden, ${rows.filter((r) => r.metrics.model?.modelStatus === "assumed-annual").length} sonstige ungeprüfte Jahresmodellannahmen, ${analysis.modelCategories.find((c) => c.category === "not-modeled-or-excluded")!.count} nicht modellierte oder bewusst ausgeschlossene Positionen.`;
   const notices = [BOND_MODEL_NOTICE, BOND_CONVENTION_NOTICE, basisNotice, exclusionNotice, dateNotice,
     "Laufende Verzinsung: momentane Kupon-Kurs-Relation, bei Floater und Stufenzins nur eine Momentaufnahme; keine Gesamtrendite.",
     modelNotice,
@@ -60,7 +60,16 @@ export function buildBondAnalysisData(depot: DepotHolding[], plan: StructurePlan
         key === "ytm" && selected.some(roundingSensitive) ? "rundungssensitiv" : ""].filter(Boolean).join(" · "),
     };
   });
-  const modelFootnote = rows.some((r) => r.metrics.ytm.value !== null && assumedModel(r)) ? "* Ungeprüfte Jahresmodellannahme." : "";
+  const modelFootnote = rows.some((r) => r.metrics.ytm.value !== null && assumedModel(r)) ? "* Indikative Modellannahme; Frequenz bzw. verkürzte erste Kuponperiode nicht vertraglich bestätigt." : "";
+  const modelCategoryLabels = {
+    "identified": "Rechnerisch eindeutig / frequenzunabhängig",
+    "ambiguous-annual": "Einbezogene Jahresannahme bei mehrdeutiger Frequenz",
+    "short-first-annual": "Einbezogene verkürzte erste Jahresperiode",
+    "assumed-annual": "Sonstige ungeprüfte Jahresmodellannahme",
+    "not-modeled-or-excluded": "Nicht modellierbar oder bewusst ausgeschlossen",
+  } as const;
+  const modelCoverageHeaders = ["Modellkategorie", "Positionen", "Marktwert EUR"];
+  const modelCoverageRows = analysis.modelCategories.map((entry) => [modelCategoryLabels[entry.category], String(entry.count), bondNumber(entry.valueEUR, " EUR")]);
   const coverageHeaders = ["Kennzahl", "EUR-Coverage", "Aggregatbasis EUR", "Gültig einbezogen: Anzahl / EUR", "Bewusst ausgeschlossen: Anzahl / EUR", "Sonst nicht berechenbar: Anzahl / EUR"];
   const coverageRows = summary.map((s) => [s.label, bondCoverageLabel(s.coverage), bondNumber(s.coverage.basisEUR, " EUR"),
     ...(["includedAndCalculable", "manuallyExcluded", "notCalculable"] as const).map((key) => `${s.coverage[key].count} / ${bondNumber(s.coverage[key].valueEUR, " EUR")}`)]);
@@ -79,11 +88,12 @@ export function buildBondAnalysisData(depot: DepotHolding[], plan: StructurePlan
     bondNumber(r.position.nominalOrUnits ?? null, ` ${r.position.currency || "Währung unbekannt"}`), `${bondNumber(r.position.accruedInterest ?? null)} (${accruedConvention(r)})`,
     `${r.metrics.valuationDate || "fehlt"} / ${r.position.maturity || "fehlt"}`,
     r.remainingYears === 0 ? "Fälligkeit erreicht / überschritten" : bondNumber(r.remainingYears, " Jahre"),
-    bondMetricLabel(r.metrics.currentYield, " %", 100), `${bondMetricLabel(r.metrics.ytm, " %", 100)}${r.metrics.ytm.value !== null && ["ambiguous", "assumed-annual"].includes(r.metrics.model?.modelStatus || "") ? " (Jahresmodellannahme)" : ""}`,
+    bondMetricLabel(r.metrics.currentYield, " %", 100), `${bondMetricLabel(r.metrics.ytm, " %", 100)}${r.metrics.ytm.value !== null && r.metrics.model?.modelStatus === "ambiguous" ? " (Jahresmodellannahme bei Mehrdeutigkeit)" : r.metrics.model?.modelStatus === "assumed-annual" ? " (ungeprüfte Jahresmodellannahme)" : r.metrics.model?.modelStatus === "short-first-annual" ? " (verkürzte erste Jahresperiode)" : ""}`,
     bondMetricLabel(r.metrics.macaulay, " Jahre"), bondMetricLabel(r.metrics.modified, " Jahre"),
     bondMetricLabel(r.metrics.dv01, ` ${r.metrics.dv01Currency || "Währung unbekannt"}`),
     [r.position.classification.sub, r.metrics.model?.modelLabel || "Kuponmodell nicht berechenbar",
       ...(r.metrics.model?.candidates || []).filter((c) => c.compatible).map((c) => `${frequencyLabel(c.frequency)}: ${bondNumber(c.ytm === null ? null : c.ytm * 100, " %")} (Modellalternative), Stückzinsband ${c.band} pro100, ${c.variants.map((v) => `${v.dayCount}: erwartet ${bondNumber(v.expected)}, ${v.compatible ? "passt" : "passt nicht"}`).join(" / ")}`),
+      ...(r.metrics.model?.shortFirstAnnual?.compatible ? [`Verkürzte erste Jahresperiode: Modellbeginn ${r.metrics.model.shortFirstAnnual.stubStart}, erste Zahlung ${r.metrics.model.shortFirstAnnual.firstCoupon}, ${r.metrics.model.shortFirstAnnual.dayCount}, Stückzinsband ${r.metrics.model.shortFirstAnnual.band} pro100`] : []),
       r.position.value === 0 ? "Marktwert 0; Nominal bleibt separat sichtbar" : "", r.position.quantityScale === null ? "PLAN-Mengenbasis nicht berechenbar" : "",
       ...(["ytm", "currentYield", "modified", "dv01"] as const).map((key) => `${bondMetricNames[key]}: ${r.metrics[key].status}${r.metrics[key].reasonCode ? ` (${bondReasonLabel(r.metrics[key].reasonCode)})` : ""}`),
       ...r.metrics.warnings.filter((w) => w.includes("rundungssensitiv") || w.includes("nicht prüfbar") || w.includes("Fallback") || w.includes("Grundband"))].filter(Boolean).join(" · ")]);
@@ -107,10 +117,11 @@ export function buildBondAnalysisData(depot: DepotHolding[], plan: StructurePlan
     [], ["Positionen"], customerPositionHeaders, ...customerPositionRows, ...(modelFootnote ? [[modelFootnote]] : [])];
   const technicalExportRows: string[][] = [["Technische Nachweise – Zins & Laufzeiten – IST"], ...notices.map((n) => [n]),
     ["Physische direkte Rentenpositionen", String(analysis.directCount)], ["Direkter Rentenwert EUR", bondNumber(analysis.directValueEUR, " EUR")],
+    ["Modellabdeckung nach Qualität"], modelCoverageHeaders, ...modelCoverageRows,
     coverageHeaders, ...coverageRows, ["Zinsszenarien"], [BOND_SCENARIO_NOTICE], ...scenarioRows,
     ["Fälligkeitsleiter"], [ladderNotice], ladderHeaders, ...(ladderRows.length ? ladderRows : [["keine belastbare Nominaldarstellung"]]),
     positionHeaders, ...positionRows];
-  return { title, analysis, rows, notices, summary, modelFootnote, coverageHeaders, coverageRows,
+  return { title, analysis, rows, notices, summary, modelFootnote, modelCoverageHeaders, modelCoverageRows, coverageHeaders, coverageRows,
     ladderHeaders, ladderRows, customerLadderHeaders, customerLadderRows, ladderNotice, customerLadderNotice,
     positionHeaders, positionRows, customerPositionHeaders, customerPositionRows, scenarioRows, scenarioNotice, exportRows, technicalExportRows };
 }

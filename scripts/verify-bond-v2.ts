@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { annualAccruedCheck, annualBondCalendar, bondPresentValue, datedBondDuration, solveBondYield } from "../app/bond-math";
+import { annualAccruedCheck, annualBondCalendar, bondPresentValue, datedBondDuration, shortFirstAnnualCouponDiagnostic, solveBondYield } from "../app/bond-math";
 import { analyzeBondV2, BondPriceInput, calculateBondModel, resolveBondPrice } from "../app/bond-v2";
 import { structureOverviewSource, validBondSource } from "../app/bond-source";
 import { parseDepotCsv } from "../app/depot-csv";
@@ -153,10 +153,36 @@ test("CSV zero-touch individual metrics, provenance, local DV01", () => {
   assert.equal(result.sourceQuality, "profile-assumption"); assert.equal(result.reportingComparable, false);
   assert.equal(result.annualCheck, "compatible");
   assert.equal(result.model?.modelStatus, "ambiguous");
-  assert.equal(result.aggregateEligible, false);
+  assert.equal(result.model?.selectedFrequency, 1);
+  assert.equal(result.aggregateEligible, true);
   assert.deepEqual(analyzeBondV2(JSON.parse(JSON.stringify(row))), result);
   const usd = analyzeBondV2(imported({ currency: "USD" }));
   close(usd.ytm.value, .05); assert.equal(usd.dv01Currency, "USD");
+});
+test("short first annual period uses one coherent ACT/365F plan", () => {
+  const diagnostic = shortFirstAnnualCouponDiagnostic("2026-09-18", "2032-01-27", 4.125, 1.2885, null);
+  assert.equal(diagnostic.compatible, true);
+  assert.equal(diagnostic.stubStart, "2026-05-27");
+  assert.equal(diagnostic.firstCoupon, "2027-01-27");
+  close(diagnostic.firstCouponAmount, 2.768835616438356);
+  assert.deepEqual(diagnostic.calendar?.cashflows.map((flow) => flow.date), ["2027-01-27", "2028-01-27", "2029-01-27", "2030-01-27", "2031-01-27", "2032-01-27"]);
+  close(diagnostic.calendar?.cashflows[0].amount, 2.768835616438356);
+  close(diagnostic.calendar?.cashflows.at(-1)?.amount, 104.125);
+  const price = resolveBondPrice({ nominal: 2000, clean: 98.25, accrued: 25.77, market: 1990.77, fxRate: 1,
+    bondCurrency: "EUR", valuationDate: "2026-09-18", units: contract.units, quality: "documented", accruedQuantizationPer100: null });
+  close(price.dirty.value, 99.5385);
+  const model = calculateBondModel(price, "2026-09-18", "2032-01-27", 4.125);
+  assert.equal(model.modelStatus, "short-first-annual"); assert.equal(model.aggregateEligible, true);
+  close(model.ytm.value, .04497385868331072); close(model.macaulay.value, 4.850660790092614);
+  close(model.modified.value, 4.641896780274053); close(model.dv01.value, .9240948853266179);
+  close(model.selectedCashflows[0].amount, 2.768835616438356);
+  assert.notEqual(solveBondYield(99.5385 + 1.2885, model.selectedCashflows)?.value, model.ytm.value);
+});
+test("short-period inference rejects non-anchor, weakly unique and contradictory accrued data", () => {
+  assert.equal(shortFirstAnnualCouponDiagnostic("2026-09-18", "2032-01-27", 4.125, 1.4, null).compatible, false);
+  assert.equal(shortFirstAnnualCouponDiagnostic("2026-09-18", "2032-01-27", .1, .03, null).compatible, false);
+  assert.equal(shortFirstAnnualCouponDiagnostic("2026-09-18", "2032-01-27", 4.125, -1, null).compatible, false);
+  assert.equal(shortFirstAnnualCouponDiagnostic("2026-09-18", "2032-01-27", 4.125, null, null).compatible, false);
 });
 test("different prerequisites, missing AI and no maturity/FX blanket exclusion", () => {
   close(analyzeBondV2(imported({ accruedInterest: undefined })).ytm.value, .05);
@@ -212,7 +238,7 @@ test("unsupported structures, maturity, zero price, negative AI and extreme yiel
   assert.equal(analyzeBondV2(imported({ value: 0, currentPrice: 0 })).ytm.value, null);
   assert.equal(analyzeBondV2(imported({ accruedInterest: -1 })).ytm.value, null);
   close(analyzeBondV2(imported({ currentPrice: 16, value: 1600 })).ytm.value, 5.5625);
-  for (const extra of [{ sourceType: "Inflation-linked" }, { certificateClass: "Payment delay" }])
+  for (const extra of [{ sourceType: "Inflation-linked" }, { certificateClass: "Payment delay" }, { name: "Synthetic cum-coupon" }])
     assert.equal(analyzeBondV2(imported(extra)).ytm.reasonCode, "special-payment-conditions");
 });
 test("5-day rounding sensitivity is visible and never a high-yield filter", () => {
