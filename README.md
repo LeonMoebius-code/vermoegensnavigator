@@ -45,8 +45,9 @@ anschließend Typecheck und Produktionsbuild aus:
 | 8 | `test:cp3` | `scripts/verify-cp3.tsx` |
 | 9 | `test:cp4` | `scripts/verify-cp4.tsx`, einschließlich `verify-asset-classification.tsx` |
 | 10 | `test:bond-final` | `scripts/verify-bond-final.tsx` |
-| 11 | `typecheck` | `tsc -p tsconfig.github.json --noEmit` |
-| 12 | `build` | `bash scripts/build-github-pages.sh` |
+| 11 | `test:cp0a2` | `scripts/verify-cp0a2.tsx` – deterministische Referenzen, Kategorien A–D |
+| 12 | `typecheck` | `tsc -p tsconfig.github.json --noEmit` |
+| 13 | `build` | `bash scripts/build-github-pages.sh` |
 
 Die ausführbare Liste wird ausschließlich im `verify`-Skript in `package.json`
 gepflegt. Alle Einzelskripte bleiben nutzbar. Die `&&`-Verknüpfung führt sie
@@ -79,8 +80,10 @@ heutigen Prüfumfang. Der Typecheck verwendet weiterhin den bestehenden Umfang
 von `tsconfig.github.json`. Die Render- und Exportprüfungen laufen in Node;
 auch als „end-to-end“ bezeichnete bestehende Tests sind keine Browserabläufe.
 
-Weiterhin fehlen deterministische Golden- beziehungsweise Referenzfallvergleiche
-aus CP0A2, vollständige Browser-Ablaufprüfungen aus CP0B, visuelle Regressionen,
+CP0A2 ergänzt 23 kleine synthetische Referenzen mit getrennten Kategorien für
+bestätigtes Verhalten, technische Beobachtungen, bekannte Fehler und offene Semantik.
+Matrix, Kanonisierung und Vergleichsvertrag: [CP0A2-Referenzbasis](docs/CP0A2_Referenzbasis.md).
+Weiterhin fehlen vollständige Browser-Ablaufprüfungen aus CP0B, visuelle Regressionen,
 native Excel-Desktop-Abnahme, native Druck-/PDF-Paginierungsabnahme,
 Architektur-Abhängigkeitsregeln und Releaseentkopplung.
 
