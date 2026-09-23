@@ -36,41 +36,8 @@ jobs:
       - name: Abhängigkeiten installieren
         run: npm ci
 
-      - name: Depotcheck 3B testen
-        run: npm run test:3b
-
-      - name: Einstieg und Sparpläne 4B testen
-        run: npm run test:4b
-
-      - name: Risiko V2 testen
-        run: npm run test:risk-v2
-
-      - name: Multi Depot testen
-        run: npm run test:multi-depot
-
-      - name: Modellportfolio-Semantik testen
-        run: npm run test:modelportfolio
-
-      - name: CP1 Datenintegrität testen
-        run: npm run test:cp1
-
-      - name: Bond V2 testen
-        run: npm run test:bond-v2
-
-      - name: CP3 Bond-Aggregation testen
-        run: npm run test:cp3
-
-      - name: CP4 Gesamtpfade und Exporte testen
-        run: npm run test:cp4
-
-      - name: Abschließende Bondmodelle testen
-        run: npm run test:bond-final
-
-      - name: Typen prüfen
-        run: npm run typecheck
-
-      - name: Produktionsbuild prüfen
-        run: npm run build
+      - name: Vollständiges Gate (Fachtests, Typecheck und Build)
+        run: npm run verify
 
       - name: Diff auf Whitespace-Fehler prüfen
         shell: bash
