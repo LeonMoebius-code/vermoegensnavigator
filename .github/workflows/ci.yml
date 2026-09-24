@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   verify:
-    name: Tests, Typecheck und Build
+    name: Tests, Typecheck, Build und Browser
     runs-on: ubuntu-latest
 
     steps:
@@ -36,7 +36,10 @@ jobs:
       - name: Abhängigkeiten installieren
         run: npm ci
 
-      - name: Vollständiges Gate (Fachtests, Typecheck und Build)
+      - name: Playwright Chromium vorbereiten
+        run: npx playwright install --with-deps chromium
+
+      - name: Vollständiges Gate (Fachtests, Typecheck, Build und Browser)
         run: npm run verify
 
       - name: Diff auf Whitespace-Fehler prüfen
@@ -44,3 +47,14 @@ jobs:
         run: |
           git fetch origin main --no-tags
           git diff --check origin/main...HEAD
+
+      - name: Synthetische Browserdiagnose bei Fehlern sichern
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cp0b-browser-diagnostics
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore
+          retention-days: 5

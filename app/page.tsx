@@ -3941,6 +3941,7 @@ function PlannerView({
                             </span>
                             <div>
                               <input
+                                aria-label={`Kaufbetrag ${allocation.productName}`}
                                 inputMode="numeric"
                                 value={allocation.amount ? allocation.amount.toLocaleString("de-DE") : ""}
                                 onChange={(event) => updateAllocationAmount(allocation, parseAmount(event.target.value))}
@@ -6398,6 +6399,7 @@ function DepotOptimizer({
                 </select>
                 <div className="inline-amount sale">
                   <input
+                    aria-label={`Geplanter Verkauf ${account.name}: ${holding.name}`}
                     inputMode="numeric"
                     value={
                       holding.plannedSale
