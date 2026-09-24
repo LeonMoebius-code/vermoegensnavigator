@@ -4,7 +4,9 @@
 
 Die kleine synthetische Referenzbasis macht ausgewählte Veränderungen vor späteren
 Refactorings sichtbar. Sie ersetzt weder die bisherigen Fachtests noch eine fachliche
-Entscheidung. Keine Produktionsfachlogik, Migration, Schemaänderung oder Fehlerkorrektur.
+Entscheidung. Das ursprüngliche CP0A2-Paket änderte keine Produktionsfachlogik,
+Migration oder Schemata und behob keine Fehler. Der nachfolgende Restore-ID-Fix
+überführt ausschließlich `restore-id` von C nach A (siehe unten).
 
 Vor Beginn am 23.09.2026 geprüft: sauberer Arbeitsbaum auf
 `work/architecture-cp0a1-test-gate`, HEAD
@@ -41,6 +43,8 @@ allein aufgrund eines roten Tests als verbindliches Altverhalten wiederhergestel
 
 ## Referenzfallmatrix (23 Referenzen)
 
+Aktuelle Verteilung nach Restore-ID-Fix: **18 A, 1 B, 3 C, 1 D**.
+
 | ID | Kategorie | Geschützter bzw. beobachteter Sachverhalt / fachliche Quelle |
 | --- | --- | --- |
 | `multi-depot` | A | Zwei Depots, gleiche synthetische WKN, drei physische Holdings, zwei wirtschaftliche Positionen; Depotwert 20.000 = Holdingsumme. `verify-multi-depot.ts` |
@@ -63,7 +67,7 @@ allein aufgrund eines roten Tests als verbindliches Altverhalten wiederhergestel
 | `invalid-depot-fallback` | C | Ungültige Depot-ID wird zum ersten Depot umgebogen |
 | `weak-plan-integrity` | C | Doppelte Plan-ID, fehlende aktive Referenz und zwei bevorzugte Pläne werden akzeptiert |
 | `stale-local-list` | C | Speichern veralteter Liste verdrängt einen inzwischen gespeicherten gesunden Fall |
-| `restore-id` | C | JSON-Kopie → tatsächlicher Restore-Handler von `ExportCenter` → `writeCaseStore`: gespeicherte ID entspricht wieder Original-ID |
+| `restore-id` | A | JSON-Kopie → tatsächlicher Restore-Handler von `ExportCenter` → `writeCaseStore`/`readCaseStore`: historische Inhalte und gesamte Historie erhalten, aktuelle Kopie-ID bleibt bestehen; Original und Kopie bleiben getrennt gespeichert |
 | `bond-ist-xlsx-print` | A | Trotz geplantem Vollverkauf bleibt Export IST: Reihenfolge der Bond-Sheets, Zellwerte, String-/Zahltypen, keine Formeln, ausgewählte bestätigte Druckwerte |
 | `general-export-scope` | D | Heute 0 Neuanlagen in bevorzugter Variante vs. 11.500 vollständiger PLAN. Ob allgemeine Struktur künftig Neuanlagen oder vollständigen ZIELPLAN abbilden soll, bleibt offen |
 
@@ -71,7 +75,39 @@ Quellen der Bondreferenzen: `verify-bond-final.tsx` (bestehende unabhängige
 Decimal70-Kurzläuferwerte, Jahresbasismodell, verkürzte Periode und gesperrte Struktur),
 `verify-cp3.tsx` (Coverage/Ausschluss und IST-Export). Kategorie A bestätigt hier die
 **bestehende indikative Modellsemantik**, keine tatsächlichen Vertragscashflows.
-Die vier C-Befunde sind im CP0A1-Abschnitt des README bereits dokumentiert.
+Die drei weiterhin offenen C-Befunde sind im CP0A1-Abschnitt des README dokumentiert:
+`stale-local-list`, `invalid-depot-fallback`, `weak-plan-integrity`.
+
+## Priorisierter Restore-ID-Fix nach CP0A2
+
+Ausgangs-main: `48b9869f92eaddec7647e35baa0ece113678a892` (PR #10), nach
+`git fetch origin main` bestätigt; keine Abweichung vom Auftrag. Der Arbeitsbaum
+auf `work/architecture-cp0a2-reference-baseline` war sauber; der veraltete lokale
+Tracking-Stand `0210f44` wurde aktualisiert. Feature-Branch: `work/fix-restore-case-identity`.
+
+Ursache: `caseSnapshot()` enthält die Fall-ID, aber keine `versions`. Der JSON-Import
+erzeugt eine neue aktuelle Fall-ID und lässt historische Snapshot-IDs bestehen.
+`normalizeImportedCase(version.snapshot, false)` übernahm beim Restore deshalb
+die Ursprungs-ID. Ein späteres Speichern konnte so den Ursprungsfall ersetzen.
+Die einzige Produktionsänderung setzt nach der Normalisierung ausdrücklich
+`id: item.id`; bestehende Versionshistorie und aktuelles `updatedAt` bleiben erhalten.
+
+Neue fachliche Invariante (Kategorie **C → A**): Historischer Restore stellt
+Snapshotinhalt wieder her, erhält aber die aktuelle Fallidentität und verhindert
+Identitätskollisionen mit dem Ursprungsfall. Original = `CASE_1`, JSON-Kopie =
+`CASE_2`, älterer Snapshot = `CASE_1`, Restore = `CASE_2`; nach Speicherung und
+erneutem Einlesen existieren genau `CASE_1` und `CASE_2`. Ihre Reihenfolge ist
+kein Vertrag. Der Test prüft zusätzlich beide erhaltenen Versionen, den gesamten
+normalisierten historischen Inhalt einschließlich innerer IDs, den Restore-Zeitpunkt
+und den unveränderten Ursprungsfall im Speicher sowie nach erneutem Einlesen.
+
+Red-Green: Der verstärkte Test scheiterte vor der Produktionskorrektur am echten
+Handler mit `restore-id: restore must retain the current copy identity`,
+`'CASE_1' !== 'CASE_2'`. Nach der Ein-Zeilen-Korrektur bestehen alle 23 Referenzen
+in zwei unabhängigen Läufen. `import-copy` bleibt B, `general-export-scope` bleibt D;
+die drei übrigen C-Reproduktionen bleiben unverändert. Keine allgemeine Persistenz-
+oder Identitätsarchitektur geändert, keine neue ID beim Restore, keine Änderung
+an Schema 11, Migrationen, Snapshot-Grundsemantik oder allgemeiner Importsemantik.
 
 ## Determinismus und Identitätsintegrität
 
@@ -88,10 +124,12 @@ Die vier C-Befunde sind im CP0A1-Abschnitt des README bereits dokumentiert.
   `ALLOCATION_1`, `INVESTMENT_1`). Neue IDs erzeugen neue Tokens. Doppelte IDs bleiben als Doppelung
   sichtbar. Unbekannte Referenzen werden getrennte `DANGLING_*`-Tokens, nie still Entities.
 - Käufe bleiben ausdrücklich `purchase-ALLOCATION_n`. WKNs, Produkt-IDs, Status,
-  Währungen und fachliche Daten werden nicht umbenannt. Arrays werden nicht sortiert.
+  Währungen und fachliche Daten werden nicht umbenannt. Fachliche Arrays werden nicht sortiert;
+  nur die gespeicherten Fall-ID-Tokens bei `restore-id` werden reihenfolgeunabhängig verglichen.
   Keine pauschale Stringersetzung und kein Löschen von Identitätsfeldern.
 - Die kleinen Ergebnisprojektionen lassen nur nichtfachliche Änderungszeitstempel,
   zufällige Recovery-Dateischlüssel, temporäre Pfade und den aktuellen Drucktag weg.
+  `restore-id` prüft `updatedAt` separat innerhalb des tatsächlichen Restore-Zeitfensters.
   Backup-Anzahl und Originalinhalt bleiben geprüft; das Original wird exakt verglichen.
   Kein Vollzustand-Snapshot. Die lokale Unverändertheitsassertion für IST vergleicht
   zusätzlich den kompletten Fall vor/nach Analyse, ohne ihn zu versionieren.
@@ -149,9 +187,9 @@ Skripte selbst wurden deshalb nicht geändert. Ergebnisse und tatsächlicher CI-
 stehen im zugehörigen PR und Abschlussbericht.
 
 CP0A2 schützt nur diese Projektionen. Kein vollständiger Zustandsvertrag, keine reale
-Depotvalidierung, kein Architekturrefactoring, keine Produktänderung und keine neue
-Exportentscheidung. Restore-ID bleibt ein priorisiertes separates Bugfix-Paket;
-auch lokale Listenkonflikte, Depotnormalisierung und Planintegrität bleiben unverändert.
+Depotvalidierung, kein Architekturrefactoring und keine neue Exportentscheidung.
+Die einzige nachfolgende Produktionskorrektur ist der oben dokumentierte Restore-ID-Fix;
+lokale Listenkonflikte, Depotnormalisierung und Planintegrität bleiben unverändert.
 CP0B übernimmt später vollständige Browserabläufe; Browser-E2E, visuelle Regression,
 native Excel-Abnahme und native Druck-/PDF-Paginierung sind hier nicht enthalten.
 Merge, Auto-Merge und Deployment gehören nicht zur CP0A2-Abnahme.

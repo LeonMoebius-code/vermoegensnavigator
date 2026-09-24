@@ -6855,6 +6855,7 @@ export function ExportCenter({
     if (!restored) return;
     setItem({
       ...restored,
+      id: item.id,
       versions: item.versions,
       updatedAt: new Date().toISOString(),
     });
