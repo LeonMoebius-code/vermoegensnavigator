@@ -16,10 +16,11 @@ import { AS_OF, ambiguous, annual, blocked, bondCase, emptyCase, holding, multiC
 import { categories, cent, compare, exact, Ids, memoryStorage, Reference, Rule } from "./cp0a2-contract";
 
 XLSX.set_fs(fs);
-function button(node: ReactNode, label: string): (() => void) | undefined {
-  if (Array.isArray(node)) return node.map((n) => button(n, label)).find(Boolean);
+function button(node: ReactNode, label: string, within?: string): (() => void) | undefined {
+  if (Array.isArray(node)) return node.map((n) => button(n, label, within)).find(Boolean);
   if (!isValidElement<{ children?: ReactNode; onClick?: () => void }>(node)) return undefined;
-  return node.type === "button" && renderToStaticMarkup(node).includes(label) ? node.props.onClick : button(node.props.children, label);
+  if (within && node.type === "article" && renderToStaticMarkup(node).includes(within)) return button(node, label);
+  return !within && node.type === "button" && renderToStaticMarkup(node).includes(label) ? node.props.onClick : button(node.props.children, label, within);
 }
 function view(c: AdvisoryCase, setItem: (item: AdvisoryCase) => void = () => {}) {
   return ExportCenter({ item: c, preferredPlan: c.plans.find((p) => p.preferred)!, setItem: (next) => setItem(typeof next === "function" ? next(c) : next),
@@ -226,22 +227,64 @@ function runReferences() {
     "README.md: CP0A1 veraltete Fallliste", "Nicht als zulässige Konfliktauflösung festschreiben"), {
     saved: readCaseStore(stale.getItem(CASE_STORAGE_KEY)).cases.map((x) => ids.ref("CASE", x.id)),
   }, { saved: ["CASE_1"] });
-  const original = emptyCase(); original.versions = [{ id: "synthetic-version", label: "Synthetische Historie", createdAt: AS_OF, snapshot: caseSnapshot(original) }];
-  const copy = normalizeImportedCase(original)!;
+  const original = multiCase();
+  original.advisory.caseName = "Synthetischer historischer Inhalt";
+  const historical = caseSnapshot(original);
+  original.advisory.caseName = "Synthetischer aktueller Ursprungsfall";
+  original.plans[0].name = "Synthetischer aktueller Plan";
+  original.versions = [
+    { id: "synthetic-version-old", label: "Synthetische ältere Historie", createdAt: AS_OF, snapshot: historical },
+    { id: "synthetic-version-new", label: "Synthetische neuere Historie", createdAt: AS_OF, snapshot: caseSnapshot(original) },
+  ];
+  const copy = normalizeImportedCase(JSON.parse(JSON.stringify({ case: original })))!;
+  assert.ok(copy);
+  assert.notEqual(copy.id, original.id, "JSON import must create a separate case");
+  copy.advisory.caseName = "Synthetische bearbeitete Kopie";
+  copy.updatedAt = AS_OF;
+  const originalBefore = JSON.stringify(original), copyBefore = JSON.stringify(copy);
+  const historyBefore = JSON.stringify(copy.versions);
   const restoreIds = new Ids(); register(restoreIds, original); register(restoreIds, copy);
+  const store = memoryStorage(); writeCaseStore(store, [original, copy]);
+  const originalLoadedBefore = readCaseStore(store.getItem(CASE_STORAGE_KEY)).cases.find((x) => x.id === original.id)!;
   let restored: AdvisoryCase | undefined;
   const oldWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
   try {
     Object.defineProperty(globalThis, "window", { configurable: true, value: { confirm: () => true } });
-    const restore = button(view(copy, (next) => { restored = next; }), "Wiederherstellen");
-    assert.ok(restore); restore(); assert.ok(restored);
-    const store = memoryStorage(); writeCaseStore(store, [restored]);
-    record(ref("restore-id", "C", "Bekannter Fehler: realer Restore-Handler übernimmt Original-ID aus kopierter Historie",
-      "README.md: CP0A1 Restore-ID; app/page.tsx: ExportCenter.restoreVersion", "Eigenes priorisiertes Bugfix-Paket, kein fachlicher Golden State"), {
+    const restore = button(view(copy, (next) => { restored = next; }), "Wiederherstellen", "Synthetische ältere Historie");
+    assert.ok(restore);
+    const restoreStarted = Date.now(); restore(); const restoreFinished = Date.now();
+    assert.ok(restored);
+    assert.equal(restoreIds.ref("CASE", restored.id), "CASE_2", "restore-id: restore must retain the current copy identity");
+    assert.equal(JSON.stringify(restored.versions), historyBefore, "Restore must retain the entire current history");
+    // Compare all normalized historical fields, including inner identities, except current case metadata.
+    const { id: snapshotId, updatedAt: snapshotUpdatedAt, versions: snapshotVersions, ...snapshotContent } = normalizeImportedCase(historical, false)!;
+    const { id: restoredId, updatedAt: restoredUpdatedAt, versions: restoredVersions, ...restoredContent } = restored;
+    assert.deepEqual(restoredContent, snapshotContent, "Restore must recover the complete historical content");
+    assert.notEqual(restoredUpdatedAt, copy.updatedAt);
+    assert.notEqual(restoredUpdatedAt, historical.updatedAt);
+    assert.ok(Date.parse(restoredUpdatedAt) >= restoreStarted && Date.parse(restoredUpdatedAt) <= restoreFinished, "updatedAt must be the restore time");
+    assert.equal(JSON.stringify(original), originalBefore, "Restore must not mutate the original");
+    assert.equal(JSON.stringify(copy), copyBefore, "Restore must not mutate the input or its snapshots");
+    writeCaseStore(store, [original, restored]);
+    const loaded = readCaseStore(store.getItem(CASE_STORAGE_KEY));
+    assert.equal(loaded.cases.length, 2);
+    assert.equal(loaded.recoveryNeeded, false);
+    assert.equal(loaded.protectedEntries.length, 0);
+    const savedOriginal = loaded.cases.find((x) => x.id === original.id)!;
+    const savedCopy = loaded.cases.find((x) => x.id === copy.id)!;
+    assert.ok(savedOriginal); assert.ok(savedCopy);
+    assert.deepEqual({ ...savedOriginal, updatedAt: AS_OF }, { ...originalLoadedBefore, updatedAt: AS_OF }, "Reloaded original must remain unchanged");
+    assert.equal(JSON.stringify(JSON.parse(store.getItem(CASE_STORAGE_KEY)!).find((x: AdvisoryCase) => x.id === original.id)), originalBefore, "Stored original must not be overwritten");
+    assert.deepEqual({ ...savedCopy, updatedAt: AS_OF }, { ...restored, updatedAt: AS_OF }, "Reload must retain restored content and history");
+    record(ref("restore-id", "A", "Historischer Restore stellt Snapshotinhalt wieder her, erhält die aktuelle Fallidentität und verhindert Kollisionen mit dem Ursprung",
+      "Restore-ID-Bugfix-Auftrag; app/page.tsx: ExportCenter.restoreVersion", "Identitätswechsel, Historienverlust oder Überschreiben des Ursprungsfalls"), {
       original: restoreIds.ref("CASE", original.id), copy: restoreIds.ref("CASE", copy.id),
       snapshot: restoreIds.ref("CASE", copy.versions[0].snapshot.id), restored: restoreIds.ref("CASE", restored.id),
-      saved: readCaseStore(store.getItem(CASE_STORAGE_KEY)).cases.map((x) => restoreIds.ref("CASE", x.id)),
-    }, { original: "CASE_1", copy: "CASE_2", snapshot: "CASE_1", restored: "CASE_1", saved: ["CASE_1"] });
+      saved: loaded.cases.map((x) => restoreIds.ref("CASE", x.id)).sort(),
+      historyCount: savedCopy.versions.length, historicalName: savedCopy.advisory.caseName,
+      originalName: savedOriginal.advisory.caseName,
+    }, { original: "CASE_1", copy: "CASE_2", snapshot: "CASE_1", restored: "CASE_2", saved: ["CASE_1", "CASE_2"],
+      historyCount: 2, historicalName: "Synthetischer historischer Inhalt", originalName: "Synthetischer aktueller Ursprungsfall" });
   } finally {
     if (oldWindow) Object.defineProperty(globalThis, "window", oldWindow); else Reflect.deleteProperty(globalThis, "window");
   }
@@ -306,5 +349,9 @@ assert.throws(() => compare(NaN, 0, { kind: "absolute", tolerance: 1e-8, evidenc
 const first = runReferences(), second = runReferences();
 assert.deepEqual(second, first, "Independent cases with newly generated identities must have identical canonical references");
 assert.deepEqual([...new Set(first.map((r) => r.reference.category))].sort(), ["A", "B", "C", "D"]);
+assert.deepEqual(Object.fromEntries(Object.keys(categories).map((category) => [category, first.filter((r) => r.reference.category === category).length])),
+  { A: 18, B: 1, C: 3, D: 1 });
+assert.deepEqual(first.filter((r) => r.reference.category === "C").map((r) => r.reference.id).sort(),
+  ["invalid-depot-fallback", "stale-local-list", "weak-plan-integrity"]);
 for (const { reference } of first) console.log(`PASS CP0A2 [${reference.category}] ${reference.id}: ${categories[reference.category]}`);
 console.log(`CP0A2: ${first.length} references, two independent runs, synthetic data only. C reproduces known bugs; D makes no business decision.`);

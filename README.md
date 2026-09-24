@@ -90,9 +90,9 @@ Architektur-Abhängigkeitsregeln und Releaseentkopplung.
 Aus dem unabhängigen Architekturreview sind folgende getrennt zu behandelnde
 Befunde bekannt. CP0A1 dokumentiert sie; ein grünes Gate widerlegt sie nicht:
 
-- **Restore-ID-Fehler (eigenes priorisiertes Fehlerpaket):** JSON-Fallkopie
-  importieren → historische Version wiederherstellen → speichern kann der Kopie
-  wieder die ursprüngliche Fall-ID geben und den Ursprungsfall überschreiben.
+- **Restore-ID-Fehler (nach CP0A2 behoben):** Historischer Restore erhält jetzt
+  die aktuelle Fall-ID der JSON-Kopie; Original und Kopie bleiben getrennt gespeichert.
+  Regressionstest `restore-id` ist Kategorie A, siehe [Referenzbasis](docs/CP0A2_Referenzbasis.md#priorisierter-restore-id-fix-nach-cp0a2).
 - **Veraltete Fallliste:** Speichern aus einem veralteten lokalen Zustand kann
   zwischenzeitlich gespeicherte gesunde Fälle verdrängen.
 - **Ungültige Depotreferenz:** Eine ungültige `depotId` kann bei der
