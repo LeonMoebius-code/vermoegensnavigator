@@ -32,6 +32,8 @@
     "scripts/verify-cp3.tsx",
     "scripts/verify-cp4.tsx",
     "scripts/verify-bond-final.tsx",
-    "scripts/verify-cp0a2.tsx"
+    "scripts/verify-cp0a2.tsx",
+    "playwright.config.ts",
+    "tests/browser/**/*.ts"
   ]
 }

@@ -17,6 +17,7 @@ Bash im `PATH` verfügbar machen; die vorhandenen Tests verwenden `/tmp`-Pfade.
 
 ```bash
 npm ci
+npx playwright install chromium
 npm run verify
 ```
 
@@ -30,8 +31,8 @@ Inventarisiert am 23.09.2026 anhand des frisch abgerufenen Remote-`main`
 `6ec5ced21704e0474dc91cc27fc5c80d7ad73792`. Dieser Stand entspricht dem im
 CP0A1-Auftrag genannten Referenzcommit; es gab keine Abweichung.
 
-Das Gate führt in dieser Reihenfolge die zehn direkten Fachtest-Einstiege und
-anschließend Typecheck und Produktionsbuild aus:
+Das Gate führt in dieser Reihenfolge die elf direkten Fachtest-Einstiege und
+anschließend Typecheck, Produktionsbuild und die drei CP0B-Browserabläufe aus:
 
 | Nr. | npm-Skript | Einstieg / Prüfung |
 | --- | --- | --- |
@@ -48,6 +49,7 @@ anschließend Typecheck und Produktionsbuild aus:
 | 11 | `test:cp0a2` | `scripts/verify-cp0a2.tsx` – deterministische Referenzen, Kategorien A–D |
 | 12 | `typecheck` | `tsc -p tsconfig.github.json --noEmit` |
 | 13 | `build` | `bash scripts/build-github-pages.sh` |
+| 14 | `test:browser` | `tests/browser/cp0b.spec.ts` gegen genau diesen `.pages-dist`-Build |
 
 Die ausführbare Liste wird ausschließlich im `verify`-Skript in `package.json`
 gepflegt. Alle Einzelskripte bleiben nutzbar. Die `&&`-Verknüpfung führt sie
@@ -67,7 +69,9 @@ erkennbar, die Asset-Class-Prüfung an der Meldung `Economic classification:`.
 Referenzwerte und ist kein aktiver Testeinstieg. Weitere Verify-Suite-Importe
 oder dynamische Suite-Aufrufe bestehen am Referenzstand nicht.
 
-Die Feature-CI (`.github/workflows/ci.yml`) ruft nach `npm ci` dasselbe
+Die Feature-CI (`.github/workflows/ci.yml`) installiert nach `npm ci` mit
+`npx playwright install --with-deps chromium` den zur fixierten Playwright-Version
+gehörenden Browser und ruft dasselbe
 `npm run verify` auf. Ihr `git diff --check origin/main...HEAD` bleibt als
 separate Whitespace-Prüfung bestehen. Deploymentworkflow und Releaseprozess
 werden durch CP0A1 nicht verändert.
@@ -83,7 +87,10 @@ auch als „end-to-end“ bezeichnete bestehende Tests sind keine Browserabläuf
 CP0A2 ergänzt 23 kleine synthetische Referenzen mit getrennten Kategorien für
 bestätigtes Verhalten, technische Beobachtungen, bekannte Fehler und offene Semantik.
 Matrix, Kanonisierung und Vergleichsvertrag: [CP0A2-Referenzbasis](docs/CP0A2_Referenzbasis.md).
-Weiterhin fehlen vollständige Browser-Ablaufprüfungen aus CP0B, visuelle Regressionen,
+CP0B ergänzt genau drei Browser-Lebenszyklen mit Playwright/Chromium:
+Depot, Planung/Fallidentität und Ausgaben. Einrichtung, Assertions und Grenzen:
+[CP0B-Browserbaseline](docs/CP0B_Browserbaseline.md).
+Weiterhin außerhalb des Gates bleiben visuelle Regressionen,
 native Excel-Desktop-Abnahme, native Druck-/PDF-Paginierungsabnahme,
 Architektur-Abhängigkeitsregeln und Releaseentkopplung.
 
