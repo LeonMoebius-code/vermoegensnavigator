@@ -1,0 +1,100 @@
+name: Rollback GitHub Pages
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_run_id:
+        description: Successful original R1 release run ID (first attempt, within retention)
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: pages-release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Verify stored R1 release
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      pages_name: ${{ steps.identity.outputs.pages_name }}
+    steps:
+      - name: Bind rollback artifact identity across deployment retries
+        id: identity
+        run: echo "pages_name=pages-rollback-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: scripts
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Resolve trusted release history and exact artifact IDs
+        id: history
+        run: node scripts/prepare-pages-rollback.mjs select
+        env:
+          ROLLBACK_RUN_ID: ${{ inputs.release_run_id }}
+          GH_TOKEN: ${{ github.token }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ steps.history.outputs.site_id }}
+          run-id: ${{ inputs.release_run_id }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          path: outputs/rollback-site
+          merge-multiple: true
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ steps.history.outputs.evidence_id }}
+          run-id: ${{ inputs.release_run_id }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          path: outputs/rollback-evidence
+          merge-multiple: true
+      - name: Validate historical evidence manifest, provenance, safety and checksum
+        run: node scripts/prepare-pages-rollback.mjs verify
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          name: ${{ steps.identity.outputs.pages_name }}
+          path: outputs/rollback-site/
+          include-hidden-files: true
+          retention-days: 30
+      - name: Confirm packaging did not change stored website
+        run: node scripts/prepare-pages-rollback.mjs verify
+      - name: Preserve rollback selection and original evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: r1-rollback-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            outputs/r1-rollback-selection.json
+            outputs/rollback-evidence/evidence.json
+          if-no-files-found: error
+          retention-days: 90
+
+  deploy:
+    name: Approve and deploy stored R1 website
+    needs: prepare
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+        with:
+          enablement: false
+      - uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+        id: deployment
+        with:
+          artifact_name: ${{ needs.prepare.outputs.pages_name }}
