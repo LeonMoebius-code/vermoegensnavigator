@@ -2,7 +2,7 @@ import { test, expect, type Page, type TestInfo } from "@playwright/test";
 import { readFile, stat } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import * as XLSX from "xlsx";
-import type { AdvisoryCase } from "../../app/case-model";
+import { normalizeImportedCase, type AdvisoryCase } from "../../app/case-model";
 import { CASE_STORAGE_KEY } from "../../app/case-storage";
 import { depotA, depotB, depotCsv, planningCase, outputCase } from "./fixtures";
 
@@ -187,6 +187,37 @@ test.describe("Planung und Fallidentität", () => {
 
   test("Planung, JSON-Kopie, Restore-Abbruch/-Bestätigung und getrennte Fälle nach Reload", async ({ page }, info) => {
     await seed(page, fixture);
+    await test.step("P1: stale React list retains external additions and does not resurrect deletions", async () => {
+      // Same localStorage, no reload/state update: model a logically separate client.
+      const neighbor = normalizeImportedCase({ ...planningCase(), id: "cp0b-p1-neighbor" }, false)!;
+      neighbor.advisory.caseName = "Synthetischer P1-Nachbarfall";
+      await page.evaluate(({ key, neighbor }) => {
+        const current = JSON.parse(localStorage.getItem(key)!);
+        localStorage.setItem(key, JSON.stringify([...current, neighbor]));
+      }, { key: CASE_STORAGE_KEY, neighbor });
+      await nav(page, "Ergebnis & Export");
+      await page.getByRole("combobox", { name: /^Bearbeitungsstand/ }).selectOption("In Prüfung");
+      await save(page);
+      const added = await stored(page);
+      expect(added.map((item) => item.id)).toEqual([fixture.id, neighbor.id]);
+      expect(added[0].status).toBe("In Prüfung");
+      expect({ ...added[1], updatedAt: neighbor.updatedAt }).toEqual(neighbor);
+      // Successful save has now synchronized React with [A, B]. Externally remove B.
+      await nav(page, "Beratungsfälle");
+      await expect(page.getByRole("button", { name: neighbor.advisory.caseName, exact: false })).toBeVisible();
+      await openCase(page, fixture.advisory.caseName);
+      await page.evaluate(({ key, id }) => {
+        const current = JSON.parse(localStorage.getItem(key)!);
+        localStorage.setItem(key, JSON.stringify(current.filter((item: { id: string }) => item.id !== id)));
+      }, { key: CASE_STORAGE_KEY, id: neighbor.id });
+      await nav(page, "Ergebnis & Export");
+      await page.getByRole("combobox", { name: /^Bearbeitungsstand/ }).selectOption("Entwurf");
+      await save(page);
+      const removed = await stored(page);
+      expect(removed.map((item) => item.id)).toEqual([fixture.id]);
+      expect(removed[0].status).toBe("Entwurf");
+      console.log("PASS P1 browser: external neighbor retained; deleted neighbor not resurrected; real save button");
+    });
     await nav(page, "Depotcheck");
     await totals(page, 20000, 14500);
     await nav(page, "Strukturplanung");
@@ -238,6 +269,19 @@ test.describe("Planung und Fallidentität", () => {
     const [original] = await stored(page);
     const backup = await currentJson(page, info, "original-backup");
     expect(backup.item).toEqual(original);
+    await test.step("P1: failed import preserves store bytes, active case and export view", async () => {
+      const malformed = "{ synthetic malformed store";
+      await page.evaluate(({ key, value }) => localStorage.setItem(key, value), { key: CASE_STORAGE_KEY, value: malformed });
+      const chooser = page.waitForEvent("filechooser");
+      await page.getByRole("button", { name: /JSON importieren/ }).click();
+      await (await chooser).setFiles(backup.path);
+      await expect(page.getByRole("alert")).toContainText("Der lokale Fallbestand ist beschädigt");
+      expect(await page.evaluate((key) => localStorage.getItem(key), CASE_STORAGE_KEY)).toBe(malformed);
+      await expect(page.getByRole("button", { name: /Vollständige Sicherung/ })).toBeVisible();
+      expect((await currentJson(page, info, "failed-import-active-case")).item).toEqual(original);
+      await page.evaluate(({ key, item }) => localStorage.setItem(key, JSON.stringify([item])), { key: CASE_STORAGE_KEY, item: original });
+      console.log("PASS P1 browser: failed import preserves original bytes and active case");
+    });
     const chooser = page.waitForEvent("filechooser");
     await page.getByRole("button", { name: /JSON importieren/ }).click();
     await (await chooser).setFiles(backup.path);
@@ -282,7 +326,8 @@ test.describe("Planung und Fallidentität", () => {
     await save(page);
     const saved = await stored(page);
     expect(saved.map((c) => c.id).sort()).toEqual([original.id, imported.id].sort());
-    expect(saved.find((c) => c.id === original.id)).toEqual(original);
+    // Reading the current store preserves content/history but refreshes updatedAt.
+    expect({ ...saved.find((c) => c.id === original.id), updatedAt: original.updatedAt }).toEqual(original);
     const savedCopy = saved.find((c) => c.id === imported.id)!;
     expect(content(savedCopy)).toEqual(content(restored));
     expect(savedCopy.versions).toEqual(before.versions);
@@ -298,7 +343,7 @@ test.describe("Planung und Fallidentität", () => {
       validRelations(reopened);
     }
     expect((await stored(page)).map((c) => c.id).sort()).toEqual([original.id, imported.id].sort());
-    expect((await stored(page)).find((c) => c.id === original.id)).toEqual(original);
+    expect({ ...(await stored(page)).find((c) => c.id === original.id), updatedAt: original.updatedAt }).toEqual(original);
   });
 });
 
