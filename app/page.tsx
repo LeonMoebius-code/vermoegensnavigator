@@ -15,7 +15,7 @@ import {
 } from "react";
 import * as XLSX from "xlsx";
 import { importIssueLabel } from "./depot-validation";
-import { CASE_STORAGE_KEY, readCaseStore, writeCaseStore, recoveryBackups } from "./case-storage";
+import { CASE_STORAGE_KEY, readCaseStore, saveCaseToStore, insertCaseIntoStore, removeCaseFromStore, recoveryBackups } from "./case-storage";
 import {
   AdvisoryData,
   emptyAdvisory,
@@ -593,16 +593,16 @@ export default function Home() {
     return () => window.clearTimeout(timer);
   }, []);
 
-  const persist = (items: AdvisoryCase[]) => {
+  const persist = (operation: () => AdvisoryCase[]) => {
     try {
       if (!storageLoaded.current) throw new Error("Der lokale Fallbestand ist noch nicht sicher geladen. Speichern wurde abgebrochen.");
-      const saved = writeCaseStore(window.localStorage, items);
+      const saved = operation();
       setSavedCases(saved);
       setBackups(recoveryBackups(window.localStorage));
-      return true;
+      return saved;
     } catch (error) {
       setStorageNotice(error instanceof Error ? error.message : "Speichern fehlgeschlagen. Der vorhandene Bestand bleibt erhalten.");
-      return false;
+      return null;
     }
   };
 
@@ -622,13 +622,8 @@ export default function Home() {
         },
       ];
     }
-    const exists = savedCases.some((item) => item.id === updated.id);
-    const saved = persist(
-      exists
-        ? savedCases.map((item) => (item.id === updated.id ? updated : item))
-        : [updated, ...savedCases],
-    );
-    if (saved) setActiveCase(updated);
+    const saved = persist(() => saveCaseToStore(window.localStorage, updated));
+    if (saved) setActiveCase(saved.find((item) => item.id === updated.id)!);
   };
 
   const start = (scope?: Scope, scenarioId?: string) => {
@@ -653,7 +648,7 @@ export default function Home() {
   };
   const removeSavedCase = (id: string) => {
     if (window.confirm("Diesen lokal gespeicherten Testfall wirklich löschen?"))
-      persist(savedCases.filter((item) => item.id !== id));
+      persist(() => removeCaseFromStore(window.localStorage, id));
   };
 
   const exportJson = () =>
@@ -680,20 +675,22 @@ export default function Home() {
     try {
       const imported = normalizeImportedCase(JSON.parse(await file.text()));
       if (!imported) throw new Error("invalid");
-      setActiveCase(imported);
+      const saved = persist(() => insertCaseIntoStore(window.localStorage, imported));
+      if (!saved) return;
+      setActiveCase(saved.find((item) => item.id === imported.id)!);
       setNewCaseAdvisorId(imported.advisorId);
       window.localStorage.setItem(
         "vermoegensnavigator-advisor",
         imported.advisorId,
       );
-      persist([imported, ...savedCases]);
       setView("wizard");
     } catch {
       window.alert(
         "Die Datei enthält keinen vollständigen VermögensNavigator-Fall.",
       );
+    } finally {
+      event.target.value = "";
     }
-    event.target.value = "";
   };
 
   const activePlan =

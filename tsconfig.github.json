@@ -34,6 +34,7 @@
     "scripts/verify-bond-final.tsx",
     "scripts/verify-cp0a2.tsx",
     "scripts/verify-p4-copy-contract.ts",
+    "scripts/verify-p1-case-store.ts",
     "playwright.config.ts",
     "tests/browser/**/*.ts"
   ]

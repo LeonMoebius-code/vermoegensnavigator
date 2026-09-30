@@ -116,7 +116,7 @@ generierte IDs nur auf Ungleichheit, Eindeutigkeit und Mappingrelationen geprüf
 Keine Sleeps oder erwarteten konkreten Zufalls-IDs.
 
 Der Test läuft einmal an Position 12 in `npm run verify`, nach `test:cp0a2`
-und vor `typecheck`. Das Gate bleibt sequenziell und Fail-Fast; danach folgen
+und seit P1 vor `test:p1-case-store` und `typecheck`. Das Gate bleibt sequenziell und Fail-Fast; danach folgen
 genau ein Produktionsbuild und die genau drei CP0B-Lebenszyklen. Der neue Test
 ist auch im Typecheck enthalten und importiert keine andere Verify-Suite.
 CP0B prüft zusätzlich im bestehenden Planungsflow den echten Duplizieren-Button:
@@ -128,9 +128,11 @@ Nur CP0A2 `import-copy` wird durch P4 von B nach A überführt:
 
 Nicht-Ziele: Produktumbau, neue UI, Schema-/ID-Migration, UUIDs, vollständige
 Planintegritätslogik, Architekturmodernisierung, Reporting oder Betriebsänderungen.
-P1 behandelt später `stale-local-list`, P2 `invalid-depot-fallback`/Depotintegrität,
+[P1](P1_Sichere_Fallpersistenz.md) behebt inzwischen `stale-local-list` durch
+operationsbasierte Save-/Insert-/Delete-Persistenz; nur dieser Befund wechselt C → A.
+Aktuell: **20 A / 0 B / 2 C / 1 D**. P2 behandelt später `invalid-depot-fallback`/Depotintegrität,
 P3 `weak-plan-integrity` (doppelte Plan-IDs, ungültige aktive ID, mehrere bevorzugte
-Pläne, Löschfolgen/Reparatur). Diese drei C-Befunde bleiben unverändert.
+Pläne, Löschfolgen/Reparatur). Diese zwei C-Befunde bleiben unverändert.
 `general-export-scope` bleibt D und benötigt eine separate fachliche Entscheidung.
 Kein Release, Rollback, Deployment oder Änderung von GitHub-Einstellungen.
 

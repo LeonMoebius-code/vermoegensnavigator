@@ -56,11 +56,45 @@ export function readCaseStore(original: string | null): CaseStoreRead {
   return result;
 }
 
-/** Re-read on every write, preserving un-loadable cases and a byte-exact original backup. */
+/** Explicit full replacement of healthy cases; protected originals remain.
+ * Do not use a UI list snapshot here: normal actions use the operations below. */
 export function writeCaseStore(storage: StorageAccess, cases: AdvisoryCase[]) {
+  return mutateCaseStore(storage, () => cases);
+}
+
+/** Replace this healthy ID in place, or prepend a new case to the current store.
+ * Same-ID writes remain last-write-wins; localStorage is not a cross-tab transaction. */
+export function saveCaseToStore(storage: StorageAccess, item: AdvisoryCase) {
+  return mutateCaseStore(storage, ({ cases }) => cases.some((current) => current.id === item.id)
+    ? cases.map((current) => current.id === item.id ? item : current)
+    : [item, ...cases]);
+}
+
+/** Insert an independent case (notably a P4 import); never overwrite an existing ID. */
+export function insertCaseIntoStore(storage: StorageAccess, item: AdvisoryCase) {
+  return mutateCaseStore(storage, ({ cases }) => {
+    if (cases.some((current) => current.id === item.id))
+      throw new Error("Ein Fall mit derselben ID ist bereits gespeichert. Import wurde abgebrochen.");
+    return [item, ...cases];
+  });
+}
+
+/** Remove only this healthy ID; missing IDs are safe, protected originals are not deleted. */
+export function removeCaseFromStore(storage: StorageAccess, id: string) {
+  return mutateCaseStore(storage, ({ cases, protectedEntries }) => {
+    if (typeof id !== "string" || !id) throw new Error("Löschen erfordert eine gültige Fall-ID.");
+    if (protectedEntries.some((entry) => (entry as { id?: unknown } | null)?.id === id))
+      throw new Error("Ein beschädigter Originalfall mit derselben ID ist geschützt.");
+    return cases.filter((current) => current.id !== id);
+  });
+}
+
+// Read once immediately before selecting the mutation; share validation and recovery.
+function mutateCaseStore(storage: StorageAccess, select: (loaded: CaseStoreRead) => AdvisoryCase[]) {
   const original = storage.getItem(CASE_STORAGE_KEY);
   const loaded = readCaseStore(original);
   if (loaded.malformed) throw new Error("Der lokale Fallbestand ist beschädigt. Originaldaten zuerst zur Wiederherstellung sichern. Der Bestand wurde nicht überschrieben.");
+  const cases = select(loaded);
   const protectedIds = new Set(loaded.protectedEntries.map((entry) => (entry as { id?: unknown } | null)?.id));
   if (cases.some((item) => typeof item.id !== "string" || !item.id) || new Set(cases.map((item) => item.id)).size !== cases.length)
     throw new Error("Fälle mit fehlenden oder doppelten IDs können nicht gespeichert werden.");

@@ -10,7 +10,7 @@ import { addDepotAccount, AdvisoryCase, caseSnapshot, depotAssetAmounts, depotPl
   duplicateStructurePlan, normalizeImportedCase, replaceDepotAccount } from "../app/case-model";
 import { buildDepotAnalysisPositions, concentrationMetrics } from "../app/depot-analysis";
 import { buildBondIstExportData } from "../app/bond-analysis-data";
-import { CASE_STORAGE_KEY, readCaseStore, recoveryBackups, writeCaseStore } from "../app/case-storage";
+import { CASE_STORAGE_KEY, readCaseStore, recoveryBackups, writeCaseStore, saveCaseToStore } from "../app/case-storage";
 import { ExportCenter } from "../app/page";
 import { AS_OF, ambiguous, annual, blocked, bondCase, emptyCase, holding, multiCase, now, stub } from "./cp0a2-fixtures";
 import { categories, cent, compare, exact, Ids, memoryStorage, Reference, Rule } from "./cp0a2-contract";
@@ -222,11 +222,15 @@ function runReferences() {
     ids: weak.plans.map((p) => ids.ref("PLAN", p.id)), active: ids.ref("PLAN", weak.activePlanId), preferredCount: weak.plans.filter((p) => p.preferred).length,
   }, { ids: ["PLAN_1", "PLAN_1"], active: "DANGLING_PLAN_1", preferredCount: 2 });
   const stale = memoryStorage(), second = emptyCase(); register(ids, second);
-  writeCaseStore(stale, [c, second]); writeCaseStore(stale, [c]);
-  record(ref("stale-local-list", "C", "Bekannter Fehler: veraltete Liste verdrängt zwischenzeitlich gespeicherten gesunden Fall",
-    "README.md: CP0A1 veraltete Fallliste", "Nicht als zulässige Konfliktauflösung festschreiben"), {
+  writeCaseStore(stale, [c]);
+  const staleClient = readCaseStore(stale.getItem(CASE_STORAGE_KEY)).cases;
+  writeCaseStore(stale, [c, second]);
+  saveCaseToStore(stale, { ...staleClient[0], status: "In Prüfung" });
+  record(ref("stale-local-list", "A", "Fallbezogenes Speichern erhält zwischenzeitlich gespeicherte gesunde Nachbarfälle",
+    "docs/P1_Sichere_Fallpersistenz.md; scripts/verify-p1-case-store.ts", "Aktueller Store ist autoritativ, lokale UI-Liste ist nur Darstellung"), {
     saved: readCaseStore(stale.getItem(CASE_STORAGE_KEY)).cases.map((x) => ids.ref("CASE", x.id)),
-  }, { saved: ["CASE_1"] });
+    status: readCaseStore(stale.getItem(CASE_STORAGE_KEY)).cases[0].status,
+  }, { saved: ["CASE_1", "CASE_3"], status: "In Prüfung" });
   const original = multiCase();
   original.advisory.caseName = "Synthetischer historischer Inhalt";
   const historical = caseSnapshot(original);
@@ -350,8 +354,8 @@ const first = runReferences(), second = runReferences();
 assert.deepEqual(second, first, "Independent cases with newly generated identities must have identical canonical references");
 assert.deepEqual([...new Set(first.map((r) => r.reference.category))].sort(), ["A", "C", "D"]);
 assert.deepEqual(Object.fromEntries(Object.keys(categories).map((category) => [category, first.filter((r) => r.reference.category === category).length])),
-  { A: 19, B: 0, C: 3, D: 1 });
+  { A: 20, B: 0, C: 2, D: 1 });
 assert.deepEqual(first.filter((r) => r.reference.category === "C").map((r) => r.reference.id).sort(),
-  ["invalid-depot-fallback", "stale-local-list", "weak-plan-integrity"]);
+  ["invalid-depot-fallback", "weak-plan-integrity"]);
 for (const { reference } of first) console.log(`PASS CP0A2 [${reference.category}] ${reference.id}: ${categories[reference.category]}`);
-console.log(`CP0A2: ${first.length} references, 19 A / 0 B / 3 C / 1 D, two independent runs, synthetic data only. C reproduces known bugs; D makes no business decision.`);
+console.log(`CP0A2: ${first.length} references, 20 A / 0 B / 2 C / 1 D, two independent runs, synthetic data only. C reproduces known bugs; D makes no business decision.`);

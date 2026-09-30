@@ -31,7 +31,7 @@ Inventarisiert am 23.09.2026 anhand des frisch abgerufenen Remote-`main`
 `6ec5ced21704e0474dc91cc27fc5c80d7ad73792`. Dieser Stand entspricht dem im
 CP0A1-Auftrag genannten Referenzcommit; es gab keine Abweichung.
 
-Das Gate führt in dieser Reihenfolge die zwölf direkten Fachtest-Einstiege und
+Das Gate führt in dieser Reihenfolge die dreizehn direkten Fachtest-Einstiege und
 anschließend Typecheck, Produktionsbuild und die drei CP0B-Browserabläufe aus:
 
 | Nr. | npm-Skript | Einstieg / Prüfung |
@@ -48,9 +48,10 @@ anschließend Typecheck, Produktionsbuild und die drei CP0B-Browserabläufe aus:
 | 10 | `test:bond-final` | `scripts/verify-bond-final.tsx` |
 | 11 | `test:cp0a2` | `scripts/verify-cp0a2.tsx` – deterministische Referenzen, Kategorien A–D |
 | 12 | `test:p4-copy-contract` | `scripts/verify-p4-copy-contract.ts` – verbindlicher Fallimport-/Plankopie-Vertrag |
-| 13 | `typecheck` | `tsc -p tsconfig.github.json --noEmit` |
-| 14 | `build` | `bash scripts/build-github-pages.sh` |
-| 15 | `test:browser` | `tests/browser/cp0b.spec.ts` gegen genau diesen `.pages-dist`-Build |
+| 13 | `test:p1-case-store` | `scripts/verify-p1-case-store.ts` – operationsbasierte Fallpersistenz/Recovery |
+| 14 | `typecheck` | `tsc -p tsconfig.github.json --noEmit` |
+| 15 | `build` | `bash scripts/build-github-pages.sh` |
+| 16 | `test:browser` | `tests/browser/cp0b.spec.ts` gegen genau diesen `.pages-dist`-Build |
 
 Die ausführbare Liste wird ausschließlich im `verify`-Skript in `package.json`
 gepflegt. Alle Einzelskripte bleiben nutzbar. Die `&&`-Verknüpfung führt sie
@@ -88,7 +89,8 @@ auch als „end-to-end“ bezeichnete bestehende Tests sind keine Browserabläuf
 CP0A2 ergänzt 23 kleine synthetische Referenzen mit getrennten Kategorien für
 bestätigtes Verhalten, technische Beobachtungen, bekannte Fehler und offene Semantik.
 Matrix, Kanonisierung und Vergleichsvertrag: [CP0A2-Referenzbasis](docs/CP0A2_Referenzbasis.md).
-P4 bestätigt `import-copy` als Kategorie A: **19 A / 0 B / 3 C / 1 D**.
+P4 bestätigt `import-copy` als Kategorie A. Nach [P1](docs/P1_Sichere_Fallpersistenz.md)
+gilt aktuell **20 A / 0 B / 2 C / 1 D**; nur `stale-local-list` wechselte C → A.
 [Copy-/Import-Vertrag](docs/P4_Copy_Import_Vertrag.md): Fallimport erneuert nur die
 aktuelle äußere Fall-ID; Plankopie erneuert planinterne IDs und remappt Einstiegsbezüge.
 Gültige innere Import-IDs, caseweite Kopierreferenzen und historische Snapshots bleiben
@@ -107,8 +109,10 @@ Befunde bekannt. CP0A1 dokumentiert sie; ein grünes Gate widerlegt sie nicht:
 - **Restore-ID-Fehler (nach CP0A2 behoben):** Historischer Restore erhält jetzt
   die aktuelle Fall-ID der JSON-Kopie; Original und Kopie bleiben getrennt gespeichert.
   Regressionstest `restore-id` ist Kategorie A, siehe [Referenzbasis](docs/CP0A2_Referenzbasis.md#priorisierter-restore-id-fix-nach-cp0a2).
-- **Veraltete Fallliste:** Speichern aus einem veralteten lokalen Zustand kann
-  zwischenzeitlich gespeicherte gesunde Fälle verdrängen.
+- **Veraltete Fallliste (durch P1 behoben):** Save, Insert/Import und Delete lesen
+  unmittelbar den aktuellen Store. Hinzugekommene Fälle bleiben erhalten; extern
+  gelöschte fremde Fälle werden nicht aus dem UI-Snapshot wiederbelebt.
+  Same-ID bleibt Last-Write-Wins, keine atomare Cross-Tab-Garantie.
 - **Ungültige Depotreferenz:** Eine ungültige `depotId` kann bei der
   Normalisierung auch im aktuellen Schema still auf das erste Depot umgebogen
   werden. Die Migrations- und Reparatursemantik bleibt unverändert.
