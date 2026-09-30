@@ -35,6 +35,7 @@
     "scripts/verify-cp0a2.tsx",
     "scripts/verify-p4-copy-contract.ts",
     "scripts/verify-p1-case-store.ts",
+    "scripts/verify-p2-depot-integrity.ts",
     "playwright.config.ts",
     "tests/browser/**/*.ts"
   ]

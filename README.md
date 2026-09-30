@@ -31,7 +31,7 @@ Inventarisiert am 23.09.2026 anhand des frisch abgerufenen Remote-`main`
 `6ec5ced21704e0474dc91cc27fc5c80d7ad73792`. Dieser Stand entspricht dem im
 CP0A1-Auftrag genannten Referenzcommit; es gab keine Abweichung.
 
-Das Gate führt in dieser Reihenfolge die dreizehn direkten Fachtest-Einstiege und
+Das Gate führt in dieser Reihenfolge die vierzehn direkten Fachtest-Einstiege und
 anschließend Typecheck, Produktionsbuild und die drei CP0B-Browserabläufe aus:
 
 | Nr. | npm-Skript | Einstieg / Prüfung |
@@ -49,9 +49,10 @@ anschließend Typecheck, Produktionsbuild und die drei CP0B-Browserabläufe aus:
 | 11 | `test:cp0a2` | `scripts/verify-cp0a2.tsx` – deterministische Referenzen, Kategorien A–D |
 | 12 | `test:p4-copy-contract` | `scripts/verify-p4-copy-contract.ts` – verbindlicher Fallimport-/Plankopie-Vertrag |
 | 13 | `test:p1-case-store` | `scripts/verify-p1-case-store.ts` – operationsbasierte Fallpersistenz/Recovery |
-| 14 | `typecheck` | `tsc -p tsconfig.github.json --noEmit` |
-| 15 | `build` | `bash scripts/build-github-pages.sh` |
-| 16 | `test:browser` | `tests/browser/cp0b.spec.ts` gegen genau diesen `.pages-dist`-Build |
+| 14 | `test:p2-depot-integrity` | `scripts/verify-p2-depot-integrity.ts` – Depotreferenzen, Legacy-Migration und Recovery |
+| 15 | `typecheck` | `tsc -p tsconfig.github.json --noEmit` |
+| 16 | `build` | `bash scripts/build-github-pages.sh` |
+| 17 | `test:browser` | `tests/browser/cp0b.spec.ts` gegen genau diesen `.pages-dist`-Build |
 
 Die ausführbare Liste wird ausschließlich im `verify`-Skript in `package.json`
 gepflegt. Alle Einzelskripte bleiben nutzbar. Die `&&`-Verknüpfung führt sie
@@ -90,7 +91,8 @@ CP0A2 ergänzt 23 kleine synthetische Referenzen mit getrennten Kategorien für
 bestätigtes Verhalten, technische Beobachtungen, bekannte Fehler und offene Semantik.
 Matrix, Kanonisierung und Vergleichsvertrag: [CP0A2-Referenzbasis](docs/CP0A2_Referenzbasis.md).
 P4 bestätigt `import-copy` als Kategorie A. Nach [P1](docs/P1_Sichere_Fallpersistenz.md)
-gilt aktuell **20 A / 0 B / 2 C / 1 D**; nur `stale-local-list` wechselte C → A.
+wechselte nur `stale-local-list` C → A. Nach [P2](docs/P2_Depotreferenzintegritaet.md)
+gilt aktuell **21 A / 0 B / 1 C / 1 D**; nur `invalid-depot-fallback` wechselte zusätzlich C → A.
 [Copy-/Import-Vertrag](docs/P4_Copy_Import_Vertrag.md): Fallimport erneuert nur die
 aktuelle äußere Fall-ID; Plankopie erneuert planinterne IDs und remappt Einstiegsbezüge.
 Gültige innere Import-IDs, caseweite Kopierreferenzen und historische Snapshots bleiben
@@ -113,9 +115,10 @@ Befunde bekannt. CP0A1 dokumentiert sie; ein grünes Gate widerlegt sie nicht:
   unmittelbar den aktuellen Store. Hinzugekommene Fälle bleiben erhalten; extern
   gelöschte fremde Fälle werden nicht aus dem UI-Snapshot wiederbelebt.
   Same-ID bleibt Last-Write-Wins, keine atomare Cross-Tab-Garantie.
-- **Ungültige Depotreferenz:** Eine ungültige `depotId` kann bei der
-  Normalisierung auch im aktuellen Schema still auf das erste Depot umgebogen
-  werden. Die Migrations- und Reparatursemantik bleibt unverändert.
+- **Ungültige Depotreferenz (durch P2 behoben):** Schema 10/11 verlangt eine
+  gültige Holding→DepotAccount-Referenz; ungültige Fälle werden abgelehnt und
+  als lokale Originale geschützt. Nur echte Schema-<10-Fälle mit Holdings ohne
+  DepotAccounts migrieren weiterhin in genau ein neues Depot.
 - **Planidentitäten:** Doppelte Plan-IDs, ungültige `activePlanId` und mehrere
   bevorzugte Pläne besitzen derzeit schwächere Integritätsprüfung.
 - **Architektur:** CSV-Klassifikation ist an das umfangreichere Analysemodul

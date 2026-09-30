@@ -73,7 +73,7 @@ verhindern den Hauptschreibvorgang; dessen Quota-Fehler erhalten den Hauptstore.
 logisch getrennten Clients und explizit veralteten Snapshots. Zwölf synthetische
 Gruppen prüfen Mengen-/Inhaltsvertrag, Rückgaben, ID-Schutz, malformed Stores,
 Protected Entries, bytegenaue Backups, Wiederverwendung und Schreibfehler.
-`test:p1-case-store` folgt im sequenziellen Fail-Fast-Gate nach P4 vor Typecheck;
+`test:p1-case-store` folgt im sequenziellen Fail-Fast-Gate nach P4, dann P2 und Typecheck;
 danach genau ein Produktionsbuild und CP0B. `npm test` delegiert weiter an `verify`.
 
 Im bestehenden CP0B-Planungs-/Fallidentitätsflow verändert ein externer Kontext
@@ -92,6 +92,9 @@ zweier Read-/Write-Operationen ist keine P1-Garantie. Abgesichert wird die bekan
 Ursache des vollständigen veralteten React-Snapshots.
 
 Schema **11**, Speicherkey, P4-Import-/Plankopie- und Restore-ID-Verträge bleiben
-erhalten. P2 behandelt später `invalid-depot-fallback`/Depotintegrität, P3
-`weak-plan-integrity`/Planintegrität; beide bleiben C. `general-export-scope`
-bleibt D. Keine Migration, Reportingentscheidung oder Releaseprozessänderung.
+erhalten. [P2](P2_Depotreferenzintegritaet.md) behebt inzwischen
+`invalid-depot-fallback`: Ungültige aktuelle Depotreferenzen werden zentral
+abgelehnt, Originale geschützt und beim gesunden Nachbar-Save samt bytegenauem
+Backup erhalten; neue ungültige Save-/Insert-/Write-Kandidaten schreiben nichts.
+Aktuell **21 A / 0 B / 1 C / 1 D**. P3 `weak-plan-integrity` bleibt C,
+`general-export-scope` bleibt D. Keine Migration, Reportingentscheidung oder Releaseprozessänderung.

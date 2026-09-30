@@ -1880,24 +1880,29 @@ export function normalizeImportedCase(
     typeof holding.id !== "string" || !holding.id || typeof holding.name !== "string" ||
     !Number.isFinite(holding.value) || holding.value < 0) ||
     new Set(rawDepot.map((holding) => holding.id)).size !== rawDepot.length) return null;
-  if (rawDepot.length > 0 && normalized.depotAccounts.length === 0) {
+  let legacyMigrationDepotId: string | undefined;
+  if (sourceSchemaVersion < 10 && rawDepot.length > 0 && normalized.depotAccounts.length === 0) {
     const migratedAt = normalized.createdAt || iso();
+    legacyMigrationDepotId = uid("depot");
     normalized.depotAccounts = [{
-      id: uid("depot"),
+      id: legacyMigrationDepotId,
       name: "Depot 1",
       createdAt: migratedAt,
       updatedAt: normalized.updatedAt || migratedAt,
     }];
   }
   const validDepotIds = new Set(normalized.depotAccounts.map((account) => account.id));
-  const fallbackDepotId = normalized.depotAccounts[0]?.id;
+  // Only a newly created pre-multi-depot migration target justifies assignment.
+  // Current or already assigned legacy holdings must never guess another depot.
+  if (!legacyMigrationDepotId && rawDepot.some((holding) =>
+    typeof holding.depotId !== "string" || !holding.depotId || !validDepotIds.has(holding.depotId))) return null;
   normalized.depot = rawDepot
     .map((holding) => ({
         ...normalizeBondHolding(sanitizeOptionalHolding(holding)),
         depotId:
-          holding.depotId && validDepotIds.has(holding.depotId)
+          typeof holding.depotId === "string" && validDepotIds.has(holding.depotId)
             ? holding.depotId
-            : fallbackDepotId!,
+            : legacyMigrationDepotId!,
         value: Math.max(0, Number(holding.value) || 0),
         plannedSale: Math.min(
           Math.max(0, Number(holding.value) || 0),
@@ -1909,8 +1914,7 @@ export function normalizeImportedCase(
         securityType: typeof holding.securityType === "string" ? holding.securityType : typeof holding.sourceType === "string" ? holding.sourceType : undefined,
         classificationStatus:
           holding.classificationStatus || "mapped",
-      }))
-    .filter((holding) => Boolean(holding.depotId));
+      }));
   if (normalized.depot.length > 0)
     normalized.advisory = withDepotValue(normalized.advisory, normalized.depot);
   normalized.moduleStates = normalized.moduleStates || {};

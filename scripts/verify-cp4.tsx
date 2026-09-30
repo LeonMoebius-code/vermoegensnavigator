@@ -107,7 +107,8 @@ test("all old schema entry points, field provenance, immutable history and actua
   for (const schemaVersion of [undefined, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) {
     const legacy: any = structuredClone(c);
     legacy.schemaVersion = schemaVersion;
-    delete legacy.depotAccounts;
+    // Multi-depot starts at schema 10: only earlier fixtures lack accounts.
+    if (schemaVersion === undefined || schemaVersion < 10) delete legacy.depotAccounts;
     delete legacy.depot[0].bondSource;
     delete legacy.depot[0].excludeFromBondAggregates;
     legacy.depot[0].legacyOptionalBondField = { retained: "synthetic" };
