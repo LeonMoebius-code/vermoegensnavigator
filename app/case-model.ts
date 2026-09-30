@@ -362,7 +362,7 @@ export function createPlan(name: string, total: number): StructurePlan {
     capitalMode: "linked",
     allocations: [],
     investmentPlans: [],
-    preferred: true,
+    preferred: false,
     notes: "",
     depotMode: "none",
     depotHoldingIds: [],
@@ -420,6 +420,8 @@ export function createCase(
   const data = clone(advisory);
   const initialTotal = data.liquidAssets;
   const plan = createPlan("Plan A – Ausgangsstruktur", initialTotal);
+  // Initial case choice is explicit; later variants never inherit preference.
+  plan.preferred = true;
   return {
     schemaVersion: 11,
     id: uid("fall"),
@@ -446,6 +448,45 @@ export function caseSnapshot(item: AdvisoryCase): CaseSnapshot {
   const snapshot = clone(enforceCaseDepotValue(item)) as Partial<AdvisoryCase>;
   delete snapshot.versions;
   return snapshot as CaseSnapshot;
+}
+
+export function getActiveStructurePlan(item: Pick<AdvisoryCase, "plans" | "activePlanId">): StructurePlan {
+  const matches = item.plans.filter((plan) => plan.id === item.activePlanId);
+  if (!validIdentity(item.activePlanId) || matches.length !== 1)
+    throw new Error("Die aktive Planvariante ist ungültig. Es wird keine Ersatzvariante gewählt.");
+  return matches[0];
+}
+
+export function getPreferredStructurePlan(plans: StructurePlan[]): StructurePlan | undefined {
+  const preferred = plans.filter((plan) => plan.preferred);
+  if (preferred.length > 1) throw new Error("Mehrere bevorzugte Planvarianten sind ungültig.");
+  return preferred[0];
+}
+
+export function setActiveStructurePlan(item: AdvisoryCase, id: string): AdvisoryCase {
+  getActiveStructurePlan(item);
+  if (!validIdentity(id) || item.plans.filter((plan) => plan.id === id).length !== 1) return item;
+  return { ...item, activePlanId: id };
+}
+
+export function setPreferredStructurePlan(item: AdvisoryCase, id: string): AdvisoryCase {
+  if (!validIdentity(id) || item.plans.filter((plan) => plan.id === id).length !== 1) return item;
+  return { ...item, plans: item.plans.map((plan) => ({ ...plan, preferred: plan.id === id })) };
+}
+
+/** Append only a valid independent variant; make it active without selecting a target. */
+export function appendStructurePlan(item: AdvisoryCase, plan: StructurePlan): AdvisoryCase {
+  const next = { ...item, plans: [...item.plans, { ...plan, preferred: false }], activePlanId: plan.id };
+  return validCurrentPlanGraph(next) ? next : item;
+}
+
+export function deleteStructurePlan(item: AdvisoryCase, id: string): AdvisoryCase {
+  getActiveStructurePlan(item);
+  const index = item.plans.findIndex((plan) => plan.id === id);
+  if (index < 0 || item.plans.length === 1) return item;
+  const successor = item.plans[index + 1] ?? item.plans[index - 1];
+  return { ...item, plans: item.plans.filter((plan) => plan.id !== id),
+    activePlanId: item.activePlanId === id ? successor.id : item.activePlanId };
 }
 
 export function monthsUntilNeed(
@@ -1837,6 +1878,62 @@ function migrateRiskAssessment(
   };
 }
 
+const validIdentity = (value: unknown): value is string =>
+  typeof value === "string" && value.trim().length > 0;
+
+/** Validate the current persisted graph BEFORE any lossy legacy reconciliation.
+ * Historical snapshot contents are deliberately opaque until actual restore. */
+function validCurrentPlanGraph(item: Partial<AdvisoryCase>): boolean {
+  const uniqueIds = (entries: { id: string }[]) => entries.every((entry) =>
+    entry && validIdentity(entry.id)) && new Set(entries.map((entry) => entry.id)).size === entries.length;
+  if (!Array.isArray(item.plans) || !item.plans.length || !uniqueIds(item.plans) ||
+    !validIdentity(item.activePlanId) || item.plans.filter((plan) => plan.id === item.activePlanId).length !== 1 ||
+    item.plans.some((plan) => typeof plan.preferred !== "boolean") ||
+    item.plans.filter((plan) => plan.preferred).length > 1 ||
+    !Array.isArray(item.advisory?.needs) ||
+    (item.versions !== undefined && (!Array.isArray(item.versions) || !uniqueIds(item.versions)))) return false;
+  const holdingIds = new Set((item.depot ?? []).map((holding) => holding?.id));
+  const allocationIds = new Set<string>();
+  const investmentIds = new Set<string>();
+  for (const plan of item.plans) {
+    if (!Array.isArray(plan.allocations) || !Array.isArray(plan.investmentPlans) ||
+      !Array.isArray(plan.depotHoldingIds) || !uniqueIds(plan.allocations) || !uniqueIds(plan.investmentPlans) ||
+      plan.depotHoldingIds.some((id) => !validIdentity(id) || !holdingIds.has(id)) ||
+      new Set(plan.depotHoldingIds).size !== plan.depotHoldingIds.length) return false;
+    const potIds = new Set<string>(capitalPots(item.advisory, plan.total, item.createdAt).map((pot) => pot.id));
+    for (const allocation of plan.allocations) {
+      if (allocationIds.has(allocation.id)) return false;
+      allocationIds.add(allocation.id);
+      if (allocation.capitalPotId !== undefined && !potIds.has(allocation.capitalPotId)) return false;
+      if (allocation.capitalPotAmounts !== undefined &&
+        (!allocation.capitalPotAmounts || typeof allocation.capitalPotAmounts !== "object" ||
+          Array.isArray(allocation.capitalPotAmounts) ||
+          Object.keys(allocation.capitalPotAmounts).some((id) => !potIds.has(id)))) return false;
+    }
+    for (const entry of plan.investmentPlans) {
+      if (investmentIds.has(entry.id)) return false;
+      investmentIds.add(entry.id);
+      if (entry.type === "phased") {
+        // Allocation identity is plan-local even though IDs are unique case-wide.
+        const allocation = plan.allocations.find((candidate) => candidate.id === entry.allocationId);
+        if (!allocation || !potIds.has(entry.capitalPotId) ||
+          allocationAmountInCapitalPot(allocation, entry.capitalPotId) <= 0) return false;
+      } else if (entry.type === "savings") {
+        if (entry.targetRef !== undefined) {
+          const target = entry.targetRef;
+          if (!target || (target.kind === "need"
+            ? typeof target.id !== "number" || !Number.isFinite(target.id) ||
+              item.advisory.needs.filter((need) => need?.id === target.id).length !== 1
+            : target.kind === "savingsGoal"
+              ? !validIdentity(target.id) || (item.savingsGoals ?? []).filter((goal) => goal?.id === target.id).length !== 1
+              : true)) return false;
+        }
+      } else return false;
+    }
+  }
+  return true;
+}
+
 export function normalizeImportedCase(
   value: unknown,
   regenerateId = true,
@@ -1857,6 +1954,7 @@ export function normalizeImportedCase(
   }
   const sourceSchemaVersion = Number(item.schemaVersion) || 0;
   if (sourceSchemaVersion > 11) return null;
+  if (sourceSchemaVersion >= 10 && !validCurrentPlanGraph(item)) return null;
   const normalized = clone(item) as AdvisoryCase;
   normalized.schemaVersion = 11;
   if (regenerateId) normalized.id = uid("fall-import");
@@ -1964,7 +2062,7 @@ export function normalizeImportedCase(
       total,
       normalized.createdAt,
     );
-    const allocations = (plan.allocations || []).map((allocation) => {
+    const allocations = sourceSchemaVersion >= 10 ? plan.allocations : (plan.allocations || []).map((allocation) => {
       const existingPotAmounts = allocationCapitalPotAmounts(allocation);
       if (Object.values(existingPotAmounts).some((amount) => Number(amount) > 0))
         return {
@@ -2014,7 +2112,7 @@ export function normalizeImportedCase(
           : undefined,
       };
     });
-    const depotHoldingIds = Array.isArray(plan.depotHoldingIds)
+    const depotHoldingIds = sourceSchemaVersion >= 10 ? plan.depotHoldingIds : Array.isArray(plan.depotHoldingIds)
       ? plan.depotHoldingIds.filter((id) =>
           normalized.depot.some((holding) => holding.id === id),
         )
@@ -2045,7 +2143,7 @@ export function normalizeImportedCase(
           : sourceSchemaVersion < 10
             ? normalized.depot.length > 0 || Boolean(plan.depotMode && plan.depotMode !== "none")
             : false,
-      investmentPlans: normalizeInvestmentPlans(
+      investmentPlans: sourceSchemaVersion >= 10 ? plan.investmentPlans : normalizeInvestmentPlans(
         plan.investmentPlans,
         allocations,
         pots,
@@ -2053,12 +2151,14 @@ export function normalizeImportedCase(
       ),
       allocations,
     };
-    return reconcilePlanCapitalPots(
+    return sourceSchemaVersion >= 10 ? normalizedPlan : reconcilePlanCapitalPots(
       normalized.advisory,
       normalizedPlan,
       normalized.createdAt,
       normalized.savingsGoals,
     );
   });
-  return normalized;
+  // Existing historical migrations may resolve old relations; ambiguous identities
+  // without a documented migration must still never become a current live case.
+  return validCurrentPlanGraph(normalized) ? normalized : null;
 }

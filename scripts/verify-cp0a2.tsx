@@ -223,11 +223,19 @@ function runReferences() {
     originalPreserved: JSON.stringify(invalidRead.protectedEntries[0]) === invalidBefore,
   }, { before: "DANGLING_DEPOT_1", normalized: null, unchanged: true, cases: 0,
     protected: 1, recovery: true, originalPreserved: true });
-  const weak = normalizeImportedCase({ ...c, activePlanId: "missing-plan", plans: c.plans.map((p) => ({ ...p, id: c.plans[0].id, preferred: true })) }, false)!;
-  record(ref("weak-plan-integrity", "C", "Bekannter Befund: doppelte IDs, ungültige aktive ID und mehrere bevorzugte Pläne passieren",
-    "README.md: CP0A1 Planidentitäten", "Kein fachlich gültiger Auswahlzustand"), {
-    ids: weak.plans.map((p) => ids.ref("PLAN", p.id)), active: ids.ref("PLAN", weak.activePlanId), preferredCount: weak.plans.filter((p) => p.preferred).length,
-  }, { ids: ["PLAN_1", "PLAN_1"], active: "DANGLING_PLAN_1", preferredCount: 2 });
+  const weakSource = { ...c, activePlanId: "missing-plan", plans: c.plans.map((p) => ({ ...p, id: c.plans[0].id, preferred: true })) };
+  const weakBefore = JSON.stringify(weakSource), weakRead = readCaseStore(JSON.stringify([weakSource]));
+  const zero = { ...c, plans: c.plans.map((p) => ({ ...p, preferred: false })) };
+  const zeroMarkup = renderToStaticMarkup(view(zero));
+  record(ref("weak-plan-integrity", "A", "Aktuelle beschädigte Plangraphen werden abgelehnt und geschützt; null oder eine Präferenz ist gültig",
+    "docs/P3_Planintegritaet.md; scripts/verify-p3-plan-integrity.tsx", "Keine erfundene aktive oder bevorzugte Zielvariante"), {
+    normalized: normalizeImportedCase(weakSource, false), unchanged: JSON.stringify(weakSource) === weakBefore,
+    cases: weakRead.cases.length, protected: weakRead.protectedEntries.length, recovery: weakRead.recoveryNeeded,
+    originalPreserved: JSON.stringify(weakRead.protectedEntries[0]) === weakBefore,
+    validCounts: [zero, c].map((item) => normalizeImportedCase(item, false)?.plans.filter((p) => p.preferred).length),
+    explicitHint: zeroMarkup.includes("Keine bevorzugte Zielvariante gewählt"), fallbackPrint: zeroMarkup.includes("print-document"),
+  }, { normalized: null, unchanged: true, cases: 0, protected: 1, recovery: true, originalPreserved: true,
+    validCounts: [0, 1], explicitHint: true, fallbackPrint: false });
   const stale = memoryStorage(), second = emptyCase(); register(ids, second);
   writeCaseStore(stale, [c]);
   const staleClient = readCaseStore(stale.getItem(CASE_STORAGE_KEY)).cases;
@@ -368,10 +376,10 @@ assert.throws(() => compare(null, 0, { kind: "absolute", tolerance: 1e-8, eviden
 assert.throws(() => compare(NaN, 0, { kind: "absolute", tolerance: 1e-8, evidence: "self-check" }, "finite"));
 const first = runReferences(), second = runReferences();
 assert.deepEqual(second, first, "Independent cases with newly generated identities must have identical canonical references");
-assert.deepEqual([...new Set(first.map((r) => r.reference.category))].sort(), ["A", "C", "D"]);
+assert.deepEqual([...new Set(first.map((r) => r.reference.category))].sort(), ["A", "D"]);
 assert.deepEqual(Object.fromEntries(Object.keys(categories).map((category) => [category, first.filter((r) => r.reference.category === category).length])),
-  { A: 21, B: 0, C: 1, D: 1 });
+  { A: 22, B: 0, C: 0, D: 1 });
 assert.deepEqual(first.filter((r) => r.reference.category === "C").map((r) => r.reference.id).sort(),
-  ["weak-plan-integrity"]);
+  []);
 for (const { reference } of first) console.log(`PASS CP0A2 [${reference.category}] ${reference.id}: ${categories[reference.category]}`);
-console.log(`CP0A2: ${first.length} references, 21 A / 0 B / 1 C / 1 D, two independent runs, synthetic data only. C reproduces known bugs; D makes no business decision.`);
+console.log(`CP0A2: ${first.length} references, 22 A / 0 B / 0 C / 1 D, two independent runs, synthetic data only. D makes no business decision.`);

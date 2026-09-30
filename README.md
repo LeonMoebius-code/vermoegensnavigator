@@ -31,7 +31,7 @@ Inventarisiert am 23.09.2026 anhand des frisch abgerufenen Remote-`main`
 `6ec5ced21704e0474dc91cc27fc5c80d7ad73792`. Dieser Stand entspricht dem im
 CP0A1-Auftrag genannten Referenzcommit; es gab keine Abweichung.
 
-Das Gate führt in dieser Reihenfolge die vierzehn direkten Fachtest-Einstiege und
+Das Gate führt in dieser Reihenfolge die fünfzehn direkten Fachtest-Einstiege und
 anschließend Typecheck, Produktionsbuild und die drei CP0B-Browserabläufe aus:
 
 | Nr. | npm-Skript | Einstieg / Prüfung |
@@ -50,9 +50,10 @@ anschließend Typecheck, Produktionsbuild und die drei CP0B-Browserabläufe aus:
 | 12 | `test:p4-copy-contract` | `scripts/verify-p4-copy-contract.ts` – verbindlicher Fallimport-/Plankopie-Vertrag |
 | 13 | `test:p1-case-store` | `scripts/verify-p1-case-store.ts` – operationsbasierte Fallpersistenz/Recovery |
 | 14 | `test:p2-depot-integrity` | `scripts/verify-p2-depot-integrity.ts` – Depotreferenzen, Legacy-Migration und Recovery |
-| 15 | `typecheck` | `tsc -p tsconfig.github.json --noEmit` |
-| 16 | `build` | `bash scripts/build-github-pages.sh` |
-| 17 | `test:browser` | `tests/browser/cp0b.spec.ts` gegen genau diesen `.pages-dist`-Build |
+| 15 | `test:p3-plan-integrity` | `scripts/verify-p3-plan-integrity.tsx` – Plangraph, Auswahl, Legacy, Recovery und Restore |
+| 16 | `typecheck` | `tsc -p tsconfig.github.json --noEmit` |
+| 17 | `build` | `bash scripts/build-github-pages.sh` |
+| 18 | `test:browser` | `tests/browser/cp0b.spec.ts` gegen genau diesen `.pages-dist`-Build |
 
 Die ausführbare Liste wird ausschließlich im `verify`-Skript in `package.json`
 gepflegt. Alle Einzelskripte bleiben nutzbar. Die `&&`-Verknüpfung führt sie
@@ -92,7 +93,9 @@ bestätigtes Verhalten, technische Beobachtungen, bekannte Fehler und offene Sem
 Matrix, Kanonisierung und Vergleichsvertrag: [CP0A2-Referenzbasis](docs/CP0A2_Referenzbasis.md).
 P4 bestätigt `import-copy` als Kategorie A. Nach [P1](docs/P1_Sichere_Fallpersistenz.md)
 wechselte nur `stale-local-list` C → A. Nach [P2](docs/P2_Depotreferenzintegritaet.md)
-gilt aktuell **21 A / 0 B / 1 C / 1 D**; nur `invalid-depot-fallback` wechselte zusätzlich C → A.
+galt **21 A / 0 B / 1 C / 1 D**. Nach [P3](docs/P3_Planintegritaet.md)
+gilt aktuell **22 A / 0 B / 0 C / 1 D**; ausschließlich `weak-plan-integrity`
+wechselt zusätzlich C → A. `general-export-scope` bleibt D.
 [Copy-/Import-Vertrag](docs/P4_Copy_Import_Vertrag.md): Fallimport erneuert nur die
 aktuelle äußere Fall-ID; Plankopie erneuert planinterne IDs und remappt Einstiegsbezüge.
 Gültige innere Import-IDs, caseweite Kopierreferenzen und historische Snapshots bleiben
@@ -119,8 +122,10 @@ Befunde bekannt. CP0A1 dokumentiert sie; ein grünes Gate widerlegt sie nicht:
   gültige Holding→DepotAccount-Referenz; ungültige Fälle werden abgelehnt und
   als lokale Originale geschützt. Nur echte Schema-<10-Fälle mit Holdings ohne
   DepotAccounts migrieren weiterhin in genau ein neues Depot.
-- **Planidentitäten:** Doppelte Plan-IDs, ungültige `activePlanId` und mehrere
-  bevorzugte Pläne besitzen derzeit schwächere Integritätsprüfung.
+- **Planintegrität (durch P3 behoben):** Aktuelle Schema-10/11-Plangraphen werden
+  vor destruktiver Normalisierung validiert; ungültige Originale bleiben geschützt.
+  Active und preferred sind unabhängig, null preferred ist gültig und führt zum
+  sichtbaren Zielhinweis. Löschung wählt den ursprünglichen Nachbarn ohne neue Präferenz.
 - **Architektur:** CSV-Klassifikation ist an das umfangreichere Analysemodul
   gekoppelt; historische abgeleitete Ergebnisse können durch später veränderte
   Produktkatalogstände beeinflusst werden.

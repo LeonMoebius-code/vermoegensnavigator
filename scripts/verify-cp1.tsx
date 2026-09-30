@@ -197,8 +197,10 @@ assert.equal(classifyDepotProduct({ securityType: "Festverzinsliche", name: "Gol
 assert.equal(classifyDepotProduct({ securityType: "Festverzinsliche", name: "Synthetischer Callable Bond" }).bondKind, "other");
 assert.equal(csv("Bezeichnung;Kurswert incl. Stückzinsen;Kursgewinn/-verlust seit Kauf\nSynthetisch;1000;-25,50").rows[0].gainLossAmount, -25.5);
 assert.equal(csv("Bezeichnung;Kurswert incl. Stückzinsen;Zinssatz\nSynthetisch;1000;").rows[0].coupon, undefined);
-const zeroState = addDepotAccount(createCase(), validBond.rows);
-assert.equal(normalizeImportedCase({ ...createCase(), ...zeroState })!.depot[0].coupon, 0);
+// Keep the synthetic activePlanId and imported plans from the same case.
+const zeroCase = createCase();
+const zeroState = addDepotAccount(zeroCase, validBond.rows);
+assert.equal(normalizeImportedCase({ ...zeroCase, ...zeroState })!.depot[0].coupon, 0);
 assert.equal(validBond.rows[0].maturity, "2028-02-29");
 assert.equal(validBond.ignoredPersonalColumns, true);
 assert.ok(!JSON.stringify(validBond).includes("SYNTHETIC-PRIVATE"));
