@@ -1,0 +1,89 @@
+name: Release GitHub Pages
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: pages-release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: R1 candidate — full gate
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      EXPECTED_SOURCE_SHA: ${{ github.sha }}
+    steps:
+      - name: Bind candidate and reject rebuild attempts
+        shell: bash
+        run: |
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          echo "Source candidate: $EXPECTED_SOURCE_SHA"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Verify exact checkout
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - run: npm ci
+      - run: npx --no-install playwright install --with-deps chromium
+      - name: Full gate — exactly one production build, then CP0B
+        run: npm run verify
+      - name: Validate unchanged website and record successful gate
+        run: node scripts/verify-release-artifact.mjs
+        env:
+          R1_RELEASE: 'true'
+      - name: Preserve reusable website
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: r1-site-${{ github.run_id }}-1
+          path: .pages-dist/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
+      - name: Preserve release evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: r1-evidence-${{ github.run_id }}-1
+          path: outputs/r1-release/evidence.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: Package the same website for Pages
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          name: pages-${{ github.run_id }}-1
+          path: .pages-dist/
+          include-hidden-files: true
+          retention-days: 30
+      - name: Confirm uploads did not mutate website
+        run: node scripts/verify-release-artifact.mjs
+
+  deploy:
+    name: Approve and deploy R1 candidate
+    needs: prepare
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+        with:
+          enablement: false
+      - uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+        id: deployment
+        with:
+          artifact_name: pages-${{ github.run_id }}-1

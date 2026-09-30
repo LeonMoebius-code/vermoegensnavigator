@@ -118,12 +118,16 @@ Schema 11 und vorhandene Tests bleiben unverändert. CP0A1 endet mit einem
 offenen, CI-grünen Pull Request zur unabhängigen Abnahme; Merge und
 Veröffentlichung benötigen eine separate Entscheidung.
 
-## Automatische Veröffentlichung
+## Bewusste Veröffentlichung (R1)
 
-Bei Änderungen auf `main` prüft die GitHub Action den TypeScript-Quellstand,
-erzeugt die statischen GitHub-Pages-Dateien und aktualisiert die veröffentlichten
-Dateien im Wurzelverzeichnis. Die bestehende GitHub-Pages-Konfiguration für
-`main` bleibt dadurch verwendbar.
+Nach der manuellen R1-Migration verändert ein Merge nach `main` die Live-Seite
+nicht. `Release GitHub Pages` wird ausdrücklich auf `main` gestartet, bindet
+den Source-SHA und führt `npm run verify` mit genau einem Produktionsbuild und
+CP0B aus. Erst nach Prüfung des gespeicherten Kandidaten und Freigabe im
+Environment `github-pages` wird genau dieses Artefakt veröffentlicht.
+Gespeicherte erfolgreiche R1-Releases können ohne Neubau zurückgerollt werden.
+Einrichtung, Freigabe, Rückfallweg und die weiterhin erhaltenen Root-Artefakte:
+[Releaseprozess und Migrationscheckliste](docs/Releaseprozess.md).
 
 ## Speicherung
 
