@@ -110,8 +110,9 @@ Befunde bekannt. CP0A1 dokumentiert sie; ein grünes Gate widerlegt sie nicht:
 - **Architektur:** CSV-Klassifikation ist an das umfangreichere Analysemodul
   gekoppelt; historische abgeleitete Ergebnisse können durch später veränderte
   Produktkatalogstände beeinflusst werden.
-- **Betrieb:** Merge und Veröffentlichung sind gekoppelt. Der veröffentlichte
-  Artefaktumfang des aktuellen Pages-Pfads muss separat überprüft werden.
+- **Betrieb (historischer CP0A1-Befund, durch R1 behoben):** Damals waren Merge
+  und Veröffentlichung gekoppelt. R1 trennt beide und prüft den Artefaktumfang
+  vor der bewussten Veröffentlichung.
 
 Diese Befunde werden in CP0A1 nicht behoben. Produktionscode, Fachlogik,
 Schema 11 und vorhandene Tests bleiben unverändert. CP0A1 endet mit einem
@@ -120,14 +121,17 @@ Veröffentlichung benötigen eine separate Entscheidung.
 
 ## Bewusste Veröffentlichung (R1)
 
-Nach der manuellen R1-Migration verändert ein Merge nach `main` die Live-Seite
+Seit der abgeschlossenen R1-Liveabnahme verändert ein Merge nach `main` die Live-Seite
 nicht. `Release GitHub Pages` wird ausdrücklich auf `main` gestartet, bindet
 den Source-SHA und führt `npm run verify` mit genau einem Produktionsbuild und
 CP0B aus. Erst nach Prüfung des gespeicherten Kandidaten und Freigabe im
 Environment `github-pages` wird genau dieses Artefakt veröffentlicht.
 Gespeicherte erfolgreiche R1-Releases können ohne Neubau zurückgerollt werden.
-Einrichtung, Freigabe, Rückfallweg und die weiterhin erhaltenen Root-Artefakte:
-[Releaseprozess und Migrationscheckliste](docs/Releaseprozess.md).
+R2 entfernt die alten generierten Root-Artefakte; produktive Quellen unter
+`github-pages/` und `public/` bleiben erhalten. Der frühere direkte Branch-/Root-
+Fallback ist damit nicht mehr unmittelbar nutzbar. Normalbetrieb, Freigabe,
+gespeicherter Rollback und historische Migration:
+[Releaseprozess nach R2](docs/Releaseprozess.md).
 
 ## Speicherung
 

@@ -44,6 +44,17 @@ next-env.d.ts
 /outputs/
 /work/
 /.pages-dist/
+
+# Legacy Pages output: root only; sources in github-pages/ and public/ stay tracked.
+/index.html
+/404.html
+/app.js
+/styles.css
+/favicon.svg
+/og.png
+/branding/
+/.nojekyll
+
 /gh-static/
 /.openai/
 /.vinext/
