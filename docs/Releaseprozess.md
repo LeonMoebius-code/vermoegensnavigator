@@ -1,15 +1,24 @@
-# R1: Releaseprozess und manuelle Migration
+# Releaseprozess nach R2 und historische R1-Migration
 
-Stand: 30.09.2026. Ausgangs-main: `6deddd177d16b067e638808f90b8bab88df6a94e`.
-Branch: `work/operations-r1-release-decoupling`. R1 implementiert den neuen Weg;
-erst die unten beschriebene manuelle Migration aktiviert ihn vollständig.
-Keine Produkt-, Fachlogik-, Schema- oder Datenmigrationsänderung. CP0A1, CP0A2,
-Restore-ID-Fix und CP0B bleiben unverändert. R2 ist ausdrücklich ausgeschlossen.
+Stand: 30.09.2026. R2-Ausgangs-main: `50a8a06d73ddc59472a2d66ef46ac624597e2c0f`.
+Branch: `work/operations-r2-root-cleanup`. R1 ist vollständig gemergt und live
+abgenommen: Release-Run `36696150438` und gespeicherte Rollbackprobe
+`36698314238` bestätigten den Source-SHA dieses Ausgangs-main und die
+Environment-Freigabe. Pages verwendet GitHub Actions; der alte Workflow
+**Build GitHub Pages** wurde administrativ deaktiviert und aus dem Repository entfernt.
+
+R2 entfernt ausschließlich die alten generierten Root-Artefakte und schützt
+diese Pfade mit gezielten Root-Regeln in `.gitignore`. `github-pages/**`,
+`public/**` und die `.pages-dist`-Buildlogik bleiben erhalten. Der R1-Release-
+und Rollbackvertrag bleibt unverändert. Keine Produkt-, Fachlogik-, Schema-
+oder Datenmigrationsänderung; CP0A1, CP0A2, Restore-ID-Fix und CP0B bleiben unverändert.
 
 ## Entwicklung und Release
 
-Featurebranch → PR → **Feature CI** → Merge nach main → Live-Seite unverändert
-(nach Umstellung von Pages auf Actions). Feature-CI hat nur `contents: read`.
+Featurebranch → PR → **Feature CI** → Merge nach main → Live-Seite unverändert.
+Ein Merge veröffentlicht nicht automatisch. Nur das geprüfte `.pages-dist`-
+Artefakt wird über den bewussten R1-Releaseweg veröffentlicht.
+Feature-CI hat nur `contents: read`.
 Ihr Pflichtcheck heißt exakt **Tests, Typecheck, Build und Browser**; die UI
 kann ihn als `Feature CI / Tests, Typecheck, Build und Browser` darstellen.
 
@@ -117,7 +126,9 @@ Quellen: [Retention](https://docs.github.com/en/actions/how-tos/manage-workflow-
 [Pages-Artefakt](https://github.com/actions/upload-pages-artifact),
 [Download aus anderem Run](https://github.com/actions/download-artifact).
 
-Konservativer Rollback:
+Der reguläre und bevorzugte Rückfallweg nach R2 ist ausschließlich
+**Rollback GitHub Pages** mit einem noch verfügbaren erfolgreichen Original-
+R1-Releaseartefakt und seiner gespeicherten Evidence:
 
 1. Einen **erfolgreich abgeschlossenen Original-R1-Release** (Attempt 1) in
    Actions auswählen. Run-ID und noch vorhandene Site-/Evidence-Artefakte prüfen.
@@ -212,10 +223,15 @@ Deploy: ausschließlich `pages: write` und `id-token: write`. Checkout immer
 `pull_request_target`, PR-Deployment oder Secret im Produktbuild. Der kurzlebige
 GitHub-Token wird nur durch Actions bzw. für die lesende Rollback-API verwendet.
 
-## Manuelle GitHub-Konfiguration und exakte Migrationsreihenfolge
+## Historisch: manuelle R1-Konfiguration und Migrationsreihenfolge
 
-**Erst nach unabhängiger PR-Abnahme, gemeinsam mit Leon. Keine dieser
-Administrations-, Merge- oder Deploymentaktionen gehört zur Implementierung.**
+Die folgende Checkliste beschreibt die inzwischen abgeschlossene R1-Migration
+vor R2. Sie ist keine aktuelle Betriebsanweisung und wird für die
+Nachvollziehbarkeit erhalten. Damaliger Ausgangs-main:
+`6deddd177d16b067e638808f90b8bab88df6a94e`, Branch:
+`work/operations-r1-release-decoupling`. Damals galt: erst nach unabhängiger
+PR-Abnahme, gemeinsam mit Leon; keine dieser Administrations-, Merge- oder
+Deploymentaktionen gehörte zur Implementierung.
 
 1. Aktuelles Remote-main, offenen R1-PR und grüne Checks erneut vergleichen.
    Live-URL aufrufen; HTML und `app.js`/`styles.css`-Cacheparameter notieren.
@@ -277,28 +293,29 @@ Administrations-, Merge- oder Deploymentaktionen gehört zur Implementierung.**
 21. R2 **nicht** automatisch starten. Alte Root-Dateien bleiben bis zum separaten
     R2-Auftrag unverändert im Repository.
 
-## Notfall: Migration zurücknehmen
+## Historischer Branch-/Root-Fallback und Notfall nach R2
 
-Alle aktiven Release-/Rollbackläufe bewusst abbrechen; keine wartende Freigabe
-erteilen. Actions-Releaseworkflows bei Bedarf administrativ deaktivieren.
-Settings → Pages → Source **Deploy from a branch** → Branch **main**, Ordner
-**/ (root)** → Save. Das ist die vor R1 per API bestätigte Einstellung
-(`build_type: legacy`, keine eigene Domain). Legacy-Pageslauf und Live-URL
-anschließend kontrollieren; eine Unterbrechung ist möglich.
+Während der R1-Migration, vor Abschluss von R2, blieben `index.html`,
+`404.html`, `app.js`, `styles.css`, `favicon.svg`, `og.png`, `branding/**` und
+`.nojekyll` bewusst im Repository-Root erhalten. Der damalige temporäre
+Rückfallweg war Settings → Pages → **Deploy from a branch** → **main** →
+**/ (root)**. Diese Dateien repräsentierten den letzten alten
+Veröffentlichungsstand, der vom neuesten Produktquellcode abweichen konnte.
 
-Die unveränderten Root-Dateien `index.html`, `404.html`, `app.js`, `styles.css`,
-`favicon.svg`, `og.png`, `branding/**`, `.nojekyll` stehen weiterhin bereit.
-Sie repräsentieren den letzten alten Veröffentlichungsstand und müssen nicht
-dem neuesten Produktquellcode entsprechen. Für das Rückspielen dieses Stands
-ist kein Produktbuild und kein Revert von Fachcode erforderlich.
+Nach R2 sind diese Root-Artefakte entfernt. Der frühere direkte Branch-/Root-
+Fallback ist nicht mehr unmittelbar nutzbar: Eine bloße Umstellung auf
+`main / (root)` stellt den alten Stand nicht wieder her. Der Standard-Rollback
+verwendet die oben beschriebenen gespeicherten R1-Websitebytes und Evidence.
 
-Falls der alte **automatische** Betrieb wiederhergestellt werden soll: separaten
-Revert-PR für R1 prüfen und mergen oder gezielt `build-pages.yml` aus dem
-notierten Vor-R1-Commit per PR wiederherstellen; danach alten Workflow bewusst
-wieder aktivieren. Seine Bot-Pushes kollidieren mit dem neuen main-Regelschutz:
-diese Rechte-/Regeländerung müsste Leon separat und bewusst entscheiden. Den
-Main-Schutz nicht still aufweichen. Für den reinen Notfall-Rückfall genügt
-Branch/Root-Pages; der Bot-Workflow muss dafür nicht wieder aktiv sein.
+Falls der aktuelle Actions-/Workflowcode selbst so beschädigt wäre, dass der
+normale Rollbackworkflow nicht ausführbar ist, muss ein bekannter guter
+Workflow-/Betriebsstand kontrolliert und nachvollziehbar wiederhergestellt
+werden, bevorzugt per Pull Request unter Beibehaltung der Branchschutzregeln.
+Schutzmechanismen dürfen nicht still aufgeweicht werden; keine ungeprüften
+Direktänderungen an main. Danach kann der reguläre Rollback mit noch verfügbaren
+Originalartefakten und erneuter bewusster Environment-Freigabe erfolgen.
+Es gibt keine Zero-Downtime-Garantie und keine automatische Recovery-Architektur
+im Rahmen von R2.
 
 ## Lokale Prüfung und Grenzen
 
@@ -328,9 +345,10 @@ Die PR-CI ergänzt nach dem Gate die Artefaktprüfung und vollständigen
 Betriebsregressionen, einschließlich historischer Kompatibilität bei später
 geänderter Dateiliste/Provenienz sowie Manipulations- und Sicherheitsgegenproben.
 
-Der erste echte Dispatch, Environment-Halt, Upload/Deployment und Cross-Run-
-Rollback sind im Featurebranch bewusst nicht live ausführbar. Die Workflow-
-Definitionen werden statisch geprüft; Historie/Evidence/Manipulationsabwehr
-werden lokal getestet. Die echte Integration bleibt Bestandteil der manuellen
-Migration, ohne temporäre Deploymenthintertür. R2 entfernt erst nach dieser
-Liveabnahme die alten Root-Artefakte und ergänzt dann passende Ignore-Regeln.
+Die echte Integration mit Dispatch, Environment-Halt, Upload/Deployment und
+Cross-Run-Rollback wurde bei der abgeschlossenen R1-Liveabnahme geprüft.
+R2 bestätigt den unveränderten Vertrag ausschließlich mit byte-identischen
+R1-Kerndateien, vorhandenen Regressionen und Releaseartefaktvalidierung.
+R2 löst keinen Release, Rollback, Pages-Deployment oder Environment-Approval
+aus und verändert keine GitHub-Einstellungen. Die aktuell laufende Live-Seite
+bleibt durch diesen Repository-Cleanup unverändert.
