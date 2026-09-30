@@ -1,6 +1,12 @@
+import { createHash } from 'node:crypto';
 import { lstatSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { assertSame, requireThat, sha256 } from './release-artifact.mjs';
+
+const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
+function requireThat(condition, message) { if (!condition) throw new Error(message); }
+function assertSame(actual, expected) {
+  requireThat(JSON.stringify(actual) === JSON.stringify(expected), 'Artifact changed since build/CP0B or stored evidence');
+}
 
 const algorithm = 'sha256-canonical-file-manifest-v1';
 const maxFileBytes = 10 * 1024 * 1024;

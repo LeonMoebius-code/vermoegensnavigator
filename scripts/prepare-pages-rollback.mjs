@@ -1,8 +1,14 @@
-import { appendFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { json, requireThat, writeJson } from './release-artifact.mjs';
 import { validateHistoricalArtifact } from './historical-release-artifact.mjs';
+
+const json = path => JSON.parse(readFileSync(path, 'utf8'));
+function requireThat(condition, message) { if (!condition) throw new Error(message); }
+function writeJson(path, value) {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, JSON.stringify(value, null, 2) + '\n');
+}
 
 export function validateRun(run, repository, runId) {
   requireThat(String(run.id) === runId && run.repository?.full_name === repository && run.head_repository?.full_name === repository, 'Foreign run');

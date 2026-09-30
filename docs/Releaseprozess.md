@@ -147,6 +147,11 @@ der gespeicherten Provenienz und dem weiterhin unterstützten historischen
 Provenienzvertrag v1 entsprechen, einschließlich Source-SHA, Releaseworkflow,
 Run-ID und Attempt. Künftige Provenienzversionen erfordern explizite zusätzliche
 historische Unterstützung; der bestehende v1-Vertrag bleibt erhalten.
+Der historische v1-Validator besitzt seine Prüfprimitive selbst; auch die
+Rollback-Vorbereitung importiert keine Helfer aus `release-artifact.mjs`.
+Spätere Refactorings dieses aktuellen Release-Moduls dürfen gültige historische
+R1-v1-Releases nicht brechen. Neue Evidence-/Provenienzversionen erhalten
+bewusst zusätzliche versionierte Unterstützung, statt v1 zu überschreiben.
 
 Evidence kann die allgemeinen Sicherheitsregeln nicht überschreiben: sichere
 relative Pfade, keine `.git`-/`.github`-Strukturen, Symlinks, Hardlinks oder

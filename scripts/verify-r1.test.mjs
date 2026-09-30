@@ -148,6 +148,20 @@ test('historical release survives later added/removed assets and evolved candida
   assert.equal(JSON.stringify(evidence), saved);
 });
 
+test('historical rollback validates v1 without the current release module', async t => {
+  const { directory, website, selection, evidence } = historicalFixture(t);
+  const isolated = resolve(directory, 'isolated-rollback');
+  mkdirSync(isolated);
+  for (const name of ['historical-release-artifact.mjs', 'prepare-pages-rollback.mjs']) {
+    const original = resolve(root, 'scripts', name);
+    assert.doesNotMatch(readFileSync(original, 'utf8'), /(?:from\s*|import\s*\()\s*['"][^'"]*\/release-artifact\.mjs['"]/);
+    cpSync(original, resolve(isolated, name));
+  }
+  assert.ok(!existsSync(resolve(isolated, 'release-artifact.mjs')));
+  const rollback = await import(pathToFileURL(resolve(isolated, 'prepare-pages-rollback.mjs')).href);
+  assert.deepEqual(rollback.validateEvidence(evidence, selection, website).files, evidence.files);
+});
+
 test('historical file layout is defined by evidence, including former nested assets', t => {
   const { website, selection, evidence } = historicalFixture(t);
   rmSync(resolve(website, 'favicon.svg'));
