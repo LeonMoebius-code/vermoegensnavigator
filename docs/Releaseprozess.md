@@ -268,7 +268,7 @@ Deploymentaktionen gehörte zur Implementierung.
    keinen alten Bot-Build. `build-pages.yml` ist nun entfernt. Live-Stand prüfen.
 10. **Release GitHub Pages** → Run workflow → **main**. Keine Featurebranchwahl.
 11. Source-SHA des Runs mit dem beabsichtigten main-Commit vergleichen und notieren.
-12. Prepare vollständig abwarten: Fachtests, CP0A2 18 A / 1 B / 3 C / 1 D,
+12. Prepare vollständig abwarten: Fachtests einschließlich P4, CP0A2 19 A / 0 B / 3 C / 1 D,
     Typecheck, ein Produktionsbuild, CP0B 3/3 und Artefaktvalidierung grün.
 13. Summary, `r1-site-<id>-1` und `r1-evidence-<id>-1` prüfen: SHA, Gate,
     elf Dateien, Provenienz, Checksum, Run/Attempt, tatsächliche Ablaufdaten.

@@ -207,6 +207,23 @@ test.describe("Planung und Fallidentität", () => {
     expect(planned.activePlanId).toBe(fixture.plans[1].id);
     expect(planned.plans.find((p) => p.preferred)!.id).toBe(fixture.plans[0].id);
     expect(planned.plans[0].allocations[0].amount).toBe(4000);
+    // P4: copying the preferred variant activates the copy without changing preference.
+    await nav(page, "Strukturplanung");
+    await page.getByRole("combobox", { name: /^Aktive Planung/ }).selectOption(planned.plans[0].id);
+    await page.getByRole("button", { name: "Duplizieren", exact: true }).click();
+    const activeCopyId = await page.getByRole("combobox", { name: /^Aktive Planung/ }).inputValue();
+    expect(planned.plans.map((p) => p.id)).not.toContain(activeCopyId);
+    await save(page);
+    const [withCopy] = await stored(page);
+    expect(withCopy.activePlanId).toBe(activeCopyId);
+    expect(withCopy.plans).toHaveLength(planned.plans.length + 1);
+    expect(withCopy.plans.slice(0, planned.plans.length)).toEqual(planned.plans);
+    const copiedPlan = withCopy.plans.find((p) => p.id === activeCopyId)!;
+    expect(copiedPlan.preferred).toBe(false);
+    expect(withCopy.plans.filter((p) => p.preferred).map((p) => p.id)).toEqual([planned.plans[0].id]);
+    expect(copiedPlan.depotHoldingIds).toEqual(planned.plans[0].depotHoldingIds);
+    expect(copiedPlan.allocations[0].id).not.toBe(planned.plans[0].allocations[0].id);
+    validRelations(withCopy);
     await nav(page, "Ergebnis & Export");
     await expect(page.locator(".print-metrics")).toContainText(fixture.plans[0].name);
     await expect(page.locator(".print-metrics")).not.toContainText(fixture.plans[1].name);

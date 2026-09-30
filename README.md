@@ -31,7 +31,7 @@ Inventarisiert am 23.09.2026 anhand des frisch abgerufenen Remote-`main`
 `6ec5ced21704e0474dc91cc27fc5c80d7ad73792`. Dieser Stand entspricht dem im
 CP0A1-Auftrag genannten Referenzcommit; es gab keine Abweichung.
 
-Das Gate führt in dieser Reihenfolge die elf direkten Fachtest-Einstiege und
+Das Gate führt in dieser Reihenfolge die zwölf direkten Fachtest-Einstiege und
 anschließend Typecheck, Produktionsbuild und die drei CP0B-Browserabläufe aus:
 
 | Nr. | npm-Skript | Einstieg / Prüfung |
@@ -47,9 +47,10 @@ anschließend Typecheck, Produktionsbuild und die drei CP0B-Browserabläufe aus:
 | 9 | `test:cp4` | `scripts/verify-cp4.tsx`, einschließlich `verify-asset-classification.tsx` |
 | 10 | `test:bond-final` | `scripts/verify-bond-final.tsx` |
 | 11 | `test:cp0a2` | `scripts/verify-cp0a2.tsx` – deterministische Referenzen, Kategorien A–D |
-| 12 | `typecheck` | `tsc -p tsconfig.github.json --noEmit` |
-| 13 | `build` | `bash scripts/build-github-pages.sh` |
-| 14 | `test:browser` | `tests/browser/cp0b.spec.ts` gegen genau diesen `.pages-dist`-Build |
+| 12 | `test:p4-copy-contract` | `scripts/verify-p4-copy-contract.ts` – verbindlicher Fallimport-/Plankopie-Vertrag |
+| 13 | `typecheck` | `tsc -p tsconfig.github.json --noEmit` |
+| 14 | `build` | `bash scripts/build-github-pages.sh` |
+| 15 | `test:browser` | `tests/browser/cp0b.spec.ts` gegen genau diesen `.pages-dist`-Build |
 
 Die ausführbare Liste wird ausschließlich im `verify`-Skript in `package.json`
 gepflegt. Alle Einzelskripte bleiben nutzbar. Die `&&`-Verknüpfung führt sie
@@ -87,6 +88,12 @@ auch als „end-to-end“ bezeichnete bestehende Tests sind keine Browserabläuf
 CP0A2 ergänzt 23 kleine synthetische Referenzen mit getrennten Kategorien für
 bestätigtes Verhalten, technische Beobachtungen, bekannte Fehler und offene Semantik.
 Matrix, Kanonisierung und Vergleichsvertrag: [CP0A2-Referenzbasis](docs/CP0A2_Referenzbasis.md).
+P4 bestätigt `import-copy` als Kategorie A: **19 A / 0 B / 3 C / 1 D**.
+[Copy-/Import-Vertrag](docs/P4_Copy_Import_Vertrag.md): Fallimport erneuert nur die
+aktuelle äußere Fall-ID; Plankopie erneuert planinterne IDs und remappt Einstiegsbezüge.
+Gültige innere Import-IDs, caseweite Kopierreferenzen und historische Snapshots bleiben
+erhalten. Aktive und bevorzugte Variante bleiben getrennt, auch beim Entwurf ohne
+bevorzugten Plan. Laden und Restore sind eigenständige Operationen.
 CP0B ergänzt genau drei Browser-Lebenszyklen mit Playwright/Chromium:
 Depot, Planung/Fallidentität und Ausgaben. Einrichtung, Assertions und Grenzen:
 [CP0B-Browserbaseline](docs/CP0B_Browserbaseline.md).

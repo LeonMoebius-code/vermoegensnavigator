@@ -6,7 +6,8 @@ Die kleine synthetische Referenzbasis macht ausgewählte Veränderungen vor spä
 Refactorings sichtbar. Sie ersetzt weder die bisherigen Fachtests noch eine fachliche
 Entscheidung. Das ursprüngliche CP0A2-Paket änderte keine Produktionsfachlogik,
 Migration oder Schemata und behob keine Fehler. Der nachfolgende Restore-ID-Fix
-überführt ausschließlich `restore-id` von C nach A (siehe unten).
+überführt ausschließlich `restore-id` von C nach A (siehe unten). P4 bestätigt
+anschließend den Copy-/Import-Vertrag und überführt nur `import-copy` von B nach A.
 
 Vor Beginn am 23.09.2026 geprüft: sauberer Arbeitsbaum auf
 `work/architecture-cp0a1-test-gate`, HEAD
@@ -43,7 +44,8 @@ allein aufgrund eines roten Tests als verbindliches Altverhalten wiederhergestel
 
 ## Referenzfallmatrix (23 Referenzen)
 
-Aktuelle Verteilung nach Restore-ID-Fix: **18 A, 1 B, 3 C, 1 D**.
+Aktuelle Verteilung nach P4: **19 A, 0 B, 3 C, 1 D**.
+Vor P4, nach Restore-ID-Fix: **18 A, 1 B, 3 C, 1 D**.
 
 | ID | Kategorie | Geschützter bzw. beobachteter Sachverhalt / fachliche Quelle |
 | --- | --- | --- |
@@ -63,7 +65,7 @@ Aktuelle Verteilung nach Restore-ID-Fix: **18 A, 1 B, 3 C, 1 D**.
 | `schema-9` | A | Unterstützte historische Depotmigration zu einem Depot; Holding-/Fallidentitäten erhalten. `verify-multi-depot.ts` |
 | `schema-6` | A | Historische retain-Auswahl und Depotmigration zu Schema 11. `verify-4b.ts` |
 | `future-schema-recovery` | A | Schema 12 nicht importierbar, geschützt, Original unverändert erhalten und bytegenaues Recoverybackup. `verify-cp1-review.ts`, `verify-cp3.tsx` |
-| `import-copy` | B | Neue Fall-ID, unveränderte innere IDs beim JSON-Kopierimport; beobachtete Semantik von `normalizeImportedCase` |
+| `import-copy` | A | Fachlich bestätigter Copy-/Import-Vertrag gemäß [P4](P4_Copy_Import_Vertrag.md): nur aktuelle äußere Fall-ID neu, gültige innere IDs/Referenzen und historische Snapshots erhalten. Dedizierter Test `scripts/verify-p4-copy-contract.ts` |
 | `invalid-depot-fallback` | C | Ungültige Depot-ID wird zum ersten Depot umgebogen |
 | `weak-plan-integrity` | C | Doppelte Plan-ID, fehlende aktive Referenz und zwei bevorzugte Pläne werden akzeptiert |
 | `stale-local-list` | C | Speichern veralteter Liste verdrängt einen inzwischen gespeicherten gesunden Fall |
@@ -104,10 +106,22 @@ und den unveränderten Ursprungsfall im Speicher sowie nach erneutem Einlesen.
 Red-Green: Der verstärkte Test scheiterte vor der Produktionskorrektur am echten
 Handler mit `restore-id: restore must retain the current copy identity`,
 `'CASE_1' !== 'CASE_2'`. Nach der Ein-Zeilen-Korrektur bestehen alle 23 Referenzen
-in zwei unabhängigen Läufen. `import-copy` bleibt B, `general-export-scope` bleibt D;
+in zwei unabhängigen Läufen. Zum Abschluss des Restore-ID-Fixes blieb `import-copy`
+B (durch P4 anschließend A), `general-export-scope` bleibt D;
 die drei übrigen C-Reproduktionen bleiben unverändert. Keine allgemeine Persistenz-
 oder Identitätsarchitektur geändert, keine neue ID beim Restore, keine Änderung
 an Schema 11, Migrationen, Snapshot-Grundsemantik oder allgemeiner Importsemantik.
+
+## P4: verbindlicher Copy-/Import-Vertrag
+
+P4 ergänzt [den verbindlichen Vertrag](P4_Copy_Import_Vertrag.md) und den separaten
+synthetischen Regressionstest `scripts/verify-p4-copy-contract.ts` für Fallimport,
+Plankopie, Identitäten/Referenzen, unveränderte historische Snapshots, Objekt-Aliase,
+Mutationsgegenproben, aktive/bevorzugte Variante und Entwürfe ohne bevorzugten Plan.
+Nur `import-copy` wechselt B → A; C/D und `restore-id` bleiben unverändert.
+Der aktuelle Fallimport erneuert nur die äußere ID; die Plankopie erneuert dagegen
+alle Plan-/Allocation-/InvestmentPlan-IDs und remappt planinterne Einstiegsbezüge.
+Kein Produktfix, kein Schemawechsel, keine neue Restore-Implementierung.
 
 ## Determinismus und Identitätsintegrität
 
@@ -175,10 +189,11 @@ keinen vollständigen HTML-Snapshot, keine CSS-Darstellung oder PDF-Paginierung.
 Die neue Suite importiert **keine** bestehende Verify-Suite. Alle zehn bisherigen
 direkten Fachtests bleiben unverändert; die zwei indirekten Tests bleiben genau einmal
 über CP1 bzw. CP4 eingebunden. CP0A2 läuft genau einmal an Position 11,
-zwischen `test:bond-final` und `typecheck`; `build` bleibt letzter Schritt.
-`npm test` delegiert weiterhin vollständig an `verify`. Die CI ruft weiterhin nur
-`npm run verify` plus den bestehenden Whitespace-Check auf; keine Workflowänderung.
-Der Typecheck umfasst zusätzlich CP0A2 und dessen importierte Helfer/Fixtures.
+nach `test:bond-final`; P4 folgt genau einmal an Position 12 vor `typecheck`.
+Danach folgen genau ein `build` und die drei CP0B-Browserabläufe.
+`npm test` delegiert weiterhin vollständig an `verify`. Die CI ruft weiterhin
+`npm run verify` plus die bestehenden R1-/Artefakt- und Whitespace-Prüfungen auf;
+keine Workflowänderung. Der Typecheck umfasst CP0A2 und P4 samt importierten Helfern/Fixtures.
 
 Lokale Abnahme: `npm run test:cp0a2`, `npm run verify`, `npm test`,
 `git diff --check` sowie manuelle Diff- und Gate-Importprüfung. Unter Windows war für
