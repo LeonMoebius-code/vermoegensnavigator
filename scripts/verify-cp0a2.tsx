@@ -211,11 +211,18 @@ function runReferences() {
     holdings: imported.depot.map((h) => ids.ref("HOLDING", h.id)),
   }, { case: "CASE_2", active: "PLAN_1", holdings: ["HOLDING_1", "HOLDING_2", "HOLDING_3"] });
 
-  const invalid = normalizeImportedCase({ ...c, depot: c.depot.map((h, i) => i === 2 ? { ...h, depotId: "missing-depot" } : h) }, false)!;
-  record(ref("invalid-depot-fallback", "C", "Bekannter Fehler: ungültige Depotreferenz fällt auf erstes Depot zurück",
-    "README.md: CP0A1 bekannte Befunde", "Fehler sichtbar halten; nicht als korrekten Reparaturvertrag verwenden"), {
-    before: ids.ref("DEPOT", "missing-depot"), after: ids.ref("DEPOT", invalid.depot[2].depotId),
-  }, { before: "DANGLING_DEPOT_1", after: "DEPOT_1" });
+  const invalidSource = { ...c, depot: c.depot.map((h, i) => i === 2 ? { ...h, depotId: "missing-depot" } : h) };
+  const invalidBefore = JSON.stringify(invalidSource);
+  const invalid = normalizeImportedCase(invalidSource, false);
+  const invalidRead = readCaseStore(JSON.stringify([invalidSource]));
+  record(ref("invalid-depot-fallback", "A", "Aktuelle ungültige Depotreferenz wird abgelehnt und im Store unverändert geschützt",
+    "docs/P2_Depotreferenzintegritaet.md; scripts/verify-p2-depot-integrity.ts", "Keine erfundene physische Depotzuordnung"), {
+    before: ids.ref("DEPOT", "missing-depot"), normalized: invalid,
+    unchanged: JSON.stringify(invalidSource) === invalidBefore, cases: invalidRead.cases.length,
+    protected: invalidRead.protectedEntries.length, recovery: invalidRead.recoveryNeeded,
+    originalPreserved: JSON.stringify(invalidRead.protectedEntries[0]) === invalidBefore,
+  }, { before: "DANGLING_DEPOT_1", normalized: null, unchanged: true, cases: 0,
+    protected: 1, recovery: true, originalPreserved: true });
   const weak = normalizeImportedCase({ ...c, activePlanId: "missing-plan", plans: c.plans.map((p) => ({ ...p, id: c.plans[0].id, preferred: true })) }, false)!;
   record(ref("weak-plan-integrity", "C", "Bekannter Befund: doppelte IDs, ungültige aktive ID und mehrere bevorzugte Pläne passieren",
     "README.md: CP0A1 Planidentitäten", "Kein fachlich gültiger Auswahlzustand"), {
@@ -254,6 +261,15 @@ function runReferences() {
   const oldWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
   try {
     Object.defineProperty(globalThis, "window", { configurable: true, value: { confirm: () => true } });
+    const corruptCopy = structuredClone(copy);
+    corruptCopy.versions[0].snapshot.depot[2].depotId = "missing-depot";
+    const corruptBefore = JSON.stringify(corruptCopy);
+    let invalidRestoreWrites = 0;
+    const invalidRestore = button(view(corruptCopy, () => { invalidRestoreWrites++; }), "Wiederherstellen", "Synthetische ältere Historie");
+    assert.ok(invalidRestore);
+    invalidRestore();
+    assert.equal(invalidRestoreWrites, 0, "P2: actual restore handler refuses invalid current-schema snapshot");
+    assert.equal(JSON.stringify(corruptCopy), corruptBefore, "P2: rejected restore preserves live case/history");
     const restore = button(view(copy, (next) => { restored = next; }), "Wiederherstellen", "Synthetische ältere Historie");
     assert.ok(restore);
     const restoreStarted = Date.now(); restore(); const restoreFinished = Date.now();
@@ -354,8 +370,8 @@ const first = runReferences(), second = runReferences();
 assert.deepEqual(second, first, "Independent cases with newly generated identities must have identical canonical references");
 assert.deepEqual([...new Set(first.map((r) => r.reference.category))].sort(), ["A", "C", "D"]);
 assert.deepEqual(Object.fromEntries(Object.keys(categories).map((category) => [category, first.filter((r) => r.reference.category === category).length])),
-  { A: 20, B: 0, C: 2, D: 1 });
+  { A: 21, B: 0, C: 1, D: 1 });
 assert.deepEqual(first.filter((r) => r.reference.category === "C").map((r) => r.reference.id).sort(),
-  ["invalid-depot-fallback", "weak-plan-integrity"]);
+  ["weak-plan-integrity"]);
 for (const { reference } of first) console.log(`PASS CP0A2 [${reference.category}] ${reference.id}: ${categories[reference.category]}`);
-console.log(`CP0A2: ${first.length} references, 20 A / 0 B / 2 C / 1 D, two independent runs, synthetic data only. C reproduces known bugs; D makes no business decision.`);
+console.log(`CP0A2: ${first.length} references, 21 A / 0 B / 1 C / 1 D, two independent runs, synthetic data only. C reproduces known bugs; D makes no business decision.`);

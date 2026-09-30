@@ -138,8 +138,8 @@ Bei Fehlern werden vorhandene `test-results/` und `playwright-report/` als
 bei Testfehlern; Downloads und Berichte enthalten ausschließlich synthetische Daten.
 
 Restore-ID ist bestätigter Sollzustand (CP0A2 Kategorie A), im Browser aktiv
-und ohne Skip geprüft. Nach [P1](P1_Sichere_Fallpersistenz.md) gilt für CP0A2
-**20 A / 0 B / 2 C / 1 D**; die oben genannten Abnahmezahlen sind historisch.
+und ohne Skip geprüft. Nach [P2](P2_Depotreferenzintegritaet.md) gilt für CP0A2
+**21 A / 0 B / 1 C / 1 D**; die oben genannten Abnahmezahlen sind historisch.
 P4 ergänzt innerhalb des bestehenden Planungsflows die echte Plankopie:
 Kopie aktiv/nicht bevorzugt, Quelle und bisherige bevorzugte Variante unverändert.
 Es bleiben genau drei Lebenszyklen.
@@ -147,9 +147,12 @@ P1 ergänzt im selben Planungsflow einen benannten Testschritt: Extern hinzugef�
 Nachbarfall bleibt beim echten Save aus stale React-State erhalten; nach externer
 Löschung wird er beim nächsten Save nicht wiederbelebt. Erfolgreiches Speichern
 synchronisiert dabei die lokale Fallliste. Keine vierte Suite.
-`stale-local-list` ist Kategorie A; `invalid-depot-fallback` und `weak-plan-integrity`
-bleiben als zwei C-Befunde offen. CP0B benutzt gültige Referenzen und akzeptiert diese Fehler
-nicht als Sollverhalten. `general-export-scope` bleibt Kategorie D, ohne neue
+P2 ergänzt im selben Planungsflow einen benannten Testschritt: Eine echte
+JSON-Sicherung wird ausschließlich an einer Holding-`depotId` beschädigt und über
+den echten Importbutton abgewiesen. Storebytes, aktiver Fall, Exportansicht und
+gültige Depotzuordnungen bleiben erhalten; danach läuft der Lifecycle weiter.
+`stale-local-list` und `invalid-depot-fallback` sind Kategorie A; einzig
+`weak-plan-integrity` bleibt C. CP0B akzeptiert diesen Fehler nicht als Sollverhalten. `general-export-scope` bleibt Kategorie D, ohne neue
 Browser-Golden-Assertion zur Neuanlagen-/ZIELPLAN-Frage.
 
 Breite Excel-Fachprüfung bleibt Aufgabe der Node-Suites. Native Excel-Desktop-

@@ -9,6 +9,7 @@ Migration oder Schemata und behob keine Fehler. Der nachfolgende Restore-ID-Fix
 überführt ausschließlich `restore-id` von C nach A (siehe unten). P4 bestätigt
 anschließend den Copy-/Import-Vertrag und überführt nur `import-copy` von B nach A.
 P1 behebt danach ausschließlich `stale-local-list` (C → A).
+P2 behebt anschließend ausschließlich `invalid-depot-fallback` (C → A).
 
 Vor Beginn am 23.09.2026 geprüft: sauberer Arbeitsbaum auf
 `work/architecture-cp0a1-test-gate`, HEAD
@@ -45,7 +46,8 @@ allein aufgrund eines roten Tests als verbindliches Altverhalten wiederhergestel
 
 ## Referenzfallmatrix (23 Referenzen)
 
-Aktuelle Verteilung nach P1: **20 A, 0 B, 2 C, 1 D**.
+Aktuelle Verteilung nach P2: **21 A, 0 B, 1 C, 1 D**.
+Nach P1, vor P2: **20 A, 0 B, 2 C, 1 D**.
 Nach P4, vor P1: **19 A, 0 B, 3 C, 1 D**.
 Vor P4, nach Restore-ID-Fix: **18 A, 1 B, 3 C, 1 D**.
 
@@ -68,7 +70,7 @@ Vor P4, nach Restore-ID-Fix: **18 A, 1 B, 3 C, 1 D**.
 | `schema-6` | A | Historische retain-Auswahl und Depotmigration zu Schema 11. `verify-4b.ts` |
 | `future-schema-recovery` | A | Schema 12 nicht importierbar, geschützt, Original unverändert erhalten und bytegenaues Recoverybackup. `verify-cp1-review.ts`, `verify-cp3.tsx` |
 | `import-copy` | A | Fachlich bestätigter Copy-/Import-Vertrag gemäß [P4](P4_Copy_Import_Vertrag.md): nur aktuelle äußere Fall-ID neu, gültige innere IDs/Referenzen und historische Snapshots erhalten. Dedizierter Test `scripts/verify-p4-copy-contract.ts` |
-| `invalid-depot-fallback` | C | Ungültige Depot-ID wird zum ersten Depot umgebogen |
+| `invalid-depot-fallback` | A | Aktuelle ungültige Depot-ID führt zu `null`; Original unverändert als Protected Entry erhalten. [P2-Vertrag](P2_Depotreferenzintegritaet.md), `scripts/verify-p2-depot-integrity.ts` |
 | `weak-plan-integrity` | C | Doppelte Plan-ID, fehlende aktive Referenz und zwei bevorzugte Pläne werden akzeptiert |
 | `stale-local-list` | A | Operationsbasiertes Save mit veraltetem Client-Snapshot erhält den inzwischen gespeicherten gesunden Nachbarfall. [P1-Vertrag](P1_Sichere_Fallpersistenz.md), `scripts/verify-p1-case-store.ts` |
 | `restore-id` | A | JSON-Kopie → tatsächlicher Restore-Handler von `ExportCenter` → `writeCaseStore`/`readCaseStore`: historische Inhalte und gesamte Historie erhalten, aktuelle Kopie-ID bleibt bestehen; Original und Kopie bleiben getrennt gespeichert |
@@ -79,8 +81,9 @@ Quellen der Bondreferenzen: `verify-bond-final.tsx` (bestehende unabhängige
 Decimal70-Kurzläuferwerte, Jahresbasismodell, verkürzte Periode und gesperrte Struktur),
 `verify-cp3.tsx` (Coverage/Ausschluss und IST-Export). Kategorie A bestätigt hier die
 **bestehende indikative Modellsemantik**, keine tatsächlichen Vertragscashflows.
-Die zwei weiterhin offenen C-Befunde sind im CP0A1-Abschnitt des README dokumentiert:
-`invalid-depot-fallback`, `weak-plan-integrity`.
+Einziger verbleibender C-Befund ist `weak-plan-integrity`; D bleibt
+`general-export-scope`. P2 erhält die historische Schema-9-Migration und prüft
+zusätzlich die Ablehnung ungültiger aktueller Snapshots im tatsächlichen Restore-Handler.
 
 ## Priorisierter Restore-ID-Fix nach CP0A2
 
@@ -192,11 +195,11 @@ Die neue Suite importiert **keine** bestehende Verify-Suite. Alle zehn bisherige
 direkten Fachtests bleiben unverändert; die zwei indirekten Tests bleiben genau einmal
 über CP1 bzw. CP4 eingebunden. CP0A2 läuft genau einmal an Position 11,
 nach `test:bond-final`; P4 folgt genau einmal an Position 12, P1 an Position 13
-vor `typecheck`.
+und P2 an Position 14 vor `typecheck`.
 Danach folgen genau ein `build` und die drei CP0B-Browserabläufe.
 `npm test` delegiert weiterhin vollständig an `verify`. Die CI ruft weiterhin
 `npm run verify` plus die bestehenden R1-/Artefakt- und Whitespace-Prüfungen auf;
-keine Workflowänderung. Der Typecheck umfasst CP0A2, P4 und P1 samt importierten Helfern/Fixtures.
+keine Workflowänderung. Der Typecheck umfasst CP0A2, P4, P1 und P2 samt importierten Helfern/Fixtures.
 
 Lokale Abnahme: `npm run test:cp0a2`, `npm run verify`, `npm test`,
 `git diff --check` sowie manuelle Diff- und Gate-Importprüfung. Unter Windows war für
@@ -209,7 +212,8 @@ Depotvalidierung, kein Architekturrefactoring und keine neue Exportentscheidung.
 Nach Restore-ID behebt [P1](P1_Sichere_Fallpersistenz.md) die veraltete Fallliste
 mit Save/Insert/Delete gegen den aktuellen Store. Der direkte Vertragstest und der
 echte CP0B-Savepfad sichern Erhalt neuer Nachbarn und fehlende Wiederbelebung ab.
-Depotnormalisierung und Planintegrität bleiben unverändert.
+[P2](P2_Depotreferenzintegritaet.md) härtet ausschließlich die Depotnormalisierung;
+Planintegrität bleibt unverändert.
 CP0B übernimmt später vollständige Browserabläufe; Browser-E2E, visuelle Regression,
 native Excel-Abnahme und native Druck-/PDF-Paginierung sind hier nicht enthalten.
 Merge, Auto-Merge und Deployment gehören nicht zur CP0A2-Abnahme.

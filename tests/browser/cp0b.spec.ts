@@ -269,6 +269,29 @@ test.describe("Planung und Fallidentität", () => {
     const [original] = await stored(page);
     const backup = await currentJson(page, info, "original-backup");
     expect(backup.item).toEqual(original);
+    await test.step("P2: dangling depot reference rejects JSON import without changing store or active case", async () => {
+      const originalBytes = await page.evaluate((key) => localStorage.getItem(key), CASE_STORAGE_KEY);
+      const invalidBackup = JSON.parse(await readFile(backup.path, "utf8"));
+      invalidBackup.case.depot[2].depotId = "cp0b-p2-missing-depot";
+      const chooser = page.waitForEvent("filechooser");
+      await page.getByRole("button", { name: /JSON importieren/ }).click();
+      const rejected = page.waitForEvent("dialog").then(async (dialog) => {
+        expect(dialog.type()).toBe("alert");
+        expect(dialog.message()).toBe("Die Datei enthält keinen vollständigen VermögensNavigator-Fall.");
+        await dialog.accept();
+      });
+      await (await chooser).setFiles({ name: "synthetic-p2-invalid.json", mimeType: "application/json",
+        buffer: Buffer.from(JSON.stringify(invalidBackup)) });
+      await rejected;
+      expect(await page.evaluate((key) => localStorage.getItem(key), CASE_STORAGE_KEY)).toBe(originalBytes);
+      expect(await stored(page)).toEqual([original]);
+      await expect(page.getByRole("button", { name: /Vollständige Sicherung/ })).toBeVisible();
+      const current = (await currentJson(page, info, "p2-rejected-import-active-case")).item;
+      expect(current).toEqual(original);
+      expect(current.depot[2].depotId).toBe(original.depot[2].depotId);
+      expect(current.depot[2].depotId).not.toBe(current.depotAccounts[0].id);
+      console.log("PASS P2 browser: dangling depotId import rejected; original store bytes, active case and depot assignments preserved");
+    });
     await test.step("P1: failed import preserves store bytes, active case and export view", async () => {
       const malformed = "{ synthetic malformed store";
       await page.evaluate(({ key, value }) => localStorage.setItem(key, value), { key: CASE_STORAGE_KEY, value: malformed });
