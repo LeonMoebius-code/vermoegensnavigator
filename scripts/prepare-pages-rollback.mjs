@@ -1,7 +1,8 @@
 import { appendFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { assertSame, json, requireThat, validate, writeJson } from './release-artifact.mjs';
+import { json, requireThat, writeJson } from './release-artifact.mjs';
+import { validateHistoricalArtifact } from './historical-release-artifact.mjs';
 
 export function validateRun(run, repository, runId) {
   requireThat(String(run.id) === runId && run.repository?.full_name === repository && run.head_repository?.full_name === repository, 'Foreign run');
@@ -12,10 +13,7 @@ export function validateRun(run, repository, runId) {
 export function validateEvidence(evidence, selection, directory) {
   requireThat(evidence.schemaVersion === 1 && evidence.kind === 'r1-release' && evidence.gate === 'npm run verify' && evidence.gateResult === 'success', 'Missing successful R1 gate');
   requireThat(evidence.repository === selection.repository && evidence.runId === selection.runId && evidence.runAttempt === '1' && evidence.sourceSha === selection.sourceSha, 'Historical identity mismatch');
-  const manifest = validate(directory, selection.sourceSha);
-  requireThat(manifest.provenance.workflow === 'Release GitHub Pages' && manifest.provenance.runId === selection.runId && manifest.provenance.runAttempt === '1', 'Historical provenance mismatch');
-  assertSame(manifest, { algorithm: evidence.algorithm, checksum: evidence.checksum, files: evidence.files, provenance: evidence.provenance });
-  return manifest;
+  return validateHistoricalArtifact(directory, evidence, selection);
 }
 async function select() {
   const runId = process.env.ROLLBACK_RUN_ID;

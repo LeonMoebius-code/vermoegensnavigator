@@ -59,7 +59,7 @@ jobs:
           repository: ${{ github.repository }}
           path: outputs/rollback-evidence
           merge-multiple: true
-      - name: Validate provenance, source, allowlist and checksum
+      - name: Validate historical evidence manifest, provenance, safety and checksum
         run: node scripts/prepare-pages-rollback.mjs verify
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:

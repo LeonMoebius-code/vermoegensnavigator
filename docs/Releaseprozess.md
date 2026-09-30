@@ -65,7 +65,7 @@ bestehenden Static-Server direkt auf `.pages-dist` unter
 diesem Manifest. Auch eine strukturell erlaubte Byteänderung wird abgelehnt.
 Die Website wird danach nur gelesen, paketiert und hochgeladen.
 
-Die geschlossene Allowlist enthält genau elf Dateien:
+Für neue Releasekandidaten enthält die aktuelle geschlossene Allowlist genau elf Dateien:
 
 ```text
 .nojekyll
@@ -127,12 +127,37 @@ Konservativer Rollback:
    GitHub API prüft Repository, Originalworkflowpfad, Dispatch, main, Erfolg,
    Attempt, historischen Source-SHA und nicht abgelaufene, eindeutige Artefakte.
 4. Downloads erfolgen über die ermittelten Artifact-IDs aus genau diesem Run.
-   Gate-Evidence, Provenienz, Source-SHA, Allowlist und Gesamtchecksum prüfen.
+   Gate-Evidence, historische Provenienz, Source-SHA, gespeichertes Dateimanifest
+   und neu berechnete Gesamtchecksum prüfen; aktuelle generische Sicherheitsregeln anwenden.
 5. Gespeicherte Bytes als neues Pages-Artefakt paketieren; erneut vergleichen.
    Neue Rollback-Evidence enthält Auswahl/Originalnachweis. Keine historischen
    npm-Abhängigkeiten, kein alter Code, keine Kompilierung werden ausgeführt.
 6. Leon prüft Original-SHA und Checksum in Summary/Evidence, genehmigt erneut
    `github-pages`; der getrennte Deploy-Job veröffentlicht das gespeicherte Paket.
+
+Neue Releasekandidaten prüft `release-artifact.mjs` weiterhin streng gegen den
+aktuellen Produktionsvertrag: Allowlist, Build-info-Felder, Cachehash und
+Buildanforderungen. Historische Rollbacks verwenden dagegen den getrennten
+Pfad `historical-release-artifact.mjs`: Das vertrauenswürdige damalige Evidence
+(unterstützte Schemaversion 1, `r1-release`, erfolgreiches `npm run verify`)
+bestimmt den Inhaltsvertrag. Tatsächlich gefundene Pfade, Dateigrößen und
+SHA-256-Digests müssen exakt `evidence.files` entsprechen; die kanonische
+Checksum wird erneut aus diesen Dateien berechnet. `build-info.json` muss exakt
+der gespeicherten Provenienz und dem weiterhin unterstützten historischen
+Provenienzvertrag v1 entsprechen, einschließlich Source-SHA, Releaseworkflow,
+Run-ID und Attempt. Künftige Provenienzversionen erfordern explizite zusätzliche
+historische Unterstützung; der bestehende v1-Vertrag bleibt erhalten.
+
+Evidence kann die allgemeinen Sicherheitsregeln nicht überschreiben: sichere
+relative Pfade, keine `.git`-/`.github`-Strukturen, Symlinks, Hardlinks oder
+Spezialdateien, weiterhin Credential-Signaturprüfung. Grenzen: 10 MiB je Datei,
+100 MiB insgesamt, höchstens 1000 Datei-/Verzeichniseinträge, 16 Pfadsegmente
+und 240 Pfadzeichen. Verzeichnisse müssen zum gespeicherten Manifest gehören.
+Die historische Prüfung liest ausschließlich gespeicherte Bytes, ohne sie zu
+ergänzen, zu ändern oder zu entfernen. Ein erfolgreiches R1-Release bleibt so
+innerhalb seiner Artifact-Retention auch nach legitimen späteren Änderungen
+der Website-Dateiliste rückspielbar, soweit es die generischen Sicherheitsregeln
+und einen unterstützten historischen Provenienzvertrag erfüllt.
 
 Bewusste Einschränkung: nur erfolgreich **veröffentlichte** Originalruns,
 keine abgebrochenen vorbereiteten Kandidaten, keine Rollback-von-Rollback-Kette
@@ -294,7 +319,9 @@ Die getrennt verlangten lokalen Build-/Gateprüfungen sind unterschiedliche
 Testkandidaten. Im echten Releaseworkflow gibt es nach dem einmaligen Gate
 keinen weiteren Build. Regressionstests arbeiten nur mit temporären Kopien.
 `package.json`, Lockfile, CP0B-Konfiguration und Produktquellen bleiben unverändert.
-Die PR-CI ergänzt nach dem Gate die Artefaktprüfung und 16 Betriebsregressionen.
+Die PR-CI ergänzt nach dem Gate die Artefaktprüfung und vollständigen
+Betriebsregressionen, einschließlich historischer Kompatibilität bei später
+geänderter Dateiliste/Provenienz sowie Manipulations- und Sicherheitsgegenproben.
 
 Der erste echte Dispatch, Environment-Halt, Upload/Deployment und Cross-Run-
 Rollback sind im Featurebranch bewusst nicht live ausführbar. Die Workflow-
