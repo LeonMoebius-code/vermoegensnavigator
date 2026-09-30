@@ -138,8 +138,8 @@ Bei Fehlern werden vorhandene `test-results/` und `playwright-report/` als
 bei Testfehlern; Downloads und Berichte enthalten ausschließlich synthetische Daten.
 
 Restore-ID ist bestätigter Sollzustand (CP0A2 Kategorie A), im Browser aktiv
-und ohne Skip geprüft. Nach [P2](P2_Depotreferenzintegritaet.md) gilt für CP0A2
-**21 A / 0 B / 1 C / 1 D**; die oben genannten Abnahmezahlen sind historisch.
+und ohne Skip geprüft. Nach [P3](P3_Planintegritaet.md) gilt für CP0A2
+**22 A / 0 B / 0 C / 1 D**; die oben genannten Abnahmezahlen sind historisch.
 P4 ergänzt innerhalb des bestehenden Planungsflows die echte Plankopie:
 Kopie aktiv/nicht bevorzugt, Quelle und bisherige bevorzugte Variante unverändert.
 Es bleiben genau drei Lebenszyklen.
@@ -151,8 +151,15 @@ P2 ergänzt im selben Planungsflow einen benannten Testschritt: Eine echte
 JSON-Sicherung wird ausschließlich an einer Holding-`depotId` beschädigt und über
 den echten Importbutton abgewiesen. Storebytes, aktiver Fall, Exportansicht und
 gültige Depotzuordnungen bleiben erhalten; danach läuft der Lifecycle weiter.
-`stale-local-list` und `invalid-depot-fallback` sind Kategorie A; einzig
-`weak-plan-integrity` bleibt C. CP0B akzeptiert diesen Fehler nicht als Sollverhalten. `general-export-scope` bleibt Kategorie D, ohne neue
+P3 ergänzt im selben Flow die benannten Schritte A–E: getrennte Auswahl mit
+Save/Reload, nicht aktive bevorzugte Variante löschen und Nullpräferenz laden,
+fehlendes Ziel mit Hinweis ohne Export-/Ergebnisfallback, aktive Kopie löschen
+mit Nachbarwahl und unveränderter Präferenz, beschädigten echten JSON-Import
+abweisen bei identischen Storebytes, Live-Fall und Ansicht. Es bleiben drei
+Lebenszyklen; kein Skip oder zusätzlicher Build. Die Relationsprüfung verlangt
+eindeutige Pläne, genau einen Active-Treffer und höchstens eine Präferenz.
+`stale-local-list`, `invalid-depot-fallback` und `weak-plan-integrity` sind A.
+`general-export-scope` bleibt Kategorie D, ohne neue
 Browser-Golden-Assertion zur Neuanlagen-/ZIELPLAN-Frage.
 
 Breite Excel-Fachprüfung bleibt Aufgabe der Node-Suites. Native Excel-Desktop-

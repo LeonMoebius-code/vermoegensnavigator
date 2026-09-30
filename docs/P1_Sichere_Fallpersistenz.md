@@ -73,7 +73,7 @@ verhindern den Hauptschreibvorgang; dessen Quota-Fehler erhalten den Hauptstore.
 logisch getrennten Clients und explizit veralteten Snapshots. Zwölf synthetische
 Gruppen prüfen Mengen-/Inhaltsvertrag, Rückgaben, ID-Schutz, malformed Stores,
 Protected Entries, bytegenaue Backups, Wiederverwendung und Schreibfehler.
-`test:p1-case-store` folgt im sequenziellen Fail-Fast-Gate nach P4, dann P2 und Typecheck;
+`test:p1-case-store` folgt im sequenziellen Fail-Fast-Gate nach P4, dann P2, P3 und Typecheck;
 danach genau ein Produktionsbuild und CP0B. `npm test` delegiert weiter an `verify`.
 
 Im bestehenden CP0B-Planungs-/Fallidentitätsflow verändert ein externer Kontext
@@ -96,5 +96,7 @@ erhalten. [P2](P2_Depotreferenzintegritaet.md) behebt inzwischen
 `invalid-depot-fallback`: Ungültige aktuelle Depotreferenzen werden zentral
 abgelehnt, Originale geschützt und beim gesunden Nachbar-Save samt bytegenauem
 Backup erhalten; neue ungültige Save-/Insert-/Write-Kandidaten schreiben nichts.
-Aktuell **21 A / 0 B / 1 C / 1 D**. P3 `weak-plan-integrity` bleibt C,
+Aktuell nach [P3](P3_Planintegritaet.md): **22 A / 0 B / 0 C / 1 D**.
+`weak-plan-integrity` ist A: ungültige aktuelle Plangraphen werden abgelehnt,
+P1-Protected-Entries und bytegenaue Backup-Wiederverwendung bleiben erhalten.
 `general-export-scope` bleibt D. Keine Migration, Reportingentscheidung oder Releaseprozessänderung.

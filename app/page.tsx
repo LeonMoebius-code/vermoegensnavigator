@@ -74,6 +74,12 @@ import {
   CustomerChecklistCategory,
   createCase,
   createPlan,
+  getActiveStructurePlan,
+  getPreferredStructurePlan,
+  setActiveStructurePlan,
+  setPreferredStructurePlan,
+  appendStructurePlan,
+  deleteStructurePlan,
   depotAssetAmounts,
   depotPlanAssetAmounts,
   DepotHolding,
@@ -693,11 +699,8 @@ export default function Home() {
     }
   };
 
-  const activePlan =
-    activeCase.plans.find((plan) => plan.id === activeCase.activePlanId) ??
-    activeCase.plans[0];
-  const preferredPlan =
-    activeCase.plans.find((plan) => plan.preferred) ?? activePlan;
+  const activePlan = getActiveStructurePlan(activeCase);
+  const preferredPlan = getPreferredStructurePlan(activeCase.plans);
   const activeAdvisor = advisorFor(activeCase.advisorId);
   const selectAdvisor = (advisorId: AdvisorId) => {
     setNewCaseAdvisorId(advisorId);
@@ -2442,12 +2445,12 @@ function ResultStep({
   openModule: (value: string) => void;
 }) {
   const data = item.advisory;
-  const plan = item.plans.find((entry) => entry.preferred) ?? item.plans[0];
-  const resultPots = capitalPots(
+  const plan = getPreferredStructurePlan(item.plans);
+  const resultPots = plan ? capitalPots(
     data,
-    plan?.total ?? data.liquidAssets,
+    plan.total,
     item.createdAt,
-  );
+  ) : [];
   const totalFixed =
     data.reserve + data.needs.reduce((sum, need) => sum + need.amount, 0);
   const warning = totalFixed > data.liquidAssets;
@@ -2473,9 +2476,7 @@ function ResultStep({
         <article className="highlight">
           <span>Strategisch frei</span>
           <strong>
-            {euro.format(
-              strategicAmount(data, plan?.total ?? data.liquidAssets),
-            )}
+            {plan ? euro.format(strategicAmount(data, plan.total)) : "Zielvariante nicht gewählt"}
           </strong>
           <small>nach Reserve und allen bekannten Bedarfen</small>
         </article>
@@ -2502,7 +2503,8 @@ function ResultStep({
           </div>
           <small>fünf wirtschaftliche Anlageklassen</small>
         </div>
-        <WealthHouse plan={plan} plans={item.plans} depot={item.depot} currentLiquidity={item.advisory.liquidAssets} compact />
+        {plan ? <WealthHouse plan={plan} plans={item.plans} depot={item.depot} currentLiquidity={item.advisory.liquidAssets} compact />
+          : <p role="status">Keine bevorzugte Zielvariante gewählt. Bitte in der Strukturplanung eine Variante als bevorzugt markieren.</p>}
         <div className="result-cta-row">
           <div>
             <strong>Struktur im Detail prüfen</strong>
@@ -2628,8 +2630,7 @@ function PlannerView({
     amount: number;
     action: ModelPortfolioAction;
   } | null>(null);
-  const plan =
-    item.plans.find((entry) => entry.id === item.activePlanId) ?? item.plans[0];
+  const plan = getActiveStructurePlan(item);
   const visibleCapitalPots = capitalPots(
     item.advisory,
     plan.total,
@@ -2671,10 +2672,7 @@ function PlannerView({
       Math.max(0, allocation.amount - allocationCapitalCoverageTotal(allocation)),
     0,
   );
-  const validDepotIds = new Set(item.depot.map((holding) => holding.id));
-  const selectedDepotIds = new Set(
-    plan.depotHoldingIds.filter((id) => validDepotIds.has(id)),
-  );
+  const selectedDepotIds = new Set(plan.depotHoldingIds);
   const selectedDepot = item.depot.filter(
     (holding) => plannerPlanHoldingValue(plan, holding) > 0,
   );
@@ -2916,7 +2914,7 @@ function PlannerView({
     next.depotMode = plan.depotMode;
     next.depotHoldingIds = [...plan.depotHoldingIds];
     next.preferred = false;
-    setItem({ ...item, plans: [...item.plans, next], activePlanId: next.id });
+    setItem(appendStructurePlan(item, next));
   };
   const duplicatePlan = () => {
     const next = reconcilePlanCapitalPots(
@@ -2928,20 +2926,12 @@ function PlannerView({
       item.createdAt,
       item.savingsGoals,
     );
-    setItem({ ...item, plans: [...item.plans, next], activePlanId: next.id });
+    setItem(appendStructurePlan(item, next));
   };
   const setPreferred = () =>
-    setItem({
-      ...item,
-      plans: item.plans.map((entry) => ({
-        ...entry,
-        preferred: entry.id === plan.id,
-      })),
-    });
+    setItem(setPreferredStructurePlan(item, plan.id));
   const deletePlan = () => {
-    if (item.plans.length === 1) return;
-    const remaining = item.plans.filter((entry) => entry.id !== plan.id);
-    setItem({ ...item, plans: remaining, activePlanId: remaining[0].id });
+    setItem(deleteStructurePlan(item, plan.id));
   };
   const updateSavingsPlan = (id: string, changes: Partial<SavingsPlan>) =>
     updatePlan({
@@ -3092,11 +3082,7 @@ function PlannerView({
         item.createdAt,
         item.savingsGoals,
       );
-      setItem({
-        ...item,
-        plans: [...item.plans, reconciledNext],
-        activePlanId: reconciledNext.id,
-      });
+      setItem(appendStructurePlan(item, reconciledNext));
     }
     if (action === "supplement")
       updatePlan({
@@ -3390,7 +3376,7 @@ function PlannerView({
           <select
             value={plan.id}
             onChange={(event) =>
-              setItem({ ...item, activePlanId: event.target.value })
+              setItem(setActiveStructurePlan(item, event.target.value))
             }
           >
             {item.plans.map((entry) => (
@@ -4669,7 +4655,8 @@ function PlannerView({
         <PlanComparison
           plans={item.plans}
           activePlanId={item.activePlanId}
-          setActive={(id) => setItem({ ...item, activePlanId: id })}
+          setActive={(id) => setItem(setActiveStructurePlan(item, id))}
+          onDelete={(id) => setItem(deleteStructurePlan(item, id))}
         />
       )}
       <section className="source-strip">
@@ -4846,7 +4833,7 @@ export function WealthHouse({
   );
   const [compareWith, setCompareWith] = useState<"plan" | "target">("target");
   const [selectedAsset, setSelectedAsset] = useState<AssetClass | null>(null);
-  const targetPlan = plans.find((entry) => entry.preferred) || plan;
+  const targetPlan = getPreferredStructurePlan(plans);
   const breakdown = planAssetAmounts(plan);
   const depotBreakdown = depotAssetAmounts(
     depot,
@@ -4942,7 +4929,7 @@ export function WealthHouse({
           unresolved: depotPlanBreakdown.unresolved,
         }
       : snapshotFor(plan);
-  const targetSnapshot = snapshotFor(targetPlan);
+  const targetSnapshot = targetPlan ? snapshotFor(targetPlan) : null;
   const shown =
     mode === "ist"
       ? istSnapshot
@@ -4950,10 +4937,10 @@ export function WealthHouse({
         ? targetSnapshot
         : planSnapshot;
   const comparison =
-    context === "depot" || compareWith === "plan"
+    mode !== "compare" || context === "depot" || compareWith === "plan"
       ? planSnapshot
       : targetSnapshot;
-  const shownKnown = Object.values(shown.amounts).reduce(
+  const shownKnown = Object.values(shown?.amounts ?? {}).reduce(
     (sum, value) => sum + value,
     0,
   );
@@ -4961,16 +4948,16 @@ export function WealthHouse({
     (sum, value) => sum + value,
     0,
   );
-  const comparisonKnown = Object.values(comparison.amounts).reduce(
+  const comparisonKnown = Object.values(comparison?.amounts ?? {}).reduce(
     (sum, value) => sum + value,
     0,
   );
   const shownTotal =
-    shownKnown + shown.unresolved;
+    shownKnown + (shown?.unresolved ?? 0);
   const istTotal =
     istKnown + istSnapshot.unresolved;
   const comparisonTotal =
-    comparisonKnown + comparison.unresolved;
+    comparisonKnown + (comparison?.unresolved ?? 0);
   const holdingContributors = (
     holdings: DepotHolding[],
     asset: AssetClass,
@@ -5021,6 +5008,7 @@ export function WealthHouse({
         ),
       ];
     const selectedPlan = source === "target" ? targetPlan : plan;
+    if (!selectedPlan) return [];
     const planEntries = selectedPlan.allocations.flatMap((allocation) => {
       const product = houseProducts.find(
         (entry) => entry.id === allocation.productId,
@@ -5136,6 +5124,8 @@ export function WealthHouse({
           )}
         </div>
       )}
+      {(!shown || !comparison) && <p role="status">Keine bevorzugte Zielvariante gewählt. Bitte in der Strukturplanung eine Variante als bevorzugt markieren.</p>}
+      {shown && comparison && <>
       <div className="house-layout">
         <div className="wealth-house">
           <div className="house-roof">
@@ -5145,7 +5135,7 @@ export function WealthHouse({
                   ? "IST · Bestehende Depotstruktur"
                   : "IST-Struktur"
                 : mode === "target"
-                  ? `ZIELPLAN · ${targetPlan.name}`
+                  ? `ZIELPLAN · ${targetPlan?.name}`
                   : mode === "compare"
                     ? context === "depot"
                       ? "IST-PLAN-Vergleich"
@@ -5367,6 +5357,7 @@ export function WealthHouse({
           })}
         </div>
       </section>}
+      </>}
     </div>
   );
 }
@@ -5703,10 +5694,12 @@ function PlanComparison({
   plans,
   activePlanId,
   setActive,
+  onDelete,
 }: {
   plans: StructurePlan[];
   activePlanId: string;
   setActive: (id: string) => void;
+  onDelete: (id: string) => void;
 }) {
   return (
     <div className="compare-view">
@@ -5732,6 +5725,9 @@ function PlanComparison({
                   <strong>{plan.name}</strong>
                 </div>
                 <button onClick={() => setActive(plan.id)}>Öffnen</button>
+                <button disabled={plans.length === 1} aria-label={`Planvariante ${plan.name} löschen`} onClick={() => {
+                  if (window.confirm(`Planvariante „${plan.name}“ löschen?`)) onDelete(plan.id);
+                }}>Löschen</button>
               </header>
               <dl>
                 <div>
@@ -6493,21 +6489,21 @@ export function ExportCenter({
 }: {
   item: AdvisoryCase;
   setItem: Dispatch<SetStateAction<AdvisoryCase>>;
-  preferredPlan: StructurePlan;
+  preferredPlan: StructurePlan | undefined;
   saveCase: (version?: boolean) => void;
   exportJson: () => void;
   importJson: () => void;
 }) {
   const item = enforceCaseDepotValue(sourceItem);
-  const breakdown = planAssetAmounts(preferredPlan);
-  const exportPots = capitalPots(
+  const breakdown = preferredPlan ? planAssetAmounts(preferredPlan) : null;
+  const exportPots = preferredPlan ? capitalPots(
     item.advisory,
     preferredPlan.total,
     item.createdAt,
-  );
+  ) : [];
   const advisor = advisorFor(item.advisorId);
   const exportRiskAssessment = completeRiskAssessment(item.advisory.riskAssessmentV2);
-  const exportBondData = buildBondIstExportData(item.depot, preferredPlan, item.depotAccounts);
+  const exportBondData = preferredPlan ? buildBondIstExportData(item.depot, preferredPlan, item.depotAccounts) : null;
   const economicAssetLabel = (entry: DepotHolding) => {
     const mix = entry.productId ? productAssetMix(entry.productId) : null;
     if (mix) {
@@ -6528,6 +6524,7 @@ export function ExportCenter({
     return item.advisory.needs.find((need) => need.id === entry.targetRef?.id)?.purpose || "";
   };
   const print = (mode: "customer" | "internal") => {
+    if (!preferredPlan) return;
     document.body.dataset.printMode = mode;
     window.setTimeout(() => {
       window.print();
@@ -6535,6 +6532,7 @@ export function ExportCenter({
     }, 60);
   };
   const exportExcel = () => {
+    if (!preferredPlan || !breakdown || !exportBondData) return;
     const workbook = XLSX.utils.book_new();
     const depotExport = buildMultiDepotExportData(
       item.depotAccounts,
@@ -6892,23 +6890,24 @@ export function ExportCenter({
           </button>
         </div>
       </div>
-      {exportBondData.analysis.directCount > 0 && <p className="analysis-note no-print">{BOND_EXPORT_SCOPE_NOTICE}</p>}
+      {!preferredPlan && <p role="status">Keine bevorzugte Zielvariante gewählt. Bitte in der Strukturplanung eine Variante als bevorzugt markieren.</p>}
+      {exportBondData && exportBondData.analysis.directCount > 0 && <p className="analysis-note no-print">{BOND_EXPORT_SCOPE_NOTICE}</p>}
       <div className="export-actions no-print">
-        <button onClick={() => print("customer")}>
+        <button disabled={!preferredPlan} onClick={() => print("customer")}>
           <span>PDF</span>
           <strong>Kundenübersicht</strong>
           <small>
             Ausgangslage, Ziele, Strukturen, Lösungsbausteine und nächste Schritte
           </small>
         </button>
-        <button onClick={() => print("internal")}>
+        <button disabled={!preferredPlan} onClick={() => print("internal")}>
           <span>PDF+</span>
           <strong>Interne Arbeitsunterlage</strong>
           <small>
             zusätzlich Datenstände, Warnungen, Produkte und Prüfpunkte
           </small>
         </button>
-        <button onClick={exportExcel}>
+        <button disabled={!preferredPlan} onClick={exportExcel}>
           <span>XLSX</span>
           <strong>Excel-Arbeitsmappe</strong>
           <small>
@@ -6962,7 +6961,7 @@ export function ExportCenter({
           </div>
         </section>
       )}
-      <article className="print-document">
+      {preferredPlan && breakdown && exportBondData && <article className="print-document">
         <header>
           <div>
             <BrandLogos compact />
@@ -7327,7 +7326,7 @@ export function ExportCenter({
             aktuelle Freigaben sind vor einer Umsetzung vollständig zu prüfen.
           </p>
         </footer>
-      </article>
+      </article>}
     </div>
   );
 }

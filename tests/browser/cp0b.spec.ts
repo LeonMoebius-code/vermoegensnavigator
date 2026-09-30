@@ -89,8 +89,9 @@ function validRelations(item: AdvisoryCase) {
   for (const plan of item.plans) {
     for (const id of plan.depotHoldingIds) expect(item.depot.some((h) => h.id === id)).toBe(true);
   }
-  expect(item.plans.some((p) => p.id === item.activePlanId)).toBe(true);
-  expect(item.plans.filter((p) => p.preferred)).toHaveLength(1);
+  expect(new Set(item.plans.map((p) => p.id)).size).toBe(item.plans.length);
+  expect(item.plans.filter((p) => p.id === item.activePlanId)).toHaveLength(1);
+  expect(item.plans.filter((p) => p.preferred).length).toBeLessThanOrEqual(1);
 }
 
 function content(item: AdvisoryCase) {
@@ -238,6 +239,15 @@ test.describe("Planung und Fallidentität", () => {
     expect(planned.activePlanId).toBe(fixture.plans[1].id);
     expect(planned.plans.find((p) => p.preferred)!.id).toBe(fixture.plans[0].id);
     expect(planned.plans[0].allocations[0].amount).toBe(4000);
+    await test.step("P3 A: active and preferred stay distinct after real save and reload", async () => {
+      await page.reload();
+      await openCase(page, fixture.advisory.caseName);
+      const reopened = (await currentJson(page, info, "p3-distinct-selections")).item;
+      expect(reopened.activePlanId).toBe(fixture.plans[1].id);
+      expect(reopened.plans.filter((p) => p.preferred).map((p) => p.id)).toEqual([fixture.plans[0].id]);
+      validRelations(reopened);
+      console.log("PASS P3 A browser: active and preferred remain independent after save/reload");
+    });
     // P4: copying the preferred variant activates the copy without changing preference.
     await nav(page, "Strukturplanung");
     await page.getByRole("combobox", { name: /^Aktive Planung/ }).selectOption(planned.plans[0].id);
@@ -255,6 +265,18 @@ test.describe("Planung und Fallidentität", () => {
     expect(copiedPlan.depotHoldingIds).toEqual(planned.plans[0].depotHoldingIds);
     expect(copiedPlan.allocations[0].id).not.toBe(planned.plans[0].allocations[0].id);
     validRelations(withCopy);
+    await test.step("P3 D: deleting active non-preferred copy chooses original previous neighbor", async () => {
+      await nav(page, "Strukturplanung");
+      await page.locator(".plan-toolbar").getByRole("button", { name: "Löschen", exact: true }).click();
+      expect(await page.getByRole("combobox", { name: /^Aktive Planung/ }).inputValue()).toBe(planned.plans[1].id);
+      await save(page);
+      const [deleted] = await stored(page);
+      expect(deleted.plans.map((p) => p.id)).toEqual(planned.plans.map((p) => p.id));
+      expect(deleted.activePlanId).toBe(planned.plans[1].id);
+      expect(deleted.plans.filter((p) => p.preferred).map((p) => p.id)).toEqual([planned.plans[0].id]);
+      validRelations(deleted);
+      console.log("PASS P3 D browser: active copy deleted; original previous neighbor selected; preference unchanged");
+    });
     await nav(page, "Ergebnis & Export");
     await expect(page.locator(".print-metrics")).toContainText(fixture.plans[0].name);
     await expect(page.locator(".print-metrics")).not.toContainText(fixture.plans[1].name);
@@ -269,6 +291,25 @@ test.describe("Planung und Fallidentität", () => {
     const [original] = await stored(page);
     const backup = await currentJson(page, info, "original-backup");
     expect(backup.item).toEqual(original);
+    await test.step("P3 E: duplicate plan identity in actual JSON backup rejects without changing store, case or view", async () => {
+      const originalBytes = await page.evaluate((key) => localStorage.getItem(key), CASE_STORAGE_KEY);
+      const invalidBackup = JSON.parse(await readFile(backup.path, "utf8"));
+      invalidBackup.case.plans[1].id = invalidBackup.case.plans[0].id;
+      const chooser = page.waitForEvent("filechooser");
+      await page.getByRole("button", { name: /JSON importieren/ }).click();
+      const rejected = page.waitForEvent("dialog").then(async (dialog) => {
+        expect(dialog.type()).toBe("alert");
+        expect(dialog.message()).toBe("Die Datei enthält keinen vollständigen VermögensNavigator-Fall.");
+        await dialog.accept();
+      });
+      await (await chooser).setFiles({ name: "synthetic-p3-invalid.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(invalidBackup)) });
+      await rejected;
+      expect(await page.evaluate((key) => localStorage.getItem(key), CASE_STORAGE_KEY)).toBe(originalBytes);
+      expect(await stored(page)).toEqual([original]);
+      await expect(page.getByRole("heading", { name: "Speichern, versionieren und exportieren" })).toBeVisible();
+      expect((await currentJson(page, info, "p3-rejected-import-current")).item).toEqual(original);
+      console.log("PASS P3 E browser: duplicate plan JSON rejected; store bytes, current case and export view unchanged");
+    });
     await test.step("P2: dangling depot reference rejects JSON import without changing store or active case", async () => {
       const originalBytes = await page.evaluate((key) => localStorage.getItem(key), CASE_STORAGE_KEY);
       const invalidBackup = JSON.parse(await readFile(backup.path, "utf8"));
@@ -367,6 +408,46 @@ test.describe("Planung und Fallidentität", () => {
     }
     expect((await stored(page)).map((c) => c.id).sort()).toEqual([original.id, imported.id].sort());
     expect({ ...(await stored(page)).find((c) => c.id === original.id), updatedAt: original.updatedAt }).toEqual(original);
+    await test.step("P3 B: deleting non-active preferred variant preserves active and persists zero preference", async () => {
+      await nav(page, "Strukturplanung");
+      await page.getByRole("button", { name: "Szenarien", exact: true }).click();
+      const confirm = page.waitForEvent("dialog").then((dialog) => dialog.accept());
+      await page.getByRole("button", { name: `Planvariante ${savedCopy.plans[0].name} löschen`, exact: true }).click();
+      await confirm;
+      await save(page);
+      const deleted = (await stored(page)).find((c) => c.id === imported.id)!;
+      expect(deleted.activePlanId).toBe(savedCopy.activePlanId);
+      expect(deleted.plans.some((p) => p.id === savedCopy.plans[0].id)).toBe(false);
+      expect(deleted.plans.filter((p) => p.preferred)).toHaveLength(0);
+      validRelations(deleted);
+      await page.reload();
+      await openCase(page, deleted.advisory.caseName, deleted.status);
+      const reopened = (await currentJson(page, info, "p3-no-preference-reload")).item;
+      expect(reopened.activePlanId).toBe(savedCopy.activePlanId);
+      expect(reopened.plans.filter((p) => p.preferred)).toHaveLength(0);
+      validRelations(reopened);
+      console.log("PASS P3 B browser: non-active preferred deleted; active stable and zero preference survives reload");
+    });
+    await test.step("P3 C: absent preferred target shows stable hint and no fallback export/result", async () => {
+      await expect(page.getByRole("status")).toHaveText("Keine bevorzugte Zielvariante gewählt. Bitte in der Strukturplanung eine Variante als bevorzugt markieren.");
+      await expect(page.locator(".print-document")).toHaveCount(0);
+      await expect(page.getByRole("button", { name: /Excel-Arbeitsmappe/ })).toBeDisabled();
+      await expect(page.getByRole("button", { name: /Kundenübersicht/ })).toBeDisabled();
+      await expect(page.getByRole("button", { name: /Vollständige Sicherung/ })).toBeEnabled();
+      await nav(page, "Strukturplanung");
+      await page.getByRole("button", { name: "Vermögensstruktur", exact: true }).click();
+      await page.getByRole("tab", { name: "ZIELPLAN", exact: true }).click();
+      await expect(page.getByRole("status")).toContainText("Keine bevorzugte Zielvariante gewählt");
+      await expect(page.locator(".house-layout")).toHaveCount(0);
+      await page.getByRole("tab", { name: "PLAN", exact: true }).click();
+      await expect(page.locator(".house-layout")).toBeVisible();
+      await page.getByRole("button", { name: "← Zurück zur Beratung", exact: true }).click();
+      await page.locator(".wizard-steps").getByRole("button", { name: /Ergebnis/ }).click();
+      await expect(page.getByRole("status")).toContainText("Keine bevorzugte Zielvariante gewählt");
+      await expect(page.locator(".result-metrics")).toContainText("Zielvariante nicht gewählt");
+      await expect(page.locator(".maturity-summary article")).toHaveCount(0);
+      console.log("PASS P3 C browser: no preferred target has visible hint, no fallback output; JSON stays available");
+    });
   });
 });
 

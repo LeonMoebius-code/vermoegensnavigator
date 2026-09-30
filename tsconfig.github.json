@@ -37,6 +37,7 @@
     "scripts/verify-p1-case-store.ts",
     "scripts/verify-p2-depot-integrity.ts",
     "playwright.config.ts",
-    "tests/browser/**/*.ts"
+    "tests/browser/**/*.ts",
+    "scripts/verify-p3-plan-integrity.tsx"
   ]
 }

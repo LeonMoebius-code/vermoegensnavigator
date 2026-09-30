@@ -89,13 +89,16 @@ beschädigen, echter JSON-Dateiimport, sichtbare Ablehnung, Storebytes und aktiv
 Fall einschließlich Depotzuordnung vergleichen. Danach läuft der Lifecycle weiter;
 es bleiben genau drei Browserfälle.
 
-Das sequenzielle Fail-Fast-Gate führt CP0A2 → P4 → P1 → P2 → Typecheck → genau
+Das sequenzielle Fail-Fast-Gate führt CP0A2 → P4 → P1 → P2 → P3 → Typecheck → genau
 einen Produktionsbuild → CP0B aus. `npm test` delegiert an `verify`; P2 ist im
 bestehenden Typecheck enthalten. Keine neue Dependency oder Workflowänderung.
 
 CP0A2: **20 A / 0 B / 2 C / 1 D → 21 A / 0 B / 1 C / 1 D**.
-Ausschließlich `invalid-depot-fallback` wechselt C → A. `weak-plan-integrity`
-bleibt C, `general-export-scope` bleibt D.
+Ausschließlich `invalid-depot-fallback` wechselte in P2 C → A.
+Aktuell nach [P3](P3_Planintegritaet.md): **22 A / 0 B / 0 C / 1 D**.
+`weak-plan-integrity` ist zusätzlich A; aktuelle Plangraphen werden vor
+destruktiver Normalisierung geprüft. P2-Depotreferenzen, P1-Recovery und
+historische Migrationen bleiben erhalten. `general-export-scope` bleibt D.
 
 Schema **11**, Speicherfelder und ID-Semantik bleiben unverändert. P2 umfasst
 keine vollständige Planintegrität (P3), keine neue Planreferenzprüfung, keine

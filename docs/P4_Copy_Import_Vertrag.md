@@ -116,7 +116,7 @@ generierte IDs nur auf Ungleichheit, Eindeutigkeit und Mappingrelationen geprüf
 Keine Sleeps oder erwarteten konkreten Zufalls-IDs.
 
 Der Test läuft einmal an Position 12 in `npm run verify`, nach `test:cp0a2`
-und seit P2 vor `test:p1-case-store`, `test:p2-depot-integrity` und `typecheck`. Das Gate bleibt sequenziell und Fail-Fast; danach folgen
+und vor `test:p1-case-store`, `test:p2-depot-integrity`, `test:p3-plan-integrity` und `typecheck`. Das Gate bleibt sequenziell und Fail-Fast; danach folgen
 genau ein Produktionsbuild und die genau drei CP0B-Lebenszyklen. Der neue Test
 ist auch im Typecheck enthalten und importiert keine andere Verify-Suite.
 CP0B prüft zusätzlich im bestehenden Planungsflow den echten Duplizieren-Button:
@@ -130,12 +130,14 @@ Nicht-Ziele: Produktumbau, neue UI, Schema-/ID-Migration, UUIDs, vollständige
 Planintegritätslogik, Architekturmodernisierung, Reporting oder Betriebsänderungen.
 [P1](P1_Sichere_Fallpersistenz.md) behebt inzwischen `stale-local-list` durch
 operationsbasierte Save-/Insert-/Delete-Persistenz; nur dieser Befund wechselt C → A.
-Aktuell nach [P2](P2_Depotreferenzintegritaet.md): **21 A / 0 B / 1 C / 1 D**.
+Historisch nach [P2](P2_Depotreferenzintegritaet.md): **21 A / 0 B / 1 C / 1 D**.
 Nur `invalid-depot-fallback` wechselt zusätzlich C → A: Ungültige aktuelle
 Depotzuordnungen werden beim Import/Restore abgelehnt, gültige Importidentitäten
-und historische Snapshots bleiben erhalten. P3 `weak-plan-integrity` (doppelte
-Plan-IDs, ungültige aktive ID, mehrere bevorzugte Pläne, Löschfolgen/Reparatur)
-bleibt unverändert C.
+und historische Snapshots bleiben erhalten. Aktuell nach [P3](P3_Planintegritaet.md):
+**22 A / 0 B / 0 C / 1 D**. `weak-plan-integrity` ist A; aktuelle ungültige
+Plangraphen werden abgelehnt, ohne innere Import-IDs oder historische Snapshots
+zu rekeyen. Die Aliasgegenprobe bestätigt nun Ablehnung ihrer absichtlichen
+Korruption, bevor ausschließlich die Testkopie für den Save-Nachweis berichtigt wird.
 `general-export-scope` bleibt D und benötigt eine separate fachliche Entscheidung.
 Kein Release, Rollback, Deployment oder Änderung von GitHub-Einstellungen.
 

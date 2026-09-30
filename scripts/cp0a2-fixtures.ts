@@ -29,6 +29,7 @@ export function multiCase() {
   active.allocations = [{ id: "synthetic-allocation", productId: "synthetic-unknown-product", productName: "Synthetischer Kauf",
     bucketId: "year10plus", amount: 3000, solutionId: "synthetic-solution", source: "product" }];
   const preferred = createPlan("Synthetische bevorzugte Variante", 0);
+  preferred.preferred = true;
   preferred.createdAt = preferred.updatedAt = AS_OF;
   preferred.depotMode = "retain";
   preferred.depotHoldingIds = [c.depot[0].id];

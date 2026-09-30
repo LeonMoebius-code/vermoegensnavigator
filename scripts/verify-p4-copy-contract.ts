@@ -262,6 +262,14 @@ test("case import: new outer ID, stable explicit inner graph and historical snap
     imported.versions[0].snapshot.plans[0].notes = "Bearbeiteter historischer Inhalt";
     imported.versions.push(structuredClone(imported.versions[1]));
     assert.equal(JSON.stringify(input), before, "Editing imported live state/history must not change source");
+    // P3 rejects the deliberately dangling alias probes above. Repair only this
+    // synthetic test copy before the independent-namespace persistence assertion.
+    const storeBefore = [...storage.values];
+    assert.throws(() => writeCaseStore(storage, [source, imported]));
+    assert.deepEqual([...storage.values], storeBefore);
+    imported.plans[0].depotHoldingIds.pop();
+    savings.targetRef!.id = "p4-goal";
+    imported.versions[imported.versions.length - 1].id = "p4-copy-version";
     writeCaseStore(storage, [source, imported]);
     const persisted = JSON.parse(storage.getItem(CASE_STORAGE_KEY)!) as AdvisoryCase[];
     assert.deepEqual(persisted.find((c) => c.id === source.id), source, "Editing/saving the copy preserves the original namespace");
