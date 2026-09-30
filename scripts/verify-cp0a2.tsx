@@ -205,8 +205,8 @@ function runReferences() {
     backups: recoveryBackups(storage).map((b) => b.original === raw),
   }, { imported: null, cases: 0, protected: 1, recovery: true, malformed: false, originalPreserved: true, backups: [true] });
   const imported = normalizeImportedCase(c)!; register(ids, imported);
-  record(ref("import-copy", "B", "JSON-Kopie generiert Fall-ID neu, innere Identitäten bleiben aktuell erhalten",
-    "app/case-model.ts: normalizeImportedCase(regenerateId=true)", "Änderung der technisch beobachteten Kopiersemantik untersuchen"), {
+  record(ref("import-copy", "A", "Fachlich bestätigter P4-Vertrag: JSON-Kopie erneuert nur die aktuelle äußere Fall-ID, gültige innere Identitäten bleiben erhalten",
+    "docs/P4_Copy_Import_Vertrag.md; scripts/verify-p4-copy-contract.ts", "Verstoß gegen den verbindlichen Copy-/Import-Vertrag"), {
     case: ids.ref("CASE", imported.id), active: ids.ref("PLAN", imported.activePlanId),
     holdings: imported.depot.map((h) => ids.ref("HOLDING", h.id)),
   }, { case: "CASE_2", active: "PLAN_1", holdings: ["HOLDING_1", "HOLDING_2", "HOLDING_3"] });
@@ -348,10 +348,10 @@ assert.throws(() => compare(null, 0, { kind: "absolute", tolerance: 1e-8, eviden
 assert.throws(() => compare(NaN, 0, { kind: "absolute", tolerance: 1e-8, evidence: "self-check" }, "finite"));
 const first = runReferences(), second = runReferences();
 assert.deepEqual(second, first, "Independent cases with newly generated identities must have identical canonical references");
-assert.deepEqual([...new Set(first.map((r) => r.reference.category))].sort(), ["A", "B", "C", "D"]);
+assert.deepEqual([...new Set(first.map((r) => r.reference.category))].sort(), ["A", "C", "D"]);
 assert.deepEqual(Object.fromEntries(Object.keys(categories).map((category) => [category, first.filter((r) => r.reference.category === category).length])),
-  { A: 18, B: 1, C: 3, D: 1 });
+  { A: 19, B: 0, C: 3, D: 1 });
 assert.deepEqual(first.filter((r) => r.reference.category === "C").map((r) => r.reference.id).sort(),
   ["invalid-depot-fallback", "stale-local-list", "weak-plan-integrity"]);
 for (const { reference } of first) console.log(`PASS CP0A2 [${reference.category}] ${reference.id}: ${categories[reference.category]}`);
-console.log(`CP0A2: ${first.length} references, two independent runs, synthetic data only. C reproduces known bugs; D makes no business decision.`);
+console.log(`CP0A2: ${first.length} references, 19 A / 0 B / 3 C / 1 D, two independent runs, synthetic data only. C reproduces known bugs; D makes no business decision.`);

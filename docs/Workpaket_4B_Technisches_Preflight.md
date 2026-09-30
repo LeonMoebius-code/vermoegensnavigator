@@ -550,7 +550,9 @@ Mit der neuen expliziten `allocationId`-Relation werden Klonvorgänge wichtig.
 
 ## 9.1 `duplicatePlan`
 
-Aktueller Code regeneriert beim Duplizieren die IDs der PlannerAllocations, die InvestmentPlans werden heute jedoch ohne Relation einfach mitgeklont.
+Zum Preflight-Stand regenerierte der Code beim Duplizieren die IDs der PlannerAllocations;
+InvestmentPlans wurden damals ohne Relation mitgeklont. Die folgende 4B-Regel ist
+inzwischen umgesetzt und durch [P4](P4_Copy_Import_Vertrag.md) verbindlich abgesichert.
 
 4B muss beim Duplizieren:
 

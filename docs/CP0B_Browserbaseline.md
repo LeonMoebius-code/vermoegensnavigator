@@ -138,7 +138,11 @@ Bei Fehlern werden vorhandene `test-results/` und `playwright-report/` als
 bei Testfehlern; Downloads und Berichte enthalten ausschließlich synthetische Daten.
 
 Restore-ID ist bestätigter Sollzustand (CP0A2 Kategorie A), im Browser aktiv
-und ohne Skip geprüft. CP0A2 bleibt **18 A / 1 B / 3 C / 1 D**.
+und ohne Skip geprüft. Seit [P4](P4_Copy_Import_Vertrag.md) gilt für CP0A2
+**19 A / 0 B / 3 C / 1 D**; die oben genannten Abnahmezahlen sind historisch.
+P4 ergänzt innerhalb des bestehenden Planungsflows die echte Plankopie:
+Kopie aktiv/nicht bevorzugt, Quelle und bisherige bevorzugte Variante unverändert.
+Es bleiben genau drei Lebenszyklen.
 `stale-local-list`, `invalid-depot-fallback`, `weak-plan-integrity` bleiben als
 drei C-Befunde offen; CP0B benutzt gültige Referenzen und akzeptiert diese Fehler
 nicht als Sollverhalten. `general-export-scope` bleibt Kategorie D, ohne neue
