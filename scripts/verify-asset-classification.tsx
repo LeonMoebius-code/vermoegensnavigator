@@ -147,15 +147,17 @@ try {
   assert.equal(depot[2].Wertpapiertyp, "Aktienanleihe");
   assert.equal(depot[6].Anlageklasse, "Geldwerte: 65,0 % · Substanzwerte: 35,0 %");
   assert.ok(!wb.Sheets["Zins & Laufzeiten"], "no fictitious standard bonds");
-  // This export section has always described new allocations only, not retained holdings.
+  // D1 exports the complete preferred target, including unresolved retained holdings.
   const structure = XLSX.utils.sheet_to_json<Record<string, any>>(wb.Sheets["Vermögensstruktur"]);
-  assert.equal(structure.find((r) => r.Anlageklasse === "Substanzwerte")!.Betrag, 3500);
-  assert.equal(structure.find((r) => r.Anlageklasse === "Geldwerte")!.Betrag, 6500);
-  assert.equal(structure.find((r) => r.Anlageklasse === "Nicht durchgeschaut")!.Betrag, 0);
+  assert.equal(structure.find((r) => r.Anlageklasse === "Substanzwerte")!.Betrag, 6300);
+  assert.equal(structure.find((r) => r.Anlageklasse === "Geldwerte")!.Betrag, 11700);
+  assert.equal(structure.find((r) => r.Anlageklasse === "Nicht durchgeschaut")!.Betrag, 48000);
+  assert.equal(structure.reduce((sum, row) => sum + row.Betrag, 0), 66000);
+  for (const row of structure) assert.equal(row.Anteil, row.Betrag / 66000);
   const printHtml = renderToStaticMarkup(view);
   assert.ok(printHtml.includes("Vermögensstruktur der bevorzugten Planung"));
-  assert.ok(printHtml.includes(`<b>${euro(3500)}</b>`));
-  assert.ok(printHtml.includes(`<b>${euro(6500)}</b>`));
+  assert.ok(printHtml.includes(`<b>${euro(6300)}</b>`));
+  assert.ok(printHtml.includes(`<b>${euro(11700)}</b>`));
 } finally {
   process.chdir(originalDir);
   rmSync(dir, { recursive: true });

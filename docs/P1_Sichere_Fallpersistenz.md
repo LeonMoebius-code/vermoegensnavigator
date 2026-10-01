@@ -96,7 +96,7 @@ erhalten. [P2](P2_Depotreferenzintegritaet.md) behebt inzwischen
 `invalid-depot-fallback`: Ungültige aktuelle Depotreferenzen werden zentral
 abgelehnt, Originale geschützt und beim gesunden Nachbar-Save samt bytegenauem
 Backup erhalten; neue ungültige Save-/Insert-/Write-Kandidaten schreiben nichts.
-Aktuell nach [P3](P3_Planintegritaet.md): **22 A / 0 B / 0 C / 1 D**.
+Aktuell nach [D1](D1_Ergebnis_Export_Sichtenvertrag.md): **23 A / 0 B / 0 C / 0 D**.
 `weak-plan-integrity` ist A: ungültige aktuelle Plangraphen werden abgelehnt,
 P1-Protected-Entries und bytegenaue Backup-Wiederverwendung bleiben erhalten.
-`general-export-scope` bleibt D. Keine Migration, Reportingentscheidung oder Releaseprozessänderung.
+`general-export-scope` ist durch D1 A. Keine Migration, Reportingentscheidung oder Releaseprozessänderung.

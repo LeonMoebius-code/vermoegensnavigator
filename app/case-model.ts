@@ -1616,13 +1616,6 @@ export function depotAssetAmounts(
   return { amounts, unresolved, total };
 }
 
-export function plannerIstHoldingValue(
-  plan: StructurePlan,
-  holding: DepotHolding,
-) {
-  return plan.depotMode === "none" ? 0 : Math.max(0, holding.value);
-}
-
 export function plannerPlanHoldingValue(
   plan: StructurePlan,
   holding: DepotHolding,
@@ -1635,6 +1628,45 @@ export function plannerPlanHoldingValue(
   )
     return Math.max(0, holding.value);
   return 0;
+}
+
+/** Complete, read-only wealth structure, including unresolved exposure. */
+export type WealthStructureSnapshot = {
+  amounts: Record<AssetClass, number>;
+  unresolved: number;
+  total: number;
+};
+
+/** IST is independent of every planning choice and planned transaction. */
+export function buildIstWealthStructure(
+  depot: DepotHolding[],
+  currentLiquidity: number,
+): WealthStructureSnapshot {
+  const actual = depotAssetAmounts(depot);
+  return {
+    amounts: { ...actual.amounts, Liquidität: actual.amounts.Liquidität + currentLiquidity },
+    unresolved: actual.unresolved,
+    total: actual.total + currentLiquidity,
+  };
+}
+
+/** PLAN and ZIELPLAN differ only in the plan supplied by the caller. */
+export function buildPlanWealthStructure(
+  depot: DepotHolding[],
+  plan: StructurePlan,
+): WealthStructureSnapshot {
+  const retained = depotAssetAmounts(depot, (holding) => plannerPlanHoldingValue(plan, holding));
+  const purchases = planAssetAmounts(plan);
+  const unallocated = Math.max(0, plan.total - purchases.total);
+  const amounts = Object.fromEntries(assetClasses.map((name) => [
+    name,
+    retained.amounts[name] + purchases.amounts[name] + (name === "Liquidität" ? unallocated : 0),
+  ])) as Record<AssetClass, number>;
+  return {
+    amounts,
+    unresolved: retained.unresolved + purchases.unresolved,
+    total: retained.total + purchases.total + unallocated,
+  };
 }
 
 export function depotPlanAssetAmounts(

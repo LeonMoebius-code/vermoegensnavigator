@@ -11,6 +11,8 @@ anschließend den Copy-/Import-Vertrag und überführt nur `import-copy` von B n
 P1 behebt danach ausschließlich `stale-local-list` (C → A).
 P2 behebt anschließend ausschließlich `invalid-depot-fallback` (C → A).
 P3 behebt anschließend ausschließlich `weak-plan-integrity` (C → A).
+D1 bestätigt anschließend die vollständige Zielstruktur und schließt ausschließlich
+`general-export-scope` (D → A).
 
 Vor Beginn am 23.09.2026 geprüft: sauberer Arbeitsbaum auf
 `work/architecture-cp0a1-test-gate`, HEAD
@@ -47,7 +49,8 @@ allein aufgrund eines roten Tests als verbindliches Altverhalten wiederhergestel
 
 ## Referenzfallmatrix (23 Referenzen)
 
-Aktuelle Verteilung nach P3: **22 A, 0 B, 0 C, 1 D**.
+Aktuelle Verteilung nach [D1](D1_Ergebnis_Export_Sichtenvertrag.md): **23 A, 0 B, 0 C, 0 D**.
+Historisch nach P3: **22 A, 0 B, 0 C, 1 D**.
 Nach P2, vor P3: **21 A, 0 B, 1 C, 1 D**.
 Nach P1, vor P2: **20 A, 0 B, 2 C, 1 D**.
 Nach P4, vor P1: **19 A, 0 B, 3 C, 1 D**.
@@ -77,14 +80,13 @@ Vor P4, nach Restore-ID-Fix: **18 A, 1 B, 3 C, 1 D**.
 | `stale-local-list` | A | Operationsbasiertes Save mit veraltetem Client-Snapshot erhält den inzwischen gespeicherten gesunden Nachbarfall. [P1-Vertrag](P1_Sichere_Fallpersistenz.md), `scripts/verify-p1-case-store.ts` |
 | `restore-id` | A | JSON-Kopie → tatsächlicher Restore-Handler von `ExportCenter` → `writeCaseStore`/`readCaseStore`: historische Inhalte und gesamte Historie erhalten, aktuelle Kopie-ID bleibt bestehen; Original und Kopie bleiben getrennt gespeichert |
 | `bond-ist-xlsx-print` | A | Trotz geplantem Vollverkauf bleibt Export IST: Reihenfolge der Bond-Sheets, Zellwerte, String-/Zahltypen, keine Formeln, ausgewählte bestätigte Druckwerte |
-| `general-export-scope` | D | Heute 0 Neuanlagen in bevorzugter Variante vs. 11.500 vollständiger PLAN. Ob allgemeine Struktur künftig Neuanlagen oder vollständigen ZIELPLAN abbilden soll, bleibt offen |
+| `general-export-scope` | A | D1: allgemeine Vermögensstruktur entspricht vollständigem modeabhängigem ZIELPLAN der preferred Variante. `multiCase`: exakt 10.000 EUR (retain nur A), nicht 0 oder 11.500 EUR; Neuanlagen bleiben separate Produktinformation |
 
 Quellen der Bondreferenzen: `verify-bond-final.tsx` (bestehende unabhängige
 Decimal70-Kurzläuferwerte, Jahresbasismodell, verkürzte Periode und gesperrte Struktur),
 `verify-cp3.tsx` (Coverage/Ausschluss und IST-Export). Kategorie A bestätigt hier die
 **bestehende indikative Modellsemantik**, keine tatsächlichen Vertragscashflows.
-Seit P3 verbleibt kein C-Befund; D bleibt
-`general-export-scope`. P2 erhält die historische Schema-9-Migration und prüft
+Seit D1 verbleibt kein B-/C-/D-Befund; `general-export-scope` ist bestätigt. P2 erhält die historische Schema-9-Migration und prüft
 zusätzlich die Ablehnung ungültiger aktueller Snapshots im tatsächlichen Restore-Handler.
 
 ## Priorisierter Restore-ID-Fix nach CP0A2
@@ -197,11 +199,11 @@ Die neue Suite importiert **keine** bestehende Verify-Suite. Alle zehn bisherige
 direkten Fachtests bleiben unverändert; die zwei indirekten Tests bleiben genau einmal
 über CP1 bzw. CP4 eingebunden. CP0A2 läuft genau einmal an Position 11,
 nach `test:bond-final`; P4 folgt genau einmal an Position 12, P1 an Position 13
-und P2 an Position 14, P3 an Position 15 vor `typecheck`.
+und P2 an Position 14, P3 an Position 15, D1 an Position 16 vor `typecheck`.
 Danach folgen genau ein `build` und die drei CP0B-Browserabläufe.
 `npm test` delegiert weiterhin vollständig an `verify`. Die CI ruft weiterhin
 `npm run verify` plus die bestehenden R1-/Artefakt- und Whitespace-Prüfungen auf;
-keine Workflowänderung. Der Typecheck umfasst CP0A2, P4, P1, P2 und P3 samt importierten Helfern/Fixtures.
+keine Workflowänderung. Der Typecheck umfasst CP0A2, P4, P1, P2, P3 und D1 samt importierten Helfern/Fixtures.
 
 Lokale Abnahme: `npm run test:cp0a2`, `npm run verify`, `npm test`,
 `git diff --check` sowie manuelle Diff- und Gate-Importprüfung. Unter Windows war für
@@ -210,12 +212,12 @@ Skripte selbst wurden deshalb nicht geändert. Ergebnisse und tatsächlicher CI-
 stehen im zugehörigen PR und Abschlussbericht.
 
 CP0A2 schützt nur diese Projektionen. Kein vollständiger Zustandsvertrag, keine reale
-Depotvalidierung, kein Architekturrefactoring und keine neue Exportentscheidung.
+Depotvalidierung, kein Architekturrefactoring. D1 bestätigt separat den vollständigen ZIELPLAN als allgemeine Exportstruktur.
 Nach Restore-ID behebt [P1](P1_Sichere_Fallpersistenz.md) die veraltete Fallliste
 mit Save/Insert/Delete gegen den aktuellen Store. Der direkte Vertragstest und der
 echte CP0B-Savepfad sichern Erhalt neuer Nachbarn und fehlende Wiederbelebung ab.
 [P2](P2_Depotreferenzintegritaet.md) härtet ausschließlich die Depotnormalisierung;
 P3 ergänzt die vollständige aktuelle Planintegrität bei erhaltenen Legacy-Migrationen.
-CP0B übernimmt später vollständige Browserabläufe; Browser-E2E, visuelle Regression,
+CP0B prüft die drei vollständigen Browserabläufe separat; visuelle Regression,
 native Excel-Abnahme und native Druck-/PDF-Paginierung sind hier nicht enthalten.
 Merge, Auto-Merge und Deployment gehören nicht zur CP0A2-Abnahme.

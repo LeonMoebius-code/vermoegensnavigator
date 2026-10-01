@@ -100,13 +100,14 @@ ohne Export-/Ergebnisfallback, D: Löschung der aktiven Kopie und Nachbarwahl,
 E: beschädigten tatsächlichen JSON-Backupimport mit unveränderten Storebytes,
 Live-Fall und Ansicht. Globale Relationsprüfungen erlauben null oder eine Präferenz.
 
-P3 folgt im sequenziellen Fail-Fast-Gate nach P2 und vor Typecheck; danach genau
+P3 folgt im sequenziellen Fail-Fast-Gate nach P2 und vor D1/Typecheck; danach genau
 ein Produktionsbuild und CP0B. `npm test` delegiert vollständig an `verify`.
 P3 ist im vorhandenen Typecheck enthalten; CI und Releaseworkflow bleiben unverändert.
 
 Nur `weak-plan-integrity` wechselt C → A: **21 A / 0 B / 1 C / 1 D →
-22 A / 0 B / 0 C / 1 D**. `general-export-scope` bleibt D und benötigt weiterhin
-eine eigene fachliche Entscheidung. Keine Schema-/UUID-/Persistenzmigration,
+22 A / 0 B / 0 C / 1 D**. `general-export-scope` war zu diesem historischen P3-Stand noch D.
+Aktuell nach [D1](D1_Ergebnis_Export_Sichtenvertrag.md): **23 A / 0 B / 0 C / 0 D**;
+`general-export-scope` ist A und der fehlende-preferred-Vertrag bleibt erhalten. Keine Schema-/UUID-/Persistenzmigration,
 Monolithzerlegung, Bond-/CSV-/Reportingänderung, Veröffentlichung oder GitHub-
 Einstellungsänderung. Abnahme und tatsächliche CI-Logs werden in der offenen PR
 und im Abschlussbericht dokumentiert; Merge und Release sind separate Aufträge.

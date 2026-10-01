@@ -108,7 +108,8 @@ import {
   ModelPortfolioAction,
   modelPortfolioDefaultAmount,
   planningShortfall,
-  plannerIstHoldingValue,
+  buildIstWealthStructure,
+  buildPlanWealthStructure,
   plannerPlanHoldingValue,
   reconcileCasePlans,
   renameDepotAccount,
@@ -3505,7 +3506,7 @@ function PlannerView({
                 <div className="depot-mode-explanation">
                   <strong>
                     {plan.depotMode === "none"
-                      ? "Depot bleibt außerhalb der Strukturplanung"
+                      ? "Depot bleibt außerhalb des PLAN"
                       : plan.depotMode === "compare"
                         ? "Vollständiges Depot ausschließlich im IST"
                         : "Vollständiger Restbestand nach simulierten Verkäufen"}
@@ -4849,18 +4850,10 @@ export function WealthHouse({
       breakdown.amounts[name] + (name === "Liquidität" ? unallocatedPlan : 0),
     ]),
   ) as Record<AssetClass, number>;
-  const combinedAmounts = Object.fromEntries(
-    assetClasses.map((name) => [
-      name,
-      plannedAmounts[name] + (includeInTotal ? depotAmounts[name] : 0),
-    ]),
-  ) as Record<AssetClass, number>;
-  const combinedKnown = Object.values(combinedAmounts).reduce(
-    (sum, value) => sum + value,
-    0,
-  );
-  const combinedUnresolved = breakdown.unresolved + (includeInTotal ? depotBreakdown.unresolved : 0);
-  const combinedTotal = combinedKnown + combinedUnresolved;
+  const plannerSnapshot = buildPlanWealthStructure(depot, plan);
+  const combinedAmounts = plannerSnapshot.amounts;
+  const combinedUnresolved = plannerSnapshot.unresolved;
+  const combinedTotal = plannerSnapshot.total;
   const colors: Record<AssetClass, string> = {
     Liquidität: "#96bee6",
     Geldwerte: "#327dc8",
@@ -4875,89 +4868,21 @@ export function WealthHouse({
     "Alternative Anlagen": "Rohstoffe und alternative Strategien",
     Sachwerte: "Immobilien und offene Immobilienfonds",
   };
-  const entireDepotBreakdown = depotAssetAmounts(depot);
-  const entireDepotAmounts = {
-    ...entireDepotBreakdown.amounts,
-    Liquidität:
-      entireDepotBreakdown.amounts.Liquidität + currentLiquidity,
-  };
-  const snapshotFor = (selectedPlan: StructurePlan) => {
-    const selectedBreakdown = planAssetAmounts(selectedPlan);
-    const retainedBreakdown = depotAssetAmounts(
-      depot,
-      (entry) => plannerPlanHoldingValue(selectedPlan, entry),
-    );
-    const amounts = Object.fromEntries(
-      assetClasses.map((name) => {
-        const retained = retainedBreakdown.amounts[name];
-        const unallocated =
-          name === "Liquidität"
-            ? Math.max(0, selectedPlan.total - selectedBreakdown.total)
-            : 0;
-        return [name, selectedBreakdown.amounts[name] + retained + unallocated];
-      }),
-    ) as Record<AssetClass, number>;
-    return {
-      amounts,
-      unresolved: selectedBreakdown.unresolved + retainedBreakdown.unresolved,
-    };
-  };
-  const plannerIstDepotBreakdown = depotAssetAmounts(
-    depot,
-    (holding) => plannerIstHoldingValue(plan, holding),
-  );
-  const istSnapshot = {
-    amounts: Object.fromEntries(
-      assetClasses.map((name) => [
-        name,
-        (context === "depot"
-          ? entireDepotBreakdown.amounts[name]
-          : plannerIstDepotBreakdown.amounts[name]) +
-          (name === "Liquidität" ? currentLiquidity : 0),
-      ]),
-    ) as Record<AssetClass, number>,
-    unresolved:
-      context === "depot"
-        ? entireDepotBreakdown.unresolved
-        : plannerIstDepotBreakdown.unresolved,
-  };
-  const depotPlanBreakdown = depotPlanAssetAmounts(depot, plan);
-  const planSnapshot =
-    context === "depot"
-      ? {
-          amounts: depotPlanBreakdown.amounts,
-          unresolved: depotPlanBreakdown.unresolved,
-        }
-      : snapshotFor(plan);
-  const targetSnapshot = targetPlan ? snapshotFor(targetPlan) : null;
-  const shown =
-    mode === "ist"
-      ? istSnapshot
-      : mode === "target"
-        ? targetSnapshot
-        : planSnapshot;
-  const comparison =
-    mode !== "compare" || context === "depot" || compareWith === "plan"
-      ? planSnapshot
-      : targetSnapshot;
-  const shownKnown = Object.values(shown?.amounts ?? {}).reduce(
-    (sum, value) => sum + value,
-    0,
-  );
-  const istKnown = Object.values(istSnapshot.amounts).reduce(
-    (sum, value) => sum + value,
-    0,
-  );
-  const comparisonKnown = Object.values(comparison?.amounts ?? {}).reduce(
-    (sum, value) => sum + value,
-    0,
-  );
-  const shownTotal =
-    shownKnown + (shown?.unresolved ?? 0);
-  const istTotal =
-    istKnown + istSnapshot.unresolved;
-  const comparisonTotal =
-    comparisonKnown + (comparison?.unresolved ?? 0);
+  const istSnapshot = buildIstWealthStructure(depot, currentLiquidity);
+  const planSnapshot = context === "depot"
+    ? depotPlanAssetAmounts(depot, plan)
+    : plannerSnapshot;
+  const targetSnapshot = targetPlan ? buildPlanWealthStructure(depot, targetPlan) : null;
+  const comparison = mode !== "compare" || context === "depot" || compareWith === "plan"
+    ? planSnapshot
+    : targetSnapshot;
+  const shown = mode === "ist" ? istSnapshot
+    : mode === "target" ? targetSnapshot
+    : mode === "compare" ? comparison
+    : planSnapshot;
+  const shownTotal = shown?.total ?? 0;
+  const istTotal = istSnapshot.total;
+  const comparisonTotal = comparison?.total ?? 0;
   const holdingContributors = (
     holdings: DepotHolding[],
     asset: AssetClass,
@@ -5001,10 +4926,7 @@ export function WealthHouse({
           depot,
           asset,
           "Bestandsdepot",
-          (entry) =>
-            context === "depot"
-              ? entry.value
-              : plannerIstHoldingValue(plan, entry),
+          (entry) => entry.value,
         ),
       ];
     const selectedPlan = source === "target" ? targetPlan : plan;
@@ -5034,7 +4956,7 @@ export function WealthHouse({
           ]
         : [];
     });
-    if (asset === "Liquidität") {
+    if (context === "planner" && asset === "Liquidität") {
       const unallocated = Math.max(
         0,
         selectedPlan.total - planAssetAmounts(selectedPlan).total,
@@ -5299,7 +5221,7 @@ export function WealthHouse({
         <strong>Depotmodus</strong>
         <span>
           {plan.depotMode === "none"
-            ? "Bestandsdepot nicht berücksichtigt"
+            ? "Bestandsdepot im PLAN nicht berücksichtigt"
             : plan.depotMode === "compare"
               ? "Bestandsdepot wird nur vergleichend angezeigt"
               : plan.depotMode === "afterSales"
@@ -6495,7 +6417,7 @@ export function ExportCenter({
   importJson: () => void;
 }) {
   const item = enforceCaseDepotValue(sourceItem);
-  const breakdown = preferredPlan ? planAssetAmounts(preferredPlan) : null;
+  const breakdown = preferredPlan ? buildPlanWealthStructure(item.depot, preferredPlan) : null;
   const exportPots = preferredPlan ? capitalPots(
     item.advisory,
     preferredPlan.total,
