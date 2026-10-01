@@ -3,9 +3,9 @@
 > **Kanonischer Produkt- und Entscheidungsstand**
 >
 > Letzte fachliche Aktualisierung: **01.10.2026 (D1)**
-> Aktuell veröffentlichte Version: **V0.18.1**
-> Implementierter Feature-Stand: **V0.18.2 / Schema 11**, Branch `work/v0182-bond-hardening`; fachliche Abnahme, Merge und Veröffentlichung noch ausstehend.
-> Veröffentlichte Codebasis: **GitHub `main`**
+> Aktuell veröffentlichte Version: **V0.18.2**
+> Implementierter Entwicklungsstand dieser Spezifikation: **V0.18.2 / Schema 11 einschließlich D1**
+> Veröffentlichte Codebasis: **Release-Artefakt aus Commit `50a8a06d73ddc59472a2d66ef46ac624597e2c0f`**
 > Zielumgebung: **Desktop-Prototyp**
 > Öffentliche Testversion: GitHub Pages
 
