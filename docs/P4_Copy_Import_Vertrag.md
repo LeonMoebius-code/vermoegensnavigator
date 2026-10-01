@@ -133,12 +133,12 @@ operationsbasierte Save-/Insert-/Delete-Persistenz; nur dieser Befund wechselt C
 Historisch nach [P2](P2_Depotreferenzintegritaet.md): **21 A / 0 B / 1 C / 1 D**.
 Nur `invalid-depot-fallback` wechselt zusätzlich C → A: Ungültige aktuelle
 Depotzuordnungen werden beim Import/Restore abgelehnt, gültige Importidentitäten
-und historische Snapshots bleiben erhalten. Aktuell nach [P3](P3_Planintegritaet.md):
-**22 A / 0 B / 0 C / 1 D**. `weak-plan-integrity` ist A; aktuelle ungültige
+und historische Snapshots bleiben erhalten. Aktuell nach [D1](D1_Ergebnis_Export_Sichtenvertrag.md):
+**23 A / 0 B / 0 C / 0 D**. `weak-plan-integrity` ist A; aktuelle ungültige
 Plangraphen werden abgelehnt, ohne innere Import-IDs oder historische Snapshots
 zu rekeyen. Die Aliasgegenprobe bestätigt nun Ablehnung ihrer absichtlichen
 Korruption, bevor ausschließlich die Testkopie für den Save-Nachweis berichtigt wird.
-`general-export-scope` bleibt D und benötigt eine separate fachliche Entscheidung.
+`general-export-scope` ist durch D1 A; keine offene CP0A2-Fachfrage.
 Kein Release, Rollback, Deployment oder Änderung von GitHub-Einstellungen.
 
 Bei einem echten Produktionsbruch dieses Vertrags: reproduzierbaren synthetischen

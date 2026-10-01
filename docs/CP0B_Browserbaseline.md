@@ -138,8 +138,8 @@ Bei Fehlern werden vorhandene `test-results/` und `playwright-report/` als
 bei Testfehlern; Downloads und Berichte enthalten ausschließlich synthetische Daten.
 
 Restore-ID ist bestätigter Sollzustand (CP0A2 Kategorie A), im Browser aktiv
-und ohne Skip geprüft. Nach [P3](P3_Planintegritaet.md) gilt für CP0A2
-**22 A / 0 B / 0 C / 1 D**; die oben genannten Abnahmezahlen sind historisch.
+und ohne Skip geprüft. Nach [D1](D1_Ergebnis_Export_Sichtenvertrag.md) gilt für CP0A2
+**23 A / 0 B / 0 C / 0 D**; die oben genannten Abnahmezahlen sind historisch.
 P4 ergänzt innerhalb des bestehenden Planungsflows die echte Plankopie:
 Kopie aktiv/nicht bevorzugt, Quelle und bisherige bevorzugte Variante unverändert.
 Es bleiben genau drei Lebenszyklen.
@@ -159,8 +159,12 @@ abweisen bei identischen Storebytes, Live-Fall und Ansicht. Es bleiben drei
 Lebenszyklen; kein Skip oder zusätzlicher Build. Die Relationsprüfung verlangt
 eindeutige Pläne, genau einen Active-Treffer und höchstens eine Präferenz.
 `stale-local-list`, `invalid-depot-fallback` und `weak-plan-integrity` sind A.
-`general-export-scope` bleibt Kategorie D, ohne neue
-Browser-Golden-Assertion zur Neuanlagen-/ZIELPLAN-Frage.
+`general-export-scope` ist seit D1 A. D1 ergänzt im selben Planungsflow die
+benannten Schritte A–D: vollständiges IST trotz `none` inklusive ungeklärtem
+Fundament und Contributors, PLAN der aktiven After-Sales-Variante, andere Variante
+explizit preferred mit abweichendem ZIELPLAN und Vergleichsauswahl, echter Excel-
+Download mit Beträgen/Anteilen gegen zuvor erfasste Zielanzeige und gemeinsamen
+Druckabschnitt. Weiterhin genau drei Lebenszyklen, keine kopierte Rechenformel.
 
 Breite Excel-Fachprüfung bleibt Aufgabe der Node-Suites. Native Excel-Desktop-
 und PDF-/Paginierungsabnahme, visuelle Regression und weitere Browser liegen

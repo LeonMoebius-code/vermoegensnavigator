@@ -31,7 +31,7 @@ Inventarisiert am 23.09.2026 anhand des frisch abgerufenen Remote-`main`
 `6ec5ced21704e0474dc91cc27fc5c80d7ad73792`. Dieser Stand entspricht dem im
 CP0A1-Auftrag genannten Referenzcommit; es gab keine Abweichung.
 
-Das Gate führt in dieser Reihenfolge die fünfzehn direkten Fachtest-Einstiege und
+Das Gate führt in dieser Reihenfolge die sechzehn direkten Fachtest-Einstiege und
 anschließend Typecheck, Produktionsbuild und die drei CP0B-Browserabläufe aus:
 
 | Nr. | npm-Skript | Einstieg / Prüfung |
@@ -51,9 +51,10 @@ anschließend Typecheck, Produktionsbuild und die drei CP0B-Browserabläufe aus:
 | 13 | `test:p1-case-store` | `scripts/verify-p1-case-store.ts` – operationsbasierte Fallpersistenz/Recovery |
 | 14 | `test:p2-depot-integrity` | `scripts/verify-p2-depot-integrity.ts` – Depotreferenzen, Legacy-Migration und Recovery |
 | 15 | `test:p3-plan-integrity` | `scripts/verify-p3-plan-integrity.tsx` – Plangraph, Auswahl, Legacy, Recovery und Restore |
-| 16 | `typecheck` | `tsc -p tsconfig.github.json --noEmit` |
-| 17 | `build` | `bash scripts/build-github-pages.sh` |
-| 18 | `test:browser` | `tests/browser/cp0b.spec.ts` gegen genau diesen `.pages-dist`-Build |
+| 16 | `test:d1-view-contract` | `scripts/verify-d1-view-contract.tsx` – IST/PLAN/ZIELPLAN, echte XLSX- und Druckstruktur |
+| 17 | `typecheck` | `tsc -p tsconfig.github.json --noEmit` |
+| 18 | `build` | `bash scripts/build-github-pages.sh` |
+| 19 | `test:browser` | `tests/browser/cp0b.spec.ts` gegen genau diesen `.pages-dist`-Build |
 
 Die ausführbare Liste wird ausschließlich im `verify`-Skript in `package.json`
 gepflegt. Alle Einzelskripte bleiben nutzbar. Die `&&`-Verknüpfung führt sie
@@ -94,8 +95,12 @@ Matrix, Kanonisierung und Vergleichsvertrag: [CP0A2-Referenzbasis](docs/CP0A2_Re
 P4 bestätigt `import-copy` als Kategorie A. Nach [P1](docs/P1_Sichere_Fallpersistenz.md)
 wechselte nur `stale-local-list` C → A. Nach [P2](docs/P2_Depotreferenzintegritaet.md)
 galt **21 A / 0 B / 1 C / 1 D**. Nach [P3](docs/P3_Planintegritaet.md)
-gilt aktuell **22 A / 0 B / 0 C / 1 D**; ausschließlich `weak-plan-integrity`
-wechselt zusätzlich C → A. `general-export-scope` bleibt D.
+galt **22 A / 0 B / 0 C / 1 D**; ausschließlich `weak-plan-integrity`
+wechselte zusätzlich C → A. Nach [D1](docs/D1_Ergebnis_Export_Sichtenvertrag.md)
+gilt aktuell **23 A / 0 B / 0 C / 0 D**: `general-export-scope` ist A. IST zeigt
+vollständigen Bestand plus aktuelle Liquidität; PLAN/ZIELPLAN verwenden dieselbe
+modeabhängige Projektion für Active/preferred. Der allgemeine Export entspricht
+der vollständigen Zielstruktur; Neuanlagen bleiben separate Produktinformation.
 [Copy-/Import-Vertrag](docs/P4_Copy_Import_Vertrag.md): Fallimport erneuert nur die
 aktuelle äußere Fall-ID; Plankopie erneuert planinterne IDs und remappt Einstiegsbezüge.
 Gültige innere Import-IDs, caseweite Kopierreferenzen und historische Snapshots bleiben

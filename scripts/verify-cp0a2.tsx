@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { isValidElement, ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import * as XLSX from "xlsx";
-import { addDepotAccount, AdvisoryCase, caseSnapshot, depotAssetAmounts, depotPlanAssetAmounts,
+import { addDepotAccount, AdvisoryCase, caseSnapshot, buildPlanWealthStructure, depotAssetAmounts, depotPlanAssetAmounts,
   duplicateStructurePlan, normalizeImportedCase, replaceDepotAccount } from "../app/case-model";
 import { buildDepotAnalysisPositions, concentrationMetrics } from "../app/depot-analysis";
 import { buildBondIstExportData } from "../app/bond-analysis-data";
@@ -353,11 +353,11 @@ function runReferences() {
     const general = multiCase(); button(view(general), "Excel-Arbeitsmappe")!();
     const generalWb = XLSX.read(readFileSync("cp0a2-synthetic.xlsx"), { type: "buffer" });
     const structure = XLSX.utils.sheet_to_json<{ Betrag: number }>(generalWb.Sheets.Vermögensstruktur);
-    record(ref("general-export-scope", "D", "Offen: Neuanlagen oder vollständiger ZIELPLAN; heute bevorzugte Variante ohne Käufe",
-      "Auftrag CP0A2 §4; scripts/verify-asset-classification.tsx dokumentiert Neuanlagen", "Abweichung benötigt Fachentscheidung, keine automatische Rückkehr"), {
+    record(ref("general-export-scope", "A", "D1: vollständiger mode-aware ZIELPLAN der bevorzugten Variante",
+      "docs/D1_Ergebnis_Export_Sichtenvertrag.md; scripts/verify-d1-view-contract.tsx", "Export und Vermögenshaus müssen dieselbe Zielstruktur zeigen"), {
       structureTotal: structure.reduce((sum, row) => sum + row.Betrag, 0),
-      preferredPlanTotal: depotPlanAssetAmounts(general.depot, general.plans[1]).total,
-    }, { structureTotal: 0, preferredPlanTotal: 11500 }, { structureTotal: cent, preferredPlanTotal: cent });
+      preferredPlanTotal: buildPlanWealthStructure(general.depot, general.plans[1]).total,
+    }, { structureTotal: 10000, preferredPlanTotal: 10000 }, { structureTotal: cent, preferredPlanTotal: cent });
   } finally { process.chdir(cwd); rmSync(dir, { recursive: true }); }
   return results;
 }
@@ -376,10 +376,10 @@ assert.throws(() => compare(null, 0, { kind: "absolute", tolerance: 1e-8, eviden
 assert.throws(() => compare(NaN, 0, { kind: "absolute", tolerance: 1e-8, evidence: "self-check" }, "finite"));
 const first = runReferences(), second = runReferences();
 assert.deepEqual(second, first, "Independent cases with newly generated identities must have identical canonical references");
-assert.deepEqual([...new Set(first.map((r) => r.reference.category))].sort(), ["A", "D"]);
+assert.deepEqual([...new Set(first.map((r) => r.reference.category))].sort(), ["A"]);
 assert.deepEqual(Object.fromEntries(Object.keys(categories).map((category) => [category, first.filter((r) => r.reference.category === category).length])),
-  { A: 22, B: 0, C: 0, D: 1 });
-assert.deepEqual(first.filter((r) => r.reference.category === "C").map((r) => r.reference.id).sort(),
+  { A: 23, B: 0, C: 0, D: 0 });
+assert.deepEqual(first.filter((r) => r.reference.category !== "A").map((r) => r.reference.id).sort(),
   []);
 for (const { reference } of first) console.log(`PASS CP0A2 [${reference.category}] ${reference.id}: ${categories[reference.category]}`);
-console.log(`CP0A2: ${first.length} references, 22 A / 0 B / 0 C / 1 D, two independent runs, synthetic data only. D makes no business decision.`);
+console.log(`CP0A2: ${first.length} references, 23 A / 0 B / 0 C / 0 D, two independent runs, synthetic data only. D1 closes general-export-scope.`);

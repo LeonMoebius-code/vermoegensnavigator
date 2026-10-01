@@ -2,7 +2,7 @@
 
 > **Kanonischer Produkt- und Entscheidungsstand**
 >
-> Letzte fachliche Aktualisierung: **18.09.2026 (CP4)**
+> Letzte fachliche Aktualisierung: **01.10.2026 (D1)**
 > Aktuell veröffentlichte Version: **V0.18.1**
 > Implementierter Feature-Stand: **V0.18.2 / Schema 11**, Branch `work/v0182-bond-hardening`; fachliche Abnahme, Merge und Veröffentlichung noch ausstehend.
 > Veröffentlichte Codebasis: **GitHub `main`**
@@ -332,23 +332,37 @@ Verbindlich umsetzen:
 
 ## 4.2 Bestandsdepot-Modi der Strukturplanung
 
-Die Semantik wird verbindlich wie folgt festgelegt:
+Die aktuelle Semantik wird durch [D1](D1_Ergebnis_Export_Sichtenvertrag.md) verbindlich festgelegt.
+Die frühere 4A.1-Regel für IST bei `none` wird damit abgelöst:
 
 | Modus | IST in der Strukturplanung | PLAN / ZIELPLAN |
 |---|---|---|
-| **Nicht berücksichtigen** | Depot nicht enthalten | Depot nicht enthalten |
+| **Nicht berücksichtigen** | gesamtes aktuelles Depot enthalten | Depot nicht enthalten |
 | **Nur im IST berücksichtigen** | gesamtes aktuelles Depot enthalten | Depot nicht enthalten |
 | **Ausgewählte Positionen beibehalten** | gesamtes aktuelles Depot enthalten | nur ausgewählte Positionen enthalten |
 | **Nach simulierten Verkäufen** | gesamtes aktuelles Depot enthalten | kompletter Restbestand nach simulierten Verkäufen enthalten |
 
 ### Wichtige Regeln
 
-- Bei `Nicht berücksichtigen` muss das Depot auch aus **IST der Strukturplanung** verschwinden.
+- IST zeigt in jedem Modus das vollständige aktuelle Depot plus erfasste aktuelle Liquidität, unabhängig von Auswahl, Verkäufen, Käufen und Planpräferenz.
 - `Nur im IST berücksichtigen` entspricht fachlich einer reinen Vergleichssicht.
 - Bei `Ausgewählte Positionen beibehalten` darf die Positionsauswahl nur den PLAN beeinflussen. IST zeigt das vollständige aktuelle Depot.
 - Bei `Nach simulierten Verkäufen` werden automatisch alle vorhandenen Positionen mit ihrem Restwert nach simulierten Verkäufen berücksichtigt.
 - Bei `Nach simulierten Verkäufen` sind einzelne Positionscheckboxen nicht notwendig.
 - Checkboxen werden nur bei `Ausgewählte Positionen beibehalten` aktiv benötigt.
+
+### IST / PLAN / ZIELPLAN / Export (D1)
+
+PLAN verwendet die aktive Variante, ZIELPLAN ausschließlich die explizit bevorzugte
+Variante. Beide verwenden `buildPlanWealthStructure(depot, plan)` mit Bestand gemäß
+obiger Matrix, Neuanlagen und `max(0, plan.total - Neuanlagen)` als Liquidität.
+`buildIstWealthStructure(depot, currentLiquidity)` benötigt keinen Plan. Ungeklärte
+Beträge bleiben separat und im vollständigen Prozentnenner enthalten.
+Vermögenshaus, kompaktes Ergebnis, Excel-Vermögensstruktur und gemeinsamer
+Kunden-/interner Druckabschnitt zeigen denselben ZIELPLAN. Produkt-/Umsetzungslisten
+bleiben Neuanlageninformation. VERGLEICH zeigt IST gegen gewählten PLAN/ZIELPLAN;
+Szenarien vergleichen Planvarianten separat. Ohne preferred kein Ziel, kein Active-
+Fallback; Zielausgaben bleiben deaktiviert. Schema 11 unverändert.
 
 ## 4.3 CSV-Neuimport / Holding-IDs
 
@@ -1517,7 +1531,7 @@ Folgepakete: V0.19 muss vom dann aktuellen Schema 11 ausgehen; seine Vergleichsa
 ## 12.1 Planvarianten
 
 - `activePlanId` bestimmt die aktive Arbeits-/PLAN-Variante
-- bevorzugte / `preferred` Variante bestimmt den ZIELPLAN
+- bevorzugte / `preferred` Variante bestimmt den ZIELPLAN; null preferred ist gültig, ohne Fallback auf Active
 - Existieren mehrere Varianten, darf keine andere Variante automatisch anhand Erstellungsdatum o. Ä. als PLAN gewählt werden
 
 ## 12.2 Kapitaltöpfe
@@ -1867,6 +1881,14 @@ Keine zentrale fachliche Entscheidung offen. Paket ist umgesetzt.
 ---
 
 # 19. Entscheidungslog
+
+## 01.10.2026 – D1
+
+- IST bleibt in jedem Depotmodus vollständig und planunabhängig; die historische 4A.1-`none`-Regel wird abgelöst.
+- PLAN/ZIELPLAN verwenden denselben Rechenkern für Active/preferred einschließlich Planliquidität und ungeklärten Beträgen.
+- Allgemeine Exportstruktur entspricht vollständigem ZIELPLAN; Neuanlagen bleiben getrennte Produktinformation.
+- `general-export-scope` D → A; CP0A2 aktuell 23 A / 0 B / 0 C / 0 D. Keine Schema-/Releaseänderung.
+
 
 ## 16.09.2026
 

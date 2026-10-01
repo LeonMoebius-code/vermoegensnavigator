@@ -15,7 +15,7 @@ import {
   phasedEntryAmounts,
   phasedEntryLastDate,
   phasedEntryScheduleValidation,
-  plannerIstHoldingValue,
+  buildIstWealthStructure,
   plannerPlanHoldingValue,
   planningShortfall,
   reconcilePlanCapitalPots,
@@ -224,8 +224,7 @@ const holding = {
   note: "",
 };
 const depotPlan = { ...base.plans[0], depotHoldingIds: [holding.id] };
-assert.equal(plannerIstHoldingValue({ ...depotPlan, depotMode: "none" }, holding), 0);
-assert.equal(plannerIstHoldingValue({ ...depotPlan, depotMode: "compare" }, holding), 100_000);
+assert.equal(buildIstWealthStructure([holding], 0).total, 100_000);
 assert.equal(plannerPlanHoldingValue({ ...depotPlan, depotMode: "compare" }, holding), 0);
 assert.equal(plannerPlanHoldingValue({ ...depotPlan, depotMode: "retain" }, holding), 100_000);
 assert.equal(plannerPlanHoldingValue({ ...depotPlan, depotMode: "afterSales" }, holding), 75_000);

@@ -38,6 +38,7 @@
     "scripts/verify-p2-depot-integrity.ts",
     "playwright.config.ts",
     "tests/browser/**/*.ts",
-    "scripts/verify-p3-plan-integrity.tsx"
+    "scripts/verify-p3-plan-integrity.tsx",
+    "scripts/verify-d1-view-contract.tsx"
   ]
 }

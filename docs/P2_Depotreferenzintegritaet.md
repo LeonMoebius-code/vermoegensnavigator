@@ -95,10 +95,10 @@ bestehenden Typecheck enthalten. Keine neue Dependency oder Workflowänderung.
 
 CP0A2: **20 A / 0 B / 2 C / 1 D → 21 A / 0 B / 1 C / 1 D**.
 Ausschließlich `invalid-depot-fallback` wechselte in P2 C → A.
-Aktuell nach [P3](P3_Planintegritaet.md): **22 A / 0 B / 0 C / 1 D**.
+Aktuell nach [D1](D1_Ergebnis_Export_Sichtenvertrag.md): **23 A / 0 B / 0 C / 0 D**.
 `weak-plan-integrity` ist zusätzlich A; aktuelle Plangraphen werden vor
 destruktiver Normalisierung geprüft. P2-Depotreferenzen, P1-Recovery und
-historische Migrationen bleiben erhalten. `general-export-scope` bleibt D.
+historische Migrationen bleiben erhalten. `general-export-scope` ist durch D1 A.
 
 Schema **11**, Speicherfelder und ID-Semantik bleiben unverändert. P2 umfasst
 keine vollständige Planintegrität (P3), keine neue Planreferenzprüfung, keine
