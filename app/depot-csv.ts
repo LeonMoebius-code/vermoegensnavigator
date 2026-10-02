@@ -3,7 +3,7 @@ import { ParsedDepotHolding } from "./case-model";
 import { AssetClass, assetClasses, houseProducts } from "./investment-data";
 import { depotRegionForCountry } from "./depot-country-codes";
 import { isAgree21Profile, structureOverviewSource } from "./bond-source";
-import { classifyDepotProduct } from "./depot-analysis";
+import { classifyDepotProduct } from "./domain/depot/product-classification";
 
 export type DepotCsvFormat = "navigator" | "structure-overview";
 
