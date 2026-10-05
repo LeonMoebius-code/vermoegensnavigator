@@ -88,6 +88,15 @@ import { managedPortfolios } from "./data/managed-portfolios";
 import { modelPortfolios } from "./data/model-portfolios";
 import { solutionTypes } from "./data/solution-types";
 import {
+  productAssetMix,
+  planAssetAmounts,
+  depotAssetAmounts,
+  plannerPlanHoldingValue,
+  buildIstWealthStructure,
+  buildPlanWealthStructure,
+  depotPlanAssetAmounts,
+} from "./domain/wealth-structure/projection";
+import {
   enforceCaseDepotValue,
   withDepotValue,
   setCaseDepot,
@@ -112,15 +121,11 @@ import {
   setPreferredStructurePlan,
   appendStructurePlan,
   deleteStructurePlan,
-  depotAssetAmounts,
-  depotPlanAssetAmounts,
   deleteDepotAccount,
   duplicateStructurePlan,
   maturityBuckets,
   monthsUntilNeed,
   normalizeImportedCase,
-  planAssetAmounts,
-  productAssetMix,
   initialReplacementDepotId,
   nextImplementationDate,
   nextDepotName,
@@ -132,9 +137,6 @@ import {
   ModelPortfolioAction,
   modelPortfolioDefaultAmount,
   planningShortfall,
-  buildIstWealthStructure,
-  buildPlanWealthStructure,
-  plannerPlanHoldingValue,
   reconcileCasePlans,
   renameDepotAccount,
   replaceDepotAccount,
