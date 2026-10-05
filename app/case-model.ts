@@ -1,23 +1,12 @@
 import { ImportIssue, sanitizeOptionalHolding } from "./depot-validation";
 import { BondSource, normalizeBondHolding } from "./bond-source";
-import {
-  AdvisoryData,
-  emptyAdvisory,
-  emptyRiskAssessmentV2,
-  LegacyRiskAssessment,
-  RiskAssessmentV2,
-  RiskLevel,
-  RiskSelectionSource,
-} from "./navigator-config";
-import { completeRiskAssessment, triangleRiskScore } from "./risk-orientation";
-import {
-  AssetClass,
-  AssetMix,
-  assetClasses,
-  dataSources,
-  houseProducts,
-  managedPortfolios,
-} from "./investment-data";
+import type { AdvisoryData } from "./domain/advisory/contracts";
+import { emptyAdvisory, emptyRiskAssessmentV2 } from "./domain/advisory/defaults";
+import type { LegacyRiskAssessment, RiskAssessmentV2, RiskLevel, RiskSelectionSource } from "./domain/risk/contracts";
+import { completeRiskAssessment, triangleRiskScore } from "./domain/risk/orientation";
+import type { AssetClass, AssetMix } from "./domain/assets/contracts";
+import { assetClasses } from "./domain/assets/contracts";
+import { dataSources, houseProducts, managedPortfolios } from "./investment-data";
 
 export const maturityBuckets = [
   {

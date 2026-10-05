@@ -1,15 +1,9 @@
-import { RiskLevel } from "./navigator-config";
+import type { AssetMix } from "./domain/assets/contracts";
+import type { SolutionType, HouseProduct, ModelPortfolio, ManagedPortfolio } from "./domain/catalog/contracts";
 
-export type SolutionType = {
-  id: string;
-  name: string;
-  yieldLow: number;
-  yieldHigh: number;
-  minMonths: number;
-  risk: string;
-  liquidity: string;
-  note: string;
-};
+export { assetClasses } from "./domain/assets/contracts";
+export type { AssetClass, AssetMix } from "./domain/assets/contracts";
+export type { SolutionType, HouseProduct, ModelPortfolio, ManagedPortfolio } from "./domain/catalog/contracts";
 
 export const solutionTypes: SolutionType[] = [
   {
@@ -83,30 +77,6 @@ export const solutionTypes: SolutionType[] = [
     note: "Langfristiger Wachstumsbaustein mit deutlichen Schwankungs- und Verlustrisiken.",
   },
 ];
-
-export type HouseProduct = {
-  id: string;
-  name: string;
-  wkn: string;
-  category: string;
-  risk: number;
-  horizon: string;
-  region: string;
-  sustainable: boolean;
-  role: "Core" | "Satellit";
-  solutionId: string;
-  assetMix: AssetMix | null;
-};
-
-export const assetClasses = [
-  "Liquidität",
-  "Geldwerte",
-  "Substanzwerte",
-  "Alternative Anlagen",
-  "Sachwerte",
-] as const;
-export type AssetClass = (typeof assetClasses)[number];
-export type AssetMix = Record<AssetClass, number>;
 
 const mix = (
   liquidity = 0,
@@ -1048,14 +1018,6 @@ export const houseProducts: HouseProduct[] = [
   ),
 ];
 
-export type ModelPortfolio = {
-  id: "rb2" | "rb3" | "rb4";
-  name: string;
-  risk: RiskLevel;
-  mix: Record<string, number>;
-  holdings: Array<{ productId: string; name: string; weight: number }>;
-};
-
 export const modelPortfolios: ModelPortfolio[] = [
   {
     id: "rb2",
@@ -1171,28 +1133,6 @@ export const modelPortfolios: ModelPortfolio[] = [
     ],
   },
 ];
-
-export type ManagedPortfolio = {
-  id: string;
-  name: string;
-  sustainable: boolean;
-  currency: "EUR" | "CHF";
-  region: string;
-  metals: "Ja" | "Nein" | "Individuell";
-  targetFunds: boolean;
-  individual: boolean;
-  risk: number;
-  minimum: number;
-  custody: string;
-  horizon: string;
-  mix: string;
-  costs: string;
-  billingCountry: "Deutschland" | "Schweiz";
-  equityBand: "Unter 50%" | "Über 50%" | "Individuell";
-  assetMix: AssetMix | null;
-  onHouseView: boolean;
-  sourceLabel?: string;
-};
 
 const vv = (
   id: string,
