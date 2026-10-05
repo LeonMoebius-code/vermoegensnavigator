@@ -1,3 +1,19 @@
+import type { AdvisoryCase } from "./domain/case/contracts";
+import type { AdvisorId, CustomerChecklistCategory, ModuleState } from "./domain/advisory/contracts";
+import type {
+  CapitalPotId,
+  CapitalPot,
+  PlannerAllocation,
+  InvestmentFrequency,
+  InvestmentPlan,
+  PhasedEntryPlan,
+  StructurePlan,
+  SavingsPlan,
+} from "./domain/planning/contracts";
+import type { DepotHolding, DepotAccount } from "./domain/depot/contracts";
+import type { VvFilters } from "./domain/vv/contracts";
+import type { AnalysisState, DepotAnalysisPosition, DistributionItem } from "./domain/depot/analysis-contracts";
+import type { ProductMainCategory } from "./domain/depot/classification-contracts";
 import { buildBondAnalysisData, buildBondIstExportData, BOND_EXPORT_SCOPE_NOTICE } from "./bond-analysis-data";
 import { BondAnalysisView } from "./bond-analysis-view";
 "use client";
@@ -15,7 +31,14 @@ import {
 } from "react";
 import * as XLSX from "xlsx";
 import { importIssueLabel } from "./depot-validation";
-import { CASE_STORAGE_KEY, readCaseStore, saveCaseToStore, insertCaseIntoStore, removeCaseFromStore, recoveryBackups } from "./case-storage";
+import {
+  CASE_STORAGE_KEY,
+  readCaseStore,
+  saveCaseToStore,
+  insertCaseIntoStore,
+  removeCaseFromStore,
+  recoveryBackups,
+} from "./case-storage";
 import type { AdvisoryData, Scope } from "./domain/advisory/contracts";
 import { emptyAdvisory } from "./domain/advisory/defaults";
 import type { RiskAssessmentV2, RiskLevel } from "./domain/risk/contracts";
@@ -48,14 +71,12 @@ import {
   solutionTypes,
 } from "./investment-data";
 import {
-  AdvisoryCase,
   enforceCaseDepotValue,
   withDepotValue,
   setCaseDepot,
   updateCaseAdvisory,
   positiveStrategicPot,
   addDepotAccount,
-  AdvisorId,
   allocationAmountInCapitalPot,
   allocationCapitalCoverageTotal,
   allocationCapitalPotAmounts,
@@ -63,13 +84,10 @@ import {
   bucketForMonths,
   capitalPotRemovalImpact,
   defaultPhasedEntryInstallments,
-  CapitalPotId,
-  CapitalPot,
   capitalPots,
   caseSnapshot,
   buildMultiDepotExportData,
   customerChecklistCategories,
-  CustomerChecklistCategory,
   createCase,
   createPlan,
   getActiveStructurePlan,
@@ -80,20 +98,14 @@ import {
   deleteStructurePlan,
   depotAssetAmounts,
   depotPlanAssetAmounts,
-  DepotHolding,
-  DepotAccount,
   deleteDepotAccount,
   defaultAdvisorId,
   duplicateStructurePlan,
   maturityBuckets,
   monthsUntilNeed,
-  ModuleState,
   normalizeImportedCase,
   planAssetAmounts,
   productAssetMix,
-  PlannerAllocation,
-  InvestmentFrequency,
-  InvestmentPlan,
   initialReplacementDepotId,
   nextImplementationDate,
   nextDepotName,
@@ -101,7 +113,6 @@ import {
   parsePhasedEntryNumericDraft,
   phasedEntryAmounts,
   phasedEntryScheduleValidation,
-  PhasedEntryPlan,
   legacyBucketAmountsForCapitalPots,
   ModelPortfolioAction,
   modelPortfolioDefaultAmount,
@@ -117,25 +128,18 @@ import {
   supplementPlanWithModelPortfolio,
   createModelPortfolioVariant,
   strategicAmount,
-  StructurePlan,
-  SavingsPlan,
-  VvFilters,
   advisors,
 } from "./case-model";
 import { DepotCsvResult, parseDepotCsv } from "./depot-csv";
 import { depotCountryName } from "./depot-country-codes";
 import {
-  AnalysisState,
   bondPortfolioAnalysis,
   buildDepotAnalysisPositions,
   concentrationMetrics,
   countryAnalysis,
   currencyAnalysis,
-  DepotAnalysisPosition,
-  DistributionItem,
   entryResultAnalysis,
   industryAnalysis,
-  ProductMainCategory,
   productTypeAnalysis,
   hasMixedValuationDates,
 } from "./depot-analysis";

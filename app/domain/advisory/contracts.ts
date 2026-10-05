@@ -32,3 +32,28 @@ export type AdvisoryData = {
   modules: string[];
   notes: string;
 };
+
+export type AdvisorId = "leon-moebius" | "jochen-walz" | "david-gerhardt" | "michael-friedrich" | "corinna-roehl" | "emanuel-bock";
+
+export type ModuleStatus = "not_started" | "in_progress" | "complete";
+
+export type ModuleState = {
+  status: ModuleStatus;
+  currentSlide: number;
+  checklist: Record<string, boolean>;
+  notes: string;
+  updatedAt: string;
+};
+
+export type CustomerChecklistCategory = "Unterlage mitbringen" | "Antrag oder Formular" | "Externe Klärung" | "Sonstiger nächster Schritt";
+
+export type CustomerChecklistItem = {
+  id: string;
+  text: string;
+  category: CustomerChecklistCategory;
+  done: boolean;
+  source: "general" | "module";
+  moduleId?: string;
+  slideIndex?: number;
+  createdAt: string;
+};

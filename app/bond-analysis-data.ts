@@ -1,7 +1,17 @@
-import { DepotAccount, DepotHolding, StructurePlan } from "./case-model";
-import { AnalysisState, BondCoverage, BondMetricKey, BondPositionAnalysis, bondPortfolioAnalysis, buildDepotAnalysisPositions } from "./depot-analysis";
+import type { DepotAccount, DepotHolding } from "./domain/depot/contracts";
+import type { StructurePlan } from "./domain/planning/contracts";
+import type { AnalysisState } from "./domain/depot/analysis-contracts";
+import type { BondMetric } from "./domain/bonds/contracts";
+
+import {
+  BondCoverage,
+  BondMetricKey,
+  BondPositionAnalysis,
+  bondPortfolioAnalysis,
+  buildDepotAnalysisPositions,
+} from "./depot-analysis";
 import { validBondSource } from "./bond-source";
-import { BOND_MODEL_NOTICE, BondMetric, bondReasonLabel, frequencyLabel } from "./bond-v2";
+import { BOND_MODEL_NOTICE, bondReasonLabel, frequencyLabel } from "./bond-v2";
 
 const decimal = new Intl.NumberFormat("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const oneDecimal = new Intl.NumberFormat("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 });

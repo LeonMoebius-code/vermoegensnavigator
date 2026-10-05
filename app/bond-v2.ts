@@ -1,21 +1,23 @@
-import type { DepotAnalysisPosition } from "./depot-analysis";
-import { BondUnits, SourceQuality, sourceFieldValid, validBondSource } from "./bond-source";
-import { annualAccruedCheck, couponAccruedDiagnostic, CouponFrequency, civilDay, datedBondDuration, shortFirstAnnualCouponDiagnostic, solveBondYield } from "./bond-math";
-import { calendarDate } from "./depot-validation";
+import type { MetricStatus, BondMetric, BondPriceInput, BondSourceConvention } from "./domain/bonds/contracts";
+export type { MetricStatus, BondMetric, BondPriceInput, BondSourceConvention } from "./domain/bonds/contracts";
+import type { DepotAnalysisPosition } from "./domain/depot/analysis-contracts";
 
-export type MetricStatus = "calculable" | "missing-data" | "invalid-data" | "unsupported-structure" | "model-inconsistent" | "legacy-unverified" | "not-applicable";
-export type BondMetric = { value: number | null; status: MetricStatus; reasonCode?: string };
+import { sourceFieldValid, validBondSource } from "./bond-source";
+import {
+  annualAccruedCheck,
+  couponAccruedDiagnostic,
+  CouponFrequency,
+  civilDay,
+  datedBondDuration,
+  shortFirstAnnualCouponDiagnostic,
+  solveBondYield,
+} from "./bond-math";
+import { calendarDate } from "./depot-validation";
 const ok = (value: number): BondMetric => Number.isFinite(value) ? { value, status: "calculable" } : fail("invalid-data", "non-finite-result");
 const fail = (status: MetricStatus, reasonCode: string): BondMetric => ({ value: null, status, reasonCode });
 const positive = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value > 0;
 const nonnegative = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0;
 const invariant = (values: number[]) => values.length > 0 && values.every((n) => Number.isFinite(n) && Math.abs(n - values[0]) <= 64 * Number.EPSILON * Math.max(1, Math.abs(n)));
-
-export type BondPriceInput = {
-  nominal?: number; clean?: number; accrued?: number; market?: number; fxRate?: number;
-  bondCurrency?: string; valuationDate?: string; priceDate?: string; accruedDate?: string; fxDate?: string;
-  units: BondUnits; quality: SourceQuality; accruedQuantizationPer100: number | null;
-};
 
 /** Explicit unit contract; no residual-based profile selection or currency guessing. */
 export function resolveBondPrice(input: BondPriceInput) {
@@ -153,14 +155,6 @@ export function calculateBondModel(price: ReturnType<typeof resolveBondPrice>, v
     aggregateEligible: ytm.value !== null && (modelStatus !== "ambiguous" || selected?.frequency === 1),
     annualCheck: annualAccruedCheck(valuation, maturity, coupon, price.accruedPer100, price.accruedQuantizationPer100), residual: selected?.residual ?? null };
 }
-
-/** Code-supplied, documented convention; never accepted from saved customer data or UI.
- * CP3 fixtures supply their explicit synthetic contract here. Production uses the versioned importer profile. */
-export type BondSourceConvention = {
-  evidence: string;
-  units: BondUnits;
-  accruedQuantizationPer100: number | null;
-};
 
 export function analyzeBondV2(position: DepotAnalysisPosition, fallbackDate = new Date(), convention?: BondSourceConvention) {
   const source = validBondSource(position.bondSource, position);
