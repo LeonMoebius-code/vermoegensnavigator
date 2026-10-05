@@ -2,7 +2,8 @@ import type { ProductMainCategory, ProductClassification } from "./classificatio
 export type { ProductMainCategory, ProductClassification } from "./classification-contracts";
 import type { DepotHolding } from "./contracts";
 
-import { houseProducts, managedPortfolios } from "../../investment-data";
+import { houseProducts } from "../../data/house-products";
+import { managedPortfolios } from "../../data/managed-portfolios";
 
 const unknownClassification = (): ProductClassification => ({
   main: "Nicht zugeordnet",

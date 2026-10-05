@@ -63,13 +63,11 @@ import {
   triangleWeightsFromPoint,
   willingnessConsistencyGap,
 } from "./domain/risk/orientation";
-import {
-  dataSources,
-  houseProducts,
-  managedPortfolios,
-  modelPortfolios,
-  solutionTypes,
-} from "./investment-data";
+import { dataSources } from "./data/investment-data-sources";
+import { houseProducts } from "./data/house-products";
+import { managedPortfolios } from "./data/managed-portfolios";
+import { modelPortfolios } from "./data/model-portfolios";
+import { solutionTypes } from "./data/solution-types";
 import {
   enforceCaseDepotValue,
   withDepotValue,

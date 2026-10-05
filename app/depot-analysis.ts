@@ -9,7 +9,8 @@ import { calendarDate } from "./depot-validation";
 import { sourceFieldValid, validBondSource } from "./bond-source";
 
 import { depotCountryName } from "./depot-country-codes";
-import { houseProducts, managedPortfolios } from "./investment-data";
+import { houseProducts } from "./data/house-products";
+import { managedPortfolios } from "./data/managed-portfolios";
 import { classifyDepotProduct } from "./domain/depot/product-classification";
 
 export { classifyDepotProduct } from "./domain/depot/product-classification";
