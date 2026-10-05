@@ -55,7 +55,9 @@ import type { LegacyRiskAssessment, RiskAssessmentV2, RiskLevel, RiskSelectionSo
 import { completeRiskAssessment, triangleRiskScore } from "./domain/risk/orientation";
 import type { AssetClass, AssetMix } from "./domain/assets/contracts";
 import { assetClasses } from "./domain/assets/contracts";
-import { dataSources, houseProducts, managedPortfolios } from "./investment-data";
+import { dataSources } from "./data/investment-data-sources";
+import { houseProducts } from "./data/house-products";
+import { managedPortfolios } from "./data/managed-portfolios";
 
 export const maturityBuckets = [
   {

@@ -8,7 +8,8 @@ import {
   OptionalNumberField,
 } from "./depot-validation";
 
-import { assetClasses, houseProducts } from "./investment-data";
+import { assetClasses } from "./domain/assets/contracts";
+import { houseProducts } from "./data/house-products";
 import { depotRegionForCountry } from "./depot-country-codes";
 import { isAgree21Profile, structureOverviewSource } from "./bond-source";
 import { classifyDepotProduct } from "./domain/depot/product-classification";
