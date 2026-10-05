@@ -16,17 +16,17 @@ import {
 import * as XLSX from "xlsx";
 import { importIssueLabel } from "./depot-validation";
 import { CASE_STORAGE_KEY, readCaseStore, saveCaseToStore, insertCaseIntoStore, removeCaseFromStore, recoveryBackups } from "./case-storage";
+import type { AdvisoryData, Scope } from "./domain/advisory/contracts";
+import { emptyAdvisory } from "./domain/advisory/defaults";
+import type { RiskAssessmentV2, RiskLevel } from "./domain/risk/contracts";
+import type { AssetClass } from "./domain/assets/contracts";
+import { assetClasses } from "./domain/assets/contracts";
 import {
-  AdvisoryData,
-  emptyAdvisory,
   euro,
   modules,
   percent,
   priorityOptions,
-  RiskAssessmentV2,
-  RiskLevel,
   scenarios,
-  Scope,
 } from "./navigator-config";
 import {
   applyCompletedRiskAssessment,
@@ -39,10 +39,8 @@ import {
   triangleRiskScore,
   triangleWeightsFromPoint,
   willingnessConsistencyGap,
-} from "./risk-orientation";
+} from "./domain/risk/orientation";
 import {
-  assetClasses,
-  AssetClass,
   dataSources,
   houseProducts,
   managedPortfolios,
