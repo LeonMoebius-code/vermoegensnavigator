@@ -1,3 +1,6 @@
+import { advisors, defaultAdvisorId } from "./data/advisors";
+export { advisors, defaultAdvisorId };
+export { customerChecklistCategories } from "./data/advisory-content";
 import type {
   BucketId,
   CapitalPotId,
@@ -104,63 +107,12 @@ export const maturityBuckets = [
   },
 ] as const;
 
-export const advisors = [
-  {
-    id: "leon-moebius",
-    initials: "LM",
-    name: "Leon Möbius",
-    title: "Spezialist Vermögensmanagement",
-  },
-  {
-    id: "jochen-walz",
-    initials: "JW",
-    name: "Jochen Walz",
-    title: "Spezialist Vermögensmanagement",
-  },
-  {
-    id: "david-gerhardt",
-    initials: "DG",
-    name: "David Gerhardt",
-    title: "Spezialist Vermögensmanagement",
-  },
-  {
-    id: "michael-friedrich",
-    initials: "MF",
-    name: "Michael Friedrich",
-    title: "Spezialist Vermögensmanagement",
-  },
-  {
-    id: "corinna-roehl",
-    initials: "CR",
-    name: "Corinna Röhl",
-    title: "Spezialistin Vermögensmanagement",
-  },
-  {
-    id: "emanuel-bock",
-    initials: "EB",
-    name: "Emanuel Bock",
-    title: "Spezialist Vermögensmanagement",
-  },
-] as const;
-export const defaultAdvisorId: AdvisorId = "leon-moebius";
-
-export const customerChecklistCategories = [
-  "Unterlage mitbringen",
-  "Antrag oder Formular",
-  "Externe Klärung",
-  "Sonstiger nächster Schritt",
-] as const;
-
 // Contract and runtime literals must describe the same set in both directions.
 type SameUnion<A, B> =
   [Exclude<A, B>, Exclude<B, A>] extends [never, never] ? true : false;
 type Assert<T extends true> = T;
 type _BucketIdContractMatchesRuntime =
   Assert<SameUnion<BucketId, (typeof maturityBuckets)[number]["id"]>>;
-type _AdvisorIdContractMatchesRuntime =
-  Assert<SameUnion<AdvisorId, (typeof advisors)[number]["id"]>>;
-type _CustomerChecklistCategoryContractMatchesRuntime =
-  Assert<SameUnion<CustomerChecklistCategory, (typeof customerChecklistCategories)[number]>>;
 
 const uid = (prefix: string) =>
   `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
