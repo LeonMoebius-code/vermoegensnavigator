@@ -97,6 +97,14 @@ import {
   depotPlanAssetAmounts,
 } from "./domain/wealth-structure/projection";
 import {
+  maturityBuckets,
+  monthsUntilNeed,
+  capitalPots,
+  planningShortfall,
+  bucketForMonths,
+  strategicAmount,
+} from "./domain/planning/capital-pots";
+import {
   enforceCaseDepotValue,
   withDepotValue,
   setCaseDepot,
@@ -107,10 +115,8 @@ import {
   allocationCapitalCoverageTotal,
   allocationCapitalPotAmounts,
   annualSavingsContribution,
-  bucketForMonths,
   capitalPotRemovalImpact,
   defaultPhasedEntryInstallments,
-  capitalPots,
   caseSnapshot,
   buildMultiDepotExportData,
   createCase,
@@ -123,8 +129,6 @@ import {
   deleteStructurePlan,
   deleteDepotAccount,
   duplicateStructurePlan,
-  maturityBuckets,
-  monthsUntilNeed,
   normalizeImportedCase,
   initialReplacementDepotId,
   nextImplementationDate,
@@ -136,7 +140,6 @@ import {
   legacyBucketAmountsForCapitalPots,
   ModelPortfolioAction,
   modelPortfolioDefaultAmount,
-  planningShortfall,
   reconcileCasePlans,
   renameDepotAccount,
   replaceDepotAccount,
@@ -144,7 +147,6 @@ import {
   replaceStrategicPlanAllocations,
   supplementPlanWithModelPortfolio,
   createModelPortfolioVariant,
-  strategicAmount,
 } from "./case-model";
 import { DepotCsvResult, parseDepotCsv } from "./depot-csv";
 import { depotCountryName } from "./depot-country-codes";
