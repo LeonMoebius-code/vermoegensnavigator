@@ -1,4 +1,5 @@
-import { AdvisoryCase, enforceCaseDepotValue, normalizeImportedCase } from "./case-model";
+import type { AdvisoryCase } from "./domain/case/contracts";
+import { enforceCaseDepotValue, normalizeImportedCase } from "./case-model";
 import { sanitizeOptionalHolding } from "./depot-validation";
 import { validBondSource } from "./bond-source";
 

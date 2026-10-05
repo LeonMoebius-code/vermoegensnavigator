@@ -1,6 +1,14 @@
-import { calendarDate, strictNumber, numberInRange, optionalNumberRules, OptionalNumberField, ImportIssue } from "./depot-validation";
-import { ParsedDepotHolding } from "./case-model";
-import { AssetClass, assetClasses, houseProducts } from "./investment-data";
+import type { ImportIssue, ParsedDepotHolding } from "./domain/depot/contracts";
+import type { AssetClass } from "./domain/assets/contracts";
+import {
+  calendarDate,
+  strictNumber,
+  numberInRange,
+  optionalNumberRules,
+  OptionalNumberField,
+} from "./depot-validation";
+
+import { assetClasses, houseProducts } from "./investment-data";
 import { depotRegionForCountry } from "./depot-country-codes";
 import { isAgree21Profile, structureOverviewSource } from "./bond-source";
 import { classifyDepotProduct } from "./domain/depot/product-classification";

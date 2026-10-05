@@ -1,27 +1,19 @@
-import { analyzeBondV2, BondSourceConvention, bondReasonLabel } from "./bond-v2";
+import type { AnalysisState, DepotAnalysisPosition, DistributionItem } from "./domain/depot/analysis-contracts";
+export type { AnalysisState, DepotAnalysisPosition, DistributionItem } from "./domain/depot/analysis-contracts";
+import type { BondSourceConvention } from "./domain/bonds/contracts";
+import type { DepotHolding } from "./domain/depot/contracts";
+import type { StructurePlan } from "./domain/planning/contracts";
+import type { ProductMainCategory, ProductClassification } from "./domain/depot/classification-contracts";
+import { analyzeBondV2, bondReasonLabel } from "./bond-v2";
 import { calendarDate } from "./depot-validation";
 import { sourceFieldValid, validBondSource } from "./bond-source";
-import { DepotHolding, StructurePlan } from "./case-model";
+
 import { depotCountryName } from "./depot-country-codes";
 import { houseProducts, managedPortfolios } from "./investment-data";
 import { classifyDepotProduct } from "./domain/depot/product-classification";
-import type { ProductMainCategory, ProductClassification } from "./domain/depot/product-classification";
 
 export { classifyDepotProduct } from "./domain/depot/product-classification";
-export type { ProductMainCategory, ProductClassification } from "./domain/depot/product-classification";
-
-export type AnalysisState = "ist" | "plan";
-export type DepotAnalysisPosition = Omit<DepotHolding, "id" | "value" | "depotId"> & {
-  id: string;
-  depotId?: string;
-  source: "holding" | "planned-purchase";
-  value: number;
-  classification: ProductClassification;
-  bondBase?: DepotAnalysisPosition;
-  quantityScale?: number | null;
-};
-
-export type DistributionItem = { label: string; value: number; share: number };
+export type { ProductMainCategory, ProductClassification } from "./domain/depot/classification-contracts";
 
 const normalized = (value?: string) =>
   String(value || "")

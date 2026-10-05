@@ -1,23 +1,8 @@
-import type { DepotHolding } from "../../case-model";
+import type { ProductMainCategory, ProductClassification } from "./classification-contracts";
+export type { ProductMainCategory, ProductClassification } from "./classification-contracts";
+import type { DepotHolding } from "./contracts";
+
 import { houseProducts, managedPortfolios } from "../../investment-data";
-
-export type ProductMainCategory =
-  | "Renten"
-  | "Aktien"
-  | "Mischfonds / Multi-Asset"
-  | "Strukturierte Produkte"
-  | "Immobilien / Sachwerte"
-  | "Alternative Anlagen"
-  | "Liquidität"
-  | "Nicht zugeordnet";
-
-export type ProductClassification = {
-  main: ProductMainCategory;
-  sub: string;
-  direct: boolean;
-  bondKind?: "fixed" | "floater" | "step-up" | "other";
-  confidence: "source" | "derived" | "unknown";
-};
 
 const unknownClassification = (): ProductClassification => ({
   main: "Nicht zugeordnet",

@@ -1,6 +1,6 @@
-/** CSV and optional persisted holding fields. No raw cell content is retained. */
-export type ValidationCode = "missing" | "invalid-number" | "ambiguous-number" | "out-of-range" | "invalid-date";
-export type ImportIssue = { field: string; code: ValidationCode };
+import type { ValidationCode, ImportIssue } from "./domain/depot/contracts";
+export type { ValidationCode, ImportIssue } from "./domain/depot/contracts";
+
 
 export function importIssueLabel(issue: { field: string; code: string }) {
   const fields: Record<string, string> = {

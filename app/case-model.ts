@@ -1,5 +1,54 @@
-import { ImportIssue, sanitizeOptionalHolding } from "./depot-validation";
-import { BondSource, normalizeBondHolding } from "./bond-source";
+import type {
+  BucketId,
+  CapitalPotId,
+  CapitalPot,
+  PlannerAllocation,
+  StructurePlan,
+  InvestmentFrequency,
+  SavingsTargetRef,
+  PhasedEntryPlan,
+  SavingsPlan,
+  InvestmentPlan,
+  SavingsGoal,
+} from "./domain/planning/contracts";
+export type {
+  BucketId,
+  CapitalPotId,
+  CapitalPot,
+  PlannerAllocation,
+  StructurePlan,
+  InvestmentFrequency,
+  SavingsTargetRef,
+  PhasedEntryPlan,
+  SavingsPlan,
+  InvestmentPlan,
+  SavingsGoal,
+} from "./domain/planning/contracts";
+import type { DepotHolding, DepotAccount, ParsedDepotHolding } from "./domain/depot/contracts";
+export type { DepotHolding, DepotAccount, ParsedDepotHolding } from "./domain/depot/contracts";
+import type {
+  AdvisorId,
+  ModuleStatus,
+  ModuleState,
+  CustomerChecklistCategory,
+  CustomerChecklistItem,
+} from "./domain/advisory/contracts";
+export type {
+  AdvisorId,
+  ModuleStatus,
+  ModuleState,
+  CustomerChecklistCategory,
+  CustomerChecklistItem,
+} from "./domain/advisory/contracts";
+import type { AdvisoryCase, CaseSnapshot, CaseVersion } from "./domain/case/contracts";
+export type { AdvisoryCase, CaseSnapshot, CaseVersion } from "./domain/case/contracts";
+import type { VvFilters } from "./domain/vv/contracts";
+export type { VvFilters } from "./domain/vv/contracts";
+import { blankVvFilters } from "./domain/vv/defaults";
+export { blankVvFilters } from "./domain/vv/defaults";
+
+import { sanitizeOptionalHolding } from "./depot-validation";
+import { normalizeBondHolding } from "./bond-source";
 import type { AdvisoryData } from "./domain/advisory/contracts";
 import { emptyAdvisory, emptyRiskAssessmentV2 } from "./domain/advisory/defaults";
 import type { LegacyRiskAssessment, RiskAssessmentV2, RiskLevel, RiskSelectionSource } from "./domain/risk/contracts";
@@ -53,192 +102,6 @@ export const maturityBuckets = [
   },
 ] as const;
 
-export type BucketId = (typeof maturityBuckets)[number]["id"];
-
-export type CapitalPotId = "reserve" | "strategic" | `year-${number}`;
-
-export type CapitalPot = {
-  id: CapitalPotId;
-  kind: "reserve" | "year" | "strategic";
-  label: string;
-  range: string;
-  total: number;
-  year?: number;
-  needs: AdvisoryData["needs"];
-  earliestDueDate?: string;
-  minMonths: number;
-  legacyBucketId: BucketId;
-};
-
-export type PlannerAllocation = {
-  id: string;
-  productId: string;
-  productName: string;
-  bucketId: BucketId;
-  amount: number;
-  solutionId: string;
-  source: "product" | "model" | "vv";
-  modelId?: string;
-  allocationMode?: "single" | "overflow" | "manual";
-  bucketAmounts?: Partial<Record<BucketId, number>>;
-  capitalPotId?: CapitalPotId;
-  capitalPotAmounts?: Partial<Record<CapitalPotId, number>>;
-  capitalPotReviewAmount?: number;
-  capitalPotReviewNote?: string;
-};
-
-export type StructurePlan = {
-  id: string;
-  name: string;
-  total: number;
-  capitalMode: "linked" | "manual";
-  allocations: PlannerAllocation[];
-  investmentPlans: InvestmentPlan[];
-  preferred: boolean;
-  notes: string;
-  modelId?: string;
-  modelAmount?: number;
-  depotMode: "none" | "compare" | "retain" | "afterSales";
-  depotHoldingIds: string[];
-  depotSelectionInitialized?: boolean;
-  /** Tracks an explicit adviser choice so the first concrete depot can use the default afterSales. */
-  depotModeSelectionInitialized?: boolean;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type InvestmentFrequency =
-  | "monthly"
-  | "quarterly"
-  | "semiannual"
-  | "annual";
-
-export type SavingsTargetRef =
-  | { kind: "savingsGoal"; id: string }
-  | { kind: "need"; id: AdvisoryData["needs"][number]["id"] };
-
-export type PhasedEntryPlan = {
-  id: string;
-  type: "phased";
-  allocationId: string;
-  capitalPotId: CapitalPotId;
-  stagedMode: "percent" | "amount";
-  stagedValue: number;
-  installments: number;
-  frequency: InvestmentFrequency;
-  startDate: string;
-  note: string;
-};
-
-export type SavingsPlan = {
-  id: string;
-  type: "savings";
-  name?: string;
-  productId: string;
-  productName: string;
-  contributionAmount: number;
-  frequency: InvestmentFrequency;
-  startDate: string;
-  targetRef?: SavingsTargetRef;
-  note: string;
-};
-
-export type InvestmentPlan = PhasedEntryPlan | SavingsPlan;
-
-export type SavingsGoal = {
-  id: string;
-  name: string;
-  targetAmount: number;
-  targetYear?: number;
-  targetDate?: string;
-  note?: string;
-};
-
-export type DepotHolding = {
-  id: string;
-  depotId: string;
-  productId?: string;
-  name: string;
-  value: number;
-  assetClass: AssetClass;
-  region: string;
-  risk: number;
-  plannedSale: number;
-  note: string;
-  wkn?: string;
-  segment?: string;
-  investmentMedium?: string;
-  securityType?: string;
-  rawCountry?: string;
-  currency?: string;
-  industry?: string;
-  certificateClass?: string;
-  importIssues?: ImportIssue[];
-  bondSource?: BondSource;
-  excludeFromBondAggregates?: boolean;
-  coupon?: number;
-  maturity?: string;
-  nominalOrUnits?: number;
-  lastPurchaseDate?: string;
-  averageEntryPrice?: number;
-  purchaseCosts?: number;
-  currentPrice?: number;
-  gainLossPercent?: number;
-  gainLossAmount?: number;
-  accruedInterest?: number;
-  sourceDepotShare?: number;
-  averageEntryFx?: number;
-  fxRate?: number;
-  valuationStart?: string;
-  valuationEnd?: string;
-  holdingAtValuationStart?: number;
-  holdingAtValuationEnd?: number;
-  /** Compatibility with depot positions saved before V0.13. */
-  sourceType?: string;
-  classificationStatus?: "mapped" | "matched" | "unresolved";
-};
-
-export type DepotAccount = {
-  id: string;
-  name: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type ParsedDepotHolding = Omit<DepotHolding, "depotId">;
-
-export type VvFilters = {
-  sustainable: "Keine Präferenz" | "Ja";
-  currency: "Keine Präferenz" | "EUR" | "CHF";
-  region: string;
-  metals: "Keine Präferenz" | "Ja" | "Nein" | "Individuell";
-  amount: number;
-  targetFunds: "Keine Präferenz" | "Ja" | "Nein";
-  equityBand: "Keine Präferenz" | "Unter 50%" | "Über 50%" | "Individuell";
-  individual: "Keine Präferenz" | "Ja" | "Nein";
-  billingCountry: "Keine Präferenz" | "Deutschland" | "Schweiz";
-  custody: string;
-  maxRisk: number;
-};
-
-export type CaseSnapshot = Omit<AdvisoryCase, "versions">;
-export type CaseVersion = {
-  id: string;
-  label: string;
-  createdAt: string;
-  snapshot: CaseSnapshot;
-};
-
-export type ModuleStatus = "not_started" | "in_progress" | "complete";
-
-export type ModuleState = {
-  status: ModuleStatus;
-  currentSlide: number;
-  checklist: Record<string, boolean>;
-  notes: string;
-  updatedAt: string;
-};
-
 export const advisors = [
   {
     id: "leon-moebius",
@@ -277,8 +140,6 @@ export const advisors = [
     title: "Spezialist Vermögensmanagement",
   },
 ] as const;
-
-export type AdvisorId = (typeof advisors)[number]["id"];
 export const defaultAdvisorId: AdvisorId = "leon-moebius";
 
 export const customerChecklistCategories = [
@@ -288,54 +149,16 @@ export const customerChecklistCategories = [
   "Sonstiger nächster Schritt",
 ] as const;
 
-export type CustomerChecklistCategory =
-  (typeof customerChecklistCategories)[number];
-
-export type CustomerChecklistItem = {
-  id: string;
-  text: string;
-  category: CustomerChecklistCategory;
-  done: boolean;
-  source: "general" | "module";
-  moduleId?: string;
-  slideIndex?: number;
-  createdAt: string;
-};
-
-export type AdvisoryCase = {
-  schemaVersion: 11;
-  id: string;
-  status: "Entwurf" | "In Prüfung" | "Abgeschlossen";
-  advisorId: AdvisorId;
-  advisory: AdvisoryData;
-  plans: StructurePlan[];
-  activePlanId: string;
-  depot: DepotHolding[];
-  depotAccounts: DepotAccount[];
-  moduleStates: Record<string, ModuleState>;
-  customerChecklist: CustomerChecklistItem[];
-  savingsGoals: SavingsGoal[];
-  vvFilters: VvFilters;
-  selectedVvIds: string[];
-  currentStep: number;
-  createdAt: string;
-  updatedAt: string;
-  versions: CaseVersion[];
-};
-
-export const blankVvFilters = (amount = 0): VvFilters => ({
-  sustainable: "Keine Präferenz",
-  currency: "Keine Präferenz",
-  region: "Keine Präferenz",
-  metals: "Keine Präferenz",
-  amount,
-  targetFunds: "Keine Präferenz",
-  equityBand: "Keine Präferenz",
-  individual: "Keine Präferenz",
-  billingCountry: "Keine Präferenz",
-  custody: "Keine Präferenz",
-  maxRisk: 4,
-});
+// Contract and runtime literals must describe the same set in both directions.
+type SameUnion<A, B> =
+  [Exclude<A, B>, Exclude<B, A>] extends [never, never] ? true : false;
+type Assert<T extends true> = T;
+type _BucketIdContractMatchesRuntime =
+  Assert<SameUnion<BucketId, (typeof maturityBuckets)[number]["id"]>>;
+type _AdvisorIdContractMatchesRuntime =
+  Assert<SameUnion<AdvisorId, (typeof advisors)[number]["id"]>>;
+type _CustomerChecklistCategoryContractMatchesRuntime =
+  Assert<SameUnion<CustomerChecklistCategory, (typeof customerChecklistCategories)[number]>>;
 
 const uid = (prefix: string) =>
   `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;

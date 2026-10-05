@@ -1,30 +1,8 @@
+import type { BondSource, BondUnits } from "./domain/bonds/contracts";
+import { bondSourceFields } from "./domain/bonds/contracts";
+export type { SourceQuality, BondUnits, BondSource } from "./domain/bonds/contracts";
+export { bondSourceFields } from "./domain/bonds/contracts";
 import { calendarDate } from "./depot-validation";
-
-export type SourceQuality = "documented" | "empirically-supported" | "profile-assumption" | "unknown";
-export type BondUnits = {
-  clean: "percent-of-par" | "unknown";
-  nominal: "face-in-bond-currency" | "unknown";
-  accrued: "absolute" | "per100" | "unknown";
-  accruedCurrency: "bond" | "reporting" | "unknown";
-  market: "dirty-absolute" | "unknown";
-  reportingCurrency: string | null;
-  fx: "reporting-per-bond" | "bond-per-reporting" | "unknown";
-};
-export const bondSourceFields = ["coupon", "currentPrice", "nominalOrUnits", "accruedInterest", "fxRate", "value", "valuationEnd", "maturity", "currency", "securityType", "investmentMedium", "segment", "certificateClass", "name", "sourceType"] as const;
-type SourceField = typeof bondSourceFields[number];
-type Evidence = { value: string | number | null; status: "valid" | "missing" | "invalid" };
-export type BondSource = {
-  profileId: "structure-overview";
-  profileVersion: 1 | 2;
-  parserVersion: 2;
-  quality: "profile-assumption" | "empirically-supported";
-  reportingEvidence?: "user-confirmed-format-convention";
-  units: BondUnits;
-  fields: Record<SourceField, Evidence>;
-  // Decimal places in a CSV are not proof of the source's rounding accuracy.
-  accruedQuantizationPer100: null;
-  dateKind: "report-date";
-};
 export const structureOverviewUnits: BondUnits = {
   clean: "percent-of-par", nominal: "face-in-bond-currency", accrued: "absolute",
   accruedCurrency: "unknown", market: "dirty-absolute", reportingCurrency: null, fx: "unknown",
@@ -38,7 +16,7 @@ export function isAgree21Profile(headers: string[]) {
   const keys = headers.map(normalize);
   return keys.length === 29 && new Set(keys).size === 29 && [...agree21ValueHeaders, "Depot-Nr.", "Depotinhaber"].every((h) => keys.includes(normalize(h)));
 }
-type SourceHolding = Partial<Record<SourceField, string | number>> & { importIssues?: { field: string; code: string }[] };
+type SourceHolding = Partial<Record<(typeof bondSourceFields)[number], string | number>> & { importIssues?: { field: string; code: string }[] };
 
 /** The only production adapter. No customer cells or personal columns are retained. */
 export function structureOverviewSource(holding: SourceHolding, profileVersion: 1 | 2 = 1): BondSource {
@@ -79,7 +57,7 @@ export function normalizeBondHolding<T extends SourceHolding & { bondSource?: Bo
   return { ...holding, bondSource: validBondSource(holding.bondSource, holding), excludeFromBondAggregates: holding.excludeFromBondAggregates === true };
 }
 
-export function sourceFieldValid(source: BondSource | undefined, field: SourceField) {
+export function sourceFieldValid(source: BondSource | undefined, field: (typeof bondSourceFields)[number]) {
   const evidence = source?.fields[field];
   if (evidence?.status !== "valid") return false;
   if (["valuationEnd", "maturity"].includes(field)) return Boolean(calendarDate(evidence.value));
