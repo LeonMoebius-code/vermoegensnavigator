@@ -103,7 +103,7 @@ function mutateCaseStore(storage: StorageAccess, select: (loaded: CaseStoreRead)
   if (cases.some((item) => protectedIds.has(item.id))) throw new Error("Ein beschädigter Originalfall mit derselben ID ist geschützt.");
   // Inspect original Runtime values before derived depot values can mask damage.
   if (cases.some((item) => !validCaseFinancialInputs(item)))
-    throw new Error("Ungültige Finanzbeträge können nicht gespeichert werden. Der Bestand bleibt erhalten.");
+    throw new Error("Ungültige Finanzbeträge oder Ratenzahlen können nicht gespeichert werden. Der Bestand bleibt erhalten.");
   const normalized = cases.map(enforceCaseDepotValue);
   if (normalized.some((item) => !normalizeImportedCase(item, false))) throw new Error("Ein beschädigter Fall kann nicht gespeichert werden. Der Bestand bleibt erhalten.");
   const serialized = JSON.stringify([...normalized, ...loaded.protectedEntries]);

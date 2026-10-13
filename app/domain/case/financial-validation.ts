@@ -1,4 +1,6 @@
-/** Monetary trust boundary only. Optional depot/Bond metadata and historical
+import { validPhasedInstallments, legacyPhasedInstallments } from "../planning/installment-validation";
+
+/** Financial and phased-count trust boundary. Optional depot/Bond metadata and historical
  * version snapshots keep their separate validation/migration contracts. */
 const record = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
@@ -61,6 +63,8 @@ export function validCaseFinancialInputs(value: unknown, sourceSchemaVersion = 1
         const amount = current || sourceSchemaVersion >= 8 ? entry.contributionAmount : entry.installmentAmount;
         if (!(current ? finiteNonnegativeAmount(amount) : migratableAmount(amount))) return false;
       } else if (entry.type === "phased") {
+        if (current ? !validPhasedInstallments(entry.installments)
+          : legacyPhasedInstallments(entry.installments) === null) return false;
         const amount = current || sourceSchemaVersion >= 8 ? entry.stagedValue : entry.installmentAmount;
         if (!(current ? finiteNonnegativeAmount(amount) : migratableAmount(amount))) return false;
         if ((current || sourceSchemaVersion >= 8) && entry.stagedMode === "percent" && Number(amount) > 100) return false;

@@ -2,9 +2,11 @@ import { test, expect, type Page, type TestInfo } from "@playwright/test";
 import { readFile, stat } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import * as XLSX from "xlsx";
-import { normalizeImportedCase, planAssetAmounts, buildPlanWealthStructure, type AdvisoryCase } from "../../app/case-model";
+import { normalizeImportedCase, duplicateStructurePlan, caseSnapshot, phasedEntryAmounts, type PhasedEntryPlan, planAssetAmounts, buildPlanWealthStructure, type AdvisoryCase } from "../../app/case-model";
 import { CASE_STORAGE_KEY } from "../../app/case-storage";
 import { depotA, depotB, depotCsv, planningCase, outputCase } from "./fixtures";
+
+import { h4Case } from "../../scripts/h4-fixtures";
 
 const nav = (page: Page, name: string) => page.getByRole("navigation").getByRole("button", { name, exact: false }).click();
 const money = (amount: number) => new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(amount);
@@ -803,6 +805,135 @@ test.describe("Planung und Fallidentität", () => {
       expect(pageErrors).toEqual([]); page.off("pageerror", onPageError);
       console.log("PASS H3 browser: all 6 originals visible; 4 invalid Restores rejected with byte-identical store; healthy Restore, safe label/cancel, explicit save and real reload; no pageerror");
     });
+    await test.step("H4: bounded React rates, strict drafts, opaque history, rejected JSON and saved reload", async () => {
+      const errors: string[] = [];
+      const onError = (error: Error) => errors.push(error.message);
+      page.on("pageerror", onError);
+      const neighbors = await stored(page), source = h4Case();
+      const variant = duplicateStructurePlan(source.plans[0], "Synthetische H4-Variante");
+      source.plans.push(variant);
+      const good = caseSnapshot(source), damaged = structuredClone(good);
+      Reflect.set(damaged.plans[0].investmentPlans[0], "installments", 4294967296);
+      source.versions = [
+        { id: "cp0b-h4-good", label: "H4 gültige Historie", createdAt: source.createdAt, snapshot: good },
+        { id: "cp0b-h4-bad", label: "H4 übergroße historische Raten", createdAt: source.createdAt, snapshot: damaged },
+      ];
+      async function jsonImport(item: AdvisoryCase, tag: string) {
+        await nav(page, "Ergebnis & Export");
+        const chooser = page.waitForEvent("filechooser");
+        await page.getByRole("button", { name: /JSON importieren/ }).click();
+        await (await chooser).setFiles({ name: `synthetic-h4-${tag}.json`, mimeType: "application/json",
+          buffer: Buffer.from(JSON.stringify({ case: item })) });
+      }
+      await jsonImport(source, "valid");
+      await expect(page.getByLabel("Bezeichnung des Testfalls")).toHaveValue(source.advisory.caseName);
+      await expect.poll(async () => (await stored(page)).length).toBe(neighbors.length + 1);
+      const imported = (await currentJson(page, info, "h4-imported")).item;
+      expect(imported.id).not.toBe(source.id); expect(imported.versions).toEqual(source.versions);
+      await page.reload(); await openCase(page, source.advisory.caseName);
+      const beforeRestore = (await currentJson(page, info, "h4-history-reloaded")).item;
+      const storageBeforeRestore = await page.evaluate(() => ({ ...localStorage }));
+      const history = page.locator(".version-history");
+      await expect(history.locator("article")).toHaveCount(2);
+      const dialogs: string[] = [];
+      const onDialog = async (dialog: import("@playwright/test").Dialog) => {
+        dialogs.push(dialog.message()); await dialog.accept();
+      };
+      page.on("dialog", onDialog);
+      try {
+        await history.locator("article").filter({ hasText: "H4 übergroße historische Raten" }).getByRole("button", { name: "Wiederherstellen", exact: true }).click();
+        await expect.poll(() => dialogs.length).toBe(2);
+      } finally { page.off("dialog", onDialog); }
+      expect(dialogs[1]).toBe("Diese historische Version kann aufgrund beschädigter Daten nicht wiederhergestellt werden. Der aktuelle Arbeitsstand bleibt unverändert.");
+      expect((await currentJson(page, info, "h4-rejected-restore")).item).toEqual(beforeRestore);
+      expect(await page.evaluate(() => ({ ...localStorage }))).toEqual(storageBeforeRestore);
+      const confirm = page.waitForEvent("dialog").then(d => d.accept());
+      await history.locator("article").filter({ hasText: "H4 gültige Historie" }).getByRole("button", { name: "Wiederherstellen", exact: true }).click();
+      await confirm;
+      const restored = (await currentJson(page, info, "h4-good-restore")).item;
+      expect(restored.id).toBe(imported.id); expect(restored.versions).toEqual(source.versions); expect(restored.plans).toEqual(good.plans);
+      expect(await page.evaluate(() => ({ ...localStorage }))).toEqual(storageBeforeRestore);
+      await nav(page, "Strukturplanung");
+      const timeline = page.locator(".capital-timeline");
+      await timeline.getByRole("button", { name: /STRATEGISCH/ }).click();
+      const detail = page.locator(".capital-pot-detail");
+      await detail.getByRole("button", { name: "Ändern", exact: true }).click();
+      const count = detail.getByRole("textbox", { name: /^Anzahl Raten/ });
+      await expect(count).toHaveValue("3");
+      await count.fill(""); await expect(count).toHaveValue("");
+      await count.pressSequentially("12"); await count.press("Tab");
+      await expect(count).toHaveValue("12"); await expect(count).toHaveAttribute("aria-invalid", "false");
+      await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+      await page.evaluate(() => navigator.clipboard.writeText("12"));
+      await count.focus(); await count.press("ControlOrMeta+A"); await count.press("ControlOrMeta+V"); await count.press("Tab");
+      await expect(count).toHaveValue("12"); await expect(count).toHaveAttribute("aria-invalid", "false");
+      await count.fill("1200"); await count.press("Enter"); await expect(count).toHaveValue("1200");
+      const invalidBytes = await page.evaluate(() => ({ ...localStorage }));
+      for (const raw of ["1201", "4294967296", "1.5", "1.200", "-1", "1e3", ""]) {
+        await count.fill(raw); await count.press("Tab");
+        await expect(count).toHaveValue(raw); await expect(count).toHaveAttribute("aria-invalid", "true");
+        await expect(detail.getByRole("alert")).toContainText("Nicht übernommen; zuletzt gültig: 1200");
+        await expect(detail.getByRole("alert")).toContainText("von 1 bis 1200 ohne Trennzeichen");
+        expect(await page.evaluate(() => ({ ...localStorage }))).toEqual(invalidBytes);
+      }
+      // Real OS clipboard shortcut: neither invalid paste nor Enter changes the model.
+      await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+      await page.evaluate(() => navigator.clipboard.writeText("4294967296"));
+      await count.focus(); await count.press("ControlOrMeta+A"); await count.press("ControlOrMeta+V"); await count.press("Enter");
+      await expect(count).toHaveValue("4294967296"); await expect(detail.getByRole("alert")).toContainText("zuletzt gültig: 1200");
+      // Distinct pot/product and plan IDs must never share a draft.
+      await timeline.getByRole("button", { name: /2030/ }).click();
+      await detail.getByRole("button", { name: "Ändern", exact: true }).click();
+      await expect(count).toHaveValue("6"); await expect(count).toHaveAttribute("aria-invalid", "false");
+      await count.fill("12"); await count.press("Tab");
+      await timeline.getByRole("button", { name: /STRATEGISCH/ }).click();
+      await detail.getByRole("button", { name: "Ändern", exact: true }).click();
+      await expect(count).toHaveValue("4294967296");
+      const plans = page.getByRole("combobox", { name: /^Aktive Planung/ });
+      await plans.selectOption(variant.id); await detail.getByRole("button", { name: "Ändern", exact: true }).click();
+      await expect(count).toHaveValue("3"); await expect(count).toHaveAttribute("aria-invalid", "false");
+      await plans.selectOption(source.plans[0].id); await detail.getByRole("button", { name: "Ändern", exact: true }).click();
+      await expect(count).toHaveValue("4294967296");
+      const beforeImport = (await currentJson(page, info, "h4-unsaved-last-valid")).item;
+      expect(Reflect.get(beforeImport.plans[0].investmentPlans[0], "installments")).toBe(1200);
+      expect(Reflect.get(beforeImport.plans[0].investmentPlans[1], "installments")).toBe(12);
+      expect(Reflect.get(beforeImport.plans[1].investmentPlans[0], "installments")).toBe(3);
+      const beforeImportBytes = await page.evaluate(() => ({ ...localStorage }));
+      for (const schema of [10, 11]) {
+        const corrupt = structuredClone(beforeImport); Reflect.set(corrupt, "schemaVersion", schema);
+        Reflect.set(corrupt.plans[0].investmentPlans[0], "installments", 4294967296);
+        const alert = page.waitForEvent("dialog").then(async dialog => {
+          expect(dialog.type()).toBe("alert"); expect(dialog.message()).toBe("Die Datei enthält keinen vollständigen VermögensNavigator-Fall."); await dialog.accept();
+        });
+        await jsonImport(corrupt, `bad-schema-${schema}`); await alert;
+        expect(await page.evaluate(() => ({ ...localStorage }))).toEqual(beforeImportBytes);
+        expect((await currentJson(page, info, `h4-after-rejected-import-${schema}`)).item).toEqual(beforeImport);
+      }
+      await nav(page, "Strukturplanung");
+      await timeline.getByRole("button", { name: /STRATEGISCH/ }).click();
+      await detail.getByRole("button", { name: "Ändern", exact: true }).click();
+      await count.fill("3"); await count.press("Enter");
+      await expect(count).toHaveAttribute("aria-invalid", "false"); await expect(detail.getByRole("alert")).toHaveCount(0);
+      await expect(detail.locator(".entry-editor")).toContainText(money(33.33)); await expect(detail.locator(".entry-editor")).toContainText(`Letzte Rate ${money(33.34)}`);
+      await save(page); await page.reload(); await openCase(page, source.advisory.caseName);
+      const reopened = (await currentJson(page, info, "h4-final-reload")).item;
+      expect(reopened.id).toBe(imported.id); expect(reopened.versions).toEqual(source.versions);
+      expect(Reflect.get(reopened.plans[0].investmentPlans[0], "installments")).toBe(3);
+      expect(phasedEntryAmounts(reopened.plans[0], reopened.plans[0].investmentPlans[0] as PhasedEntryPlan).installmentAmounts).toEqual([33.33,33.33,33.34]);
+      const xlsx = await download(page, info, "Excel-Arbeitsmappe", "h4-cent-rates");
+      const workbook = XLSX.read(await readFile(xlsx.path), { type: "buffer" });
+      const rows = XLSX.utils.sheet_to_json<{ Plan: string; Produkt: string; Anzahl_Raten: number; Ratenhöhe: number; Gestaffelter_Betrag: number; Plausibilität: string }>(workbook.Sheets.Investitionspläne);
+      expect(rows.find(r => r.Plan === source.plans[0].name && r.Produkt === source.plans[0].allocations[0].productName)).toMatchObject({
+        Anzahl_Raten: 3, Ratenhöhe: 33.33, Gestaffelter_Betrag: 100, Plausibilität: "Plausibel",
+      });
+      await nav(page, "Strukturplanung"); await timeline.getByRole("button", { name: /STRATEGISCH/ }).click();
+      await detail.getByRole("button", { name: "Ändern", exact: true }).click(); await expect(count).toHaveValue("3");
+      const finalStore = await stored(page);
+      for (const neighbor of neighbors) expect({ ...finalStore.find(c => c.id === neighbor.id), updatedAt: neighbor.updatedAt }).toEqual(neighbor);
+      expect(errors).toEqual([]); page.off("pageerror", onError);
+      console.log("PASS H4 browser: strict typing/paste/Tab/Enter/blur and isolated pot/product/plan drafts; last-valid 1200; schema10/11 imports and bad Restore inert; healthy Restore, cents, real save/reload and no pageerror");
+    });
+
   });
 });
 

@@ -1,6 +1,7 @@
 import { uid, iso, clone } from "./runtime";
 import { validCaseFinancialInputs } from "./financial-validation";
 import { validCurrentPlanGraph } from "../planning/plan-identity";
+import { legacyPhasedInstallments } from "../planning/installment-validation";
 import { withDepotValue } from "../depot/lifecycle";
 import {
   allocationBucketAmounts,
@@ -107,7 +108,8 @@ function normalizeInvestmentPlans(
         capitalPotId: entry.capitalPotId,
         stagedMode: entry.stagedMode === "percent" ? "percent" as const : "amount" as const,
         stagedValue: Math.max(0, Number(entry.stagedValue) || 0),
-        installments: Math.max(1, Math.trunc(Number(entry.installments) || 1)),
+        installments: sourceSchemaVersion >= 10
+          ? entry.installments! : legacyPhasedInstallments(entry.installments)!,
         frequency: normalizedFrequency(entry.frequency),
         startDate: entry.startDate || "",
         note: entry.note || "",
@@ -131,7 +133,7 @@ function normalizeInvestmentPlans(
         allocationAmountInCapitalPot(allocation, legacyPotId) > 0,
     );
     if (candidates.length !== 1) return [];
-    const installments = Math.max(1, Math.trunc(Number(entry.installments) || 1));
+    const installments = legacyPhasedInstallments(entry.installments)!;
     const stagedValue =
       Math.max(0, Number(entry.installmentAmount) || 0) * installments;
     if (stagedValue <= 0) return [];
