@@ -154,6 +154,7 @@ import {
 } from "./case-model";
 import { DepotCsvResult, parseDepotCsv } from "./depot-csv";
 import { depotCountryName } from "./depot-country-codes";
+import { AmountInput } from "./presentation/amount-input";
 import {
   bondPortfolioAnalysis,
   buildDepotAnalysisPositions,
@@ -188,8 +189,6 @@ const investmentFrequencyUnits: Record<InvestmentFrequency, string> = {
 
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
-const parseAmount = (value: string) =>
-  Number(value.replace(/[^0-9]/g, "")) || 0;
 const parseGermanDecimal = (value: string) => {
   const cleaned = value.trim().replace(/\s/g, "");
   const normalized = cleaned.includes(",")
@@ -247,23 +246,25 @@ function AmountField({
   onChange,
   hint,
   readOnly = false,
+  identity = label,
 }: {
   label: string;
   value: number;
   onChange: (value: number) => void;
   hint?: string;
   readOnly?: boolean;
+  identity?: string;
 }) {
   return (
     <label className="field amount-field">
       <span>{label}</span>
       <div>
-        <input
-          inputMode="numeric"
-          value={value ? value.toLocaleString("de-DE") : ""}
+        <AmountInput
+          identity={identity}
+          value={value}
           placeholder="0"
           readOnly={readOnly}
-          onChange={(event) => { if (!readOnly) onChange(parseAmount(event.target.value)); }}
+          onValueChange={onChange}
         />
         <b>€</b>
       </div>
@@ -713,6 +714,7 @@ export default function Home() {
         )}
         {view === "wizard" && (
           <WizardView
+            key={activeCase.id}
             item={activeCase}
             setItem={setActiveCase}
             saveCase={saveCase}
@@ -722,6 +724,7 @@ export default function Home() {
         )}
         {view === "planner" && (
           <PlannerView
+            key={activeCase.id}
             item={activeCase}
             setItem={setActiveCase}
             saveCase={saveCase}
@@ -730,6 +733,7 @@ export default function Home() {
         )}
         {view === "depot" && (
           <DepotOptimizer
+            key={activeCase.id}
             item={activeCase}
             setItem={setActiveCase}
             plan={activePlan}
@@ -1491,17 +1495,13 @@ export function SituationStep({
                       placeholder="Produktbezeichnung"
                     />
                     <div className="inline-amount">
-                      <input
+                      <AmountInput
+                        identity={holding.id}
                         aria-label="Aktueller Wert"
-                        inputMode="numeric"
-                        value={
-                          holding.value
-                            ? holding.value.toLocaleString("de-DE")
-                            : ""
-                        }
-                        onChange={(event) =>
+                        value={holding.value}
+                        onValueChange={(value) =>
                           updateHolding(holding.id, {
-                            value: parseAmount(event.target.value),
+                            value,
                           })
                         }
                         placeholder="0"
@@ -1615,14 +1615,12 @@ function NeedsStep({
               <label>
                 <span>Betrag</span>
                 <div className="inline-amount">
-                  <input
-                    inputMode="numeric"
-                    value={
-                      need.amount ? need.amount.toLocaleString("de-DE") : ""
-                    }
-                    onChange={(event) =>
+                  <AmountInput
+                    identity={need.id}
+                    value={need.amount}
+                    onValueChange={(amount) =>
                       updateNeed(need.id, {
-                        amount: parseAmount(event.target.value),
+                        amount,
                       })
                     }
                   />
@@ -3408,14 +3406,14 @@ function PlannerView({
               <label>
                 <span>Zu strukturierendes Kapital</span>
                 <div>
-                  <input
-                    inputMode="numeric"
+                  <AmountInput
+                    identity={plan.id}
                     disabled={plan.capitalMode === "linked"}
-                    value={plan.total ? plan.total.toLocaleString("de-DE") : ""}
+                    value={plan.total}
                     placeholder="0"
-                    onChange={(event) =>
+                    onValueChange={(total) =>
                       updatePlan({
-                        total: parseAmount(event.target.value),
+                        total,
                         capitalMode: "manual",
                       })
                     }
@@ -3750,11 +3748,11 @@ function PlannerView({
                                 )}
                             </span>
                             <div>
-                              <input
+                              <AmountInput
+                                identity={`${plan.id}:${allocation.id}`}
                                 aria-label={`Kaufbetrag ${allocation.productName}`}
-                                inputMode="numeric"
-                                value={allocation.amount ? allocation.amount.toLocaleString("de-DE") : ""}
-                                onChange={(event) => updateAllocationAmount(allocation, parseAmount(event.target.value))}
+                                value={allocation.amount}
+                                onValueChange={(amount) => updateAllocationAmount(allocation, amount)}
                               />
                               <b>€</b>
                               <button
@@ -3824,7 +3822,16 @@ function PlannerView({
                                       <label>
                                         <span>Gestaffelter Anteil</span>
                                         <div className="staged-value-field">
-                                          <input
+                                          {phasedEntry.stagedMode === "amount" ? (
+                                            <AmountInput
+                                              identity={`${plan.id}:${phasedEntry.id}:amount`}
+                                              value={phasedEntry.stagedValue}
+                                              onValueChange={(stagedValue) => {
+                                                if (stagedValue === 0) removeInvestmentPlan(phasedEntry.id);
+                                                else updatePhasedEntry(phasedEntry.id, { stagedValue });
+                                              }}
+                                            />
+                                          ) : <input
                                             inputMode="decimal"
                                             value={
                                               entryDrafts[pairKey]?.stagedValue ??
@@ -3852,7 +3859,7 @@ function PlannerView({
                                             onKeyDown={(event) => {
                                               if (event.key === "Enter") event.currentTarget.blur();
                                             }}
-                                          />
+                                          />}
                                           <select
                                             aria-label="Staffelmodus"
                                             value={phasedEntry.stagedMode}
@@ -4023,15 +4030,13 @@ function PlannerView({
                                   <label key={pot.id}>
                                     <span>{pot.label}</span>
                                     <div className="inline-amount">
-                                      <input
-                                        inputMode="numeric"
-                                        value={allocationAmountInCapitalPot(allocation, pot.id)
-                                          ? allocationAmountInCapitalPot(allocation, pot.id).toLocaleString("de-DE")
-                                          : ""}
-                                        onChange={(event) => updateManualBucket(
+                                      <AmountInput
+                                        identity={`${plan.id}:${allocation.id}:${pot.id}`}
+                                        value={allocationAmountInCapitalPot(allocation, pot.id)}
+                                        onValueChange={(amount) => updateManualBucket(
                                           allocation,
                                           pot.id,
-                                          parseAmount(event.target.value),
+                                          amount,
                                         )}
                                       />
                                       <b>€</b>
@@ -4195,16 +4200,12 @@ function PlannerView({
                       <label>
                             <span>Sparrate</span>
                         <div className="inline-amount">
-                          <input
-                            inputMode="numeric"
-                            value={
-                                  entry.contributionAmount
-                                    ? entry.contributionAmount.toLocaleString("de-DE")
-                                : ""
-                            }
-                            onChange={(event) =>
+                          <AmountInput
+                            identity={`${plan.id}:${entry.id}`}
+                            value={entry.contributionAmount}
+                            onValueChange={(contributionAmount) =>
                                   updateSavingsPlan(entry.id, {
-                                    contributionAmount: parseAmount(event.target.value),
+                                    contributionAmount,
                               })
                             }
                           />
@@ -4325,12 +4326,12 @@ function PlannerView({
                             <label>
                               <span>Zielbetrag</span>
                               <div className="inline-amount">
-                                <input
-                                  inputMode="numeric"
-                                  value={selectedGoal.targetAmount ? selectedGoal.targetAmount.toLocaleString("de-DE") : ""}
-                                  onChange={(event) =>
+                                <AmountInput
+                                  identity={selectedGoal.id}
+                                  value={selectedGoal.targetAmount}
+                                  onValueChange={(targetAmount) =>
                                     updateSavingsGoal(selectedGoal.id, {
-                                      targetAmount: parseAmount(event.target.value),
+                                      targetAmount,
                                     })
                                   }
                                 />
@@ -4530,6 +4531,7 @@ function PlannerView({
               </button>
             </div>
             <AmountField
+              identity={`${plan.id}:${modelDialog.id}:${modelDialog.action}`}
               label="Betroffener Betrag"
               value={modelDialog.amount}
               onChange={(amount) => setModelDialog({ ...modelDialog, amount })}
@@ -5307,15 +5309,13 @@ function VvSelection({
                 <label className="vv-investment-amount">
                   <span>Anlagebetrag</span>
                   <div className="inline-amount">
-                    <input
-                      inputMode="numeric"
-                      value={(amounts[entry.id] ?? filters.amount)
-                        ? (amounts[entry.id] ?? filters.amount).toLocaleString("de-DE")
-                        : ""}
-                      onChange={(event) =>
+                    <AmountInput
+                      identity={`${item.id}:${plan.id}:${entry.id}`}
+                      value={amounts[entry.id] ?? filters.amount}
+                      onValueChange={(amount) =>
                         setAmounts((current) => ({
                           ...current,
-                          [entry.id]: parseAmount(event.target.value),
+                          [entry.id]: amount,
                         }))
                       }
                     />
@@ -6094,14 +6094,13 @@ function DepotOptimizer({
                   {holding.classificationStatus === "unresolved" && <small className="classification-open">Durchschau ungeklärt</small>}
                 </div>
                 <div className="inline-amount">
-                  <input
-                    inputMode="numeric"
-                    value={
-                      holding.value ? holding.value.toLocaleString("de-DE") : ""
-                    }
-                    onChange={(event) =>
+                  <AmountInput
+                    identity={holding.id}
+                    aria-label={`Positionswert ${account.name}: ${holding.name}`}
+                    value={holding.value}
+                    onValueChange={(value) =>
                       updateHolding(holding.id, {
-                        value: parseAmount(event.target.value),
+                        value,
                       })
                     }
                   />
@@ -6139,19 +6138,15 @@ function DepotOptimizer({
                   <option>Nicht zugeordnet</option>
                 </select>
                 <div className="inline-amount sale">
-                  <input
+                  <AmountInput
+                    identity={holding.id}
                     aria-label={`Geplanter Verkauf ${account.name}: ${holding.name}`}
-                    inputMode="numeric"
-                    value={
-                      holding.plannedSale
-                        ? holding.plannedSale.toLocaleString("de-DE")
-                        : ""
-                    }
-                    onChange={(event) =>
+                    value={holding.plannedSale}
+                    onValueChange={(amount) =>
                       updateHolding(holding.id, {
                         plannedSale: Math.min(
                           holding.value,
-                          parseAmount(event.target.value),
+                          amount,
                         ),
                       })
                     }
