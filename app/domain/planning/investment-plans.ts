@@ -6,6 +6,7 @@ import type {
   InvestmentFrequency,
 } from "./contracts";
 import { allocationAmountInCapitalPot } from "./allocations";
+import { validPhasedInstallments } from "./installment-validation";
 
 const toCents = (amount: number) => Math.round((Number(amount) || 0) * 100);
 
@@ -24,6 +25,16 @@ export function phasedEntryAmounts(
   plan: StructurePlan,
   entry: PhasedEntryPlan,
 ): PhasedEntryAmounts {
+  if (!validPhasedInstallments(entry.installments)) return {
+    targetAmount: 0,
+    stagedAmount: 0,
+    immediateAmount: 0,
+    installmentAmounts: [],
+    installmentAmount: 0,
+    lastInstallmentAmount: 0,
+    invalid: true,
+    hasRoundingAdjustment: false,
+  };
   const allocation = plan.allocations.find(
     (candidate) => candidate.id === entry.allocationId,
   );
@@ -36,7 +47,7 @@ export function phasedEntryAmounts(
     entry.stagedMode === "percent"
       ? Math.round(targetCents * (Number(entry.stagedValue) || 0) / 100)
       : toCents(entry.stagedValue);
-  const installments = Math.max(0, Math.trunc(Number(entry.installments) || 0));
+  const installments = entry.installments;
   const invalid =
     targetCents <= 0 ||
     stagedCents <= 0 ||
@@ -108,8 +119,8 @@ const frequencyMonths: Record<InvestmentFrequency, number> = {
 };
 
 export function phasedEntryLastDate(entry: Pick<PhasedEntryPlan, "startDate" | "installments" | "frequency">) {
-  const installments = Math.trunc(Number(entry.installments));
-  if (installments < 1) return null;
+  if (!validPhasedInstallments(entry.installments)) return null;
+  const installments = entry.installments;
   return addLocalMonthsClamped(
     entry.startDate,
     (installments - 1) * frequencyMonths[entry.frequency],
@@ -152,7 +163,9 @@ export function defaultPhasedEntryInstallments(
   referenceDate: Date | string = new Date(),
   preferred = 12,
 ) {
-  const maximum = Math.max(1, Math.trunc(preferred));
+  // An invalid external preference falls back to the normal proposal, never a
+  // truncated/clamped interpretation of an actual entry's installment count.
+  const maximum = validPhasedInstallments(preferred) ? preferred : 12;
   for (let installments = maximum; installments >= 1; installments -= 1) {
     if (phasedEntryScheduleValidation(
       { startDate, installments, frequency: "monthly" },
@@ -167,13 +180,18 @@ export type PhasedEntryDraftKind = "installments" | "percent" | "amount";
 export function parsePhasedEntryNumericDraft(raw: string, kind: PhasedEntryDraftKind) {
   const trimmed = raw.trim();
   if (!trimmed) return { status: "empty" as const };
+  if (kind === "installments") {
+    if (!/^\d+$/.test(trimmed)) return { status: "invalid" as const };
+    const value = Number(trimmed);
+    return validPhasedInstallments(value)
+      ? { status: "valid" as const, value }
+      : { status: "invalid" as const };
+  }
   const normalized = trimmed.replace(/\s/g, "").replace(/\./g, "").replace(",", ".");
   if (!/^-?\d+(?:\.\d+)?$/.test(normalized)) return { status: "invalid" as const };
   const value = Number(normalized);
   const valid = Number.isFinite(value) && (
-    kind === "installments"
-      ? Number.isInteger(value) && value >= 1
-      : kind === "percent"
+    kind === "percent"
         ? value >= 0 && value <= 100
         : value >= 0
   );

@@ -17,6 +17,8 @@ import type { ProductMainCategory } from "./domain/depot/classification-contract
 import { buildBondAnalysisData, buildBondIstExportData, BOND_EXPORT_SCOPE_NOTICE } from "./bond-analysis-data";
 import { BondAnalysisView } from "./bond-analysis-view";
 "use client";
+
+import { MAX_PHASED_INSTALLMENTS } from "./domain/planning/installment-validation";
 import { BOND_MODEL_NOTICE, BOND_PROFILE_NOTICE } from "./bond-v2";
 
 import {
@@ -2822,16 +2824,16 @@ function PlannerView({
     mode: "immediate" | "partial" | "full",
   ) => {
     const existing = phasedEntryFor(allocation.id, capitalPotId);
+    setEntryDrafts((current) => {
+      const next = { ...current };
+      delete next[`${item.id}::${plan.id}::${allocation.id}::${capitalPotId}`];
+      return next;
+    });
     if (mode === "immediate") {
       if (existing) removeInvestmentPlan(existing.id);
       return;
     }
     if (existing) {
-      setEntryDrafts((current) => {
-        const next = { ...current };
-        delete next[`${allocation.id}::${capitalPotId}`];
-        return next;
-      });
       updatePhasedEntry(existing.id, {
         stagedMode: mode === "full" ? "percent" : existing.stagedMode,
         stagedValue:
@@ -3696,7 +3698,7 @@ function PlannerView({
                         const conflict =
                           itemSolution &&
                           itemSolution.minMonths > selectedPot.minMonths;
-                        const pairKey = `${allocation.id}::${selectedPot.id}`;
+                        const pairKey = `${item.id}::${plan.id}::${allocation.id}::${selectedPot.id}`;
                         const phasedEntry = phasedEntryFor(
                           allocation.id,
                           selectedPot.id,
@@ -3714,6 +3716,10 @@ function PlannerView({
                         const entryNeedsAdjustment = Boolean(
                           entryAmounts?.invalid || (entrySchedule && !entrySchedule.valid),
                         );
+                        const installmentDraft = entryDrafts[pairKey]?.installments;
+                        const invalidInstallmentDraft = installmentDraft !== undefined &&
+                          parsePhasedEntryNumericDraft(installmentDraft, "installments").status !== "valid";
+                        const installmentErrorId = `installment-error-${phasedEntry?.id}`;
                         const entryMode = !phasedEntry
                           ? "immediate"
                           : entryAmounts?.stagedAmount === entryAmounts?.targetAmount
@@ -3901,9 +3907,14 @@ function PlannerView({
                                     <label>
                                       <span>Anzahl Raten</span>
                                       <input
-                                        type="number"
+                                        type="text"
+                                        inputMode="numeric"
+                                        pattern="[0-9]+"
                                         min="1"
+                                        max={MAX_PHASED_INSTALLMENTS}
                                         step="1"
+                                        aria-invalid={invalidInstallmentDraft}
+                                        aria-describedby={invalidInstallmentDraft ? installmentErrorId : undefined}
                                         value={
                                           entryDrafts[pairKey]?.installments ??
                                           String(phasedEntry.installments)
@@ -3920,11 +3931,18 @@ function PlannerView({
                                               installments: parsed.value,
                                             });
                                         }}
-                                        onBlur={() => clearEntryDraft(pairKey, "installments")}
+                                        onBlur={() => {
+                                          if (!invalidInstallmentDraft) clearEntryDraft(pairKey, "installments");
+                                        }}
                                         onKeyDown={(event) => {
                                           if (event.key === "Enter") event.currentTarget.blur();
                                         }}
                                       />
+                                      {invalidInstallmentDraft && (
+                                        <small id={installmentErrorId} role="alert">
+                                          Bitte eine ganze Zahl von 1 bis {MAX_PHASED_INSTALLMENTS} ohne Trennzeichen eingeben. Nicht übernommen; zuletzt gültig: {phasedEntry.installments}.
+                                        </small>
+                                      )}
                                     </label>
                                     <label>
                                       <span>Rate</span>

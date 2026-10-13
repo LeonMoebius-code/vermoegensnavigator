@@ -1,6 +1,7 @@
 import { uid, iso, clone } from "../case/runtime";
 import { capitalPots } from "./capital-pots";
 import { allocationAmountInCapitalPot } from "./allocations";
+import { validPhasedInstallments } from "./installment-validation";
 import type { StructurePlan, InvestmentPlan } from "./contracts";
 import type { AdvisoryCase } from "../case/contracts";
 
@@ -140,7 +141,7 @@ export function validCurrentPlanGraph(item: Partial<AdvisoryCase>): boolean {
       if (entry.type === "phased") {
         // Allocation identity is plan-local even though IDs are unique case-wide.
         const allocation = plan.allocations.find((candidate) => candidate.id === entry.allocationId);
-        if (!allocation || !potIds.has(entry.capitalPotId) ||
+        if (!validPhasedInstallments(entry.installments) || !allocation || !potIds.has(entry.capitalPotId) ||
           allocationAmountInCapitalPot(allocation, entry.capitalPotId) <= 0) return false;
       } else if (entry.type === "savings") {
         if (entry.targetRef !== undefined) {

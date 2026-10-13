@@ -615,7 +615,8 @@ Stattdessen sichtbar warnen:
 ### Anzahl Raten
 
 - bei Staffelung manuell festlegen
-- positive ganze Zahl
+- tatsächliche sichere ganze Zahl von 1 bis 1.200 (technische H4-Ressourcengrenze)
+- keine Kappung oder Umdeutung ungültiger Werte; Kapitaltopf-Fristen bleiben zusätzlich maßgeblich
 - Rate automatisch daraus berechnen
 
 ### Rhythmus

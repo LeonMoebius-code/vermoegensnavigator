@@ -9,6 +9,7 @@ import type {
   InvestmentPlan,
 } from "./contracts";
 import { capitalPots } from "./capital-pots";
+import { validPhasedInstallments } from "./installment-validation";
 
 export function allocationBucketAmounts(
   allocation: PlannerAllocation,
@@ -203,8 +204,7 @@ export function reconcilePlanCapitalPots(
         validIds.has(entry.capitalPotId) &&
         allocationAmountInCapitalPot(allocation, entry.capitalPotId) > 0 &&
         Number(entry.stagedValue) > 0 &&
-        Number.isInteger(entry.installments) &&
-        entry.installments > 0
+        validPhasedInstallments(entry.installments)
         ? [entry]
         : [];
     }
