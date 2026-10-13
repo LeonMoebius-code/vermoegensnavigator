@@ -40,6 +40,7 @@
     "tests/browser/**/*.ts",
     "scripts/verify-p3-plan-integrity.tsx",
     "scripts/verify-d1-view-contract.tsx",
-    "scripts/verify-h1-amount-inputs.tsx"
+    "scripts/verify-h1-amount-inputs.tsx",
+    "scripts/verify-h2-financial-data.ts"
   ]
 }

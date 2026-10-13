@@ -2,7 +2,7 @@ import { test, expect, type Page, type TestInfo } from "@playwright/test";
 import { readFile, stat } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import * as XLSX from "xlsx";
-import { normalizeImportedCase, type AdvisoryCase } from "../../app/case-model";
+import { normalizeImportedCase, planAssetAmounts, buildPlanWealthStructure, type AdvisoryCase } from "../../app/case-model";
 import { CASE_STORAGE_KEY } from "../../app/case-storage";
 import { depotA, depotB, depotCsv, planningCase, outputCase } from "./fixtures";
 
@@ -517,6 +517,45 @@ test.describe("Planung und Fallidentität", () => {
     const [original] = await stored(page);
     const backup = await currentJson(page, info, "original-backup");
     expect(backup.item).toEqual(original);
+    await test.step("H2: actual string-needs and Audit-06 allocation imports reject before store/recalculation", async () => {
+      const originalBytes = await page.evaluate((key) => localStorage.getItem(key), CASE_STORAGE_KEY);
+      const metrics = await page.locator(".print-metrics").innerText();
+      const expectedWealth = original.plans.map(p => buildPlanWealthStructure(original.depot, p));
+      for (const kind of ["needs", "allocations"] as const) {
+        const damaged = JSON.parse(await readFile(backup.path, "utf8"));
+        if (kind === "needs") {
+          damaged.case.advisory.needs = [
+            { id: 101, purpose: "Synthetischer H2-Bedarf A", amount: "1000", years: 2 },
+            { id: 102, purpose: "Synthetischer H2-Bedarf B", amount: "2000", years: 2 },
+          ];
+        } else {
+          const allocation = damaged.case.plans[0].allocations[0];
+          damaged.case.plans[0].allocations = ["1000", "2000"].map((amount, index) => ({
+            ...allocation, id: index === 0 ? allocation.id : "cp0b-h2-second-allocation",
+            amount, capitalPotId: "strategic", capitalPotAmounts: { strategic: amount },
+            bucketAmounts: { year10plus: amount },
+          }));
+        }
+        const chooser = page.waitForEvent("filechooser");
+        await page.getByRole("button", { name: /JSON importieren/ }).click();
+        const rejected = page.waitForEvent("dialog").then(async (dialog) => {
+          expect(dialog.type()).toBe("alert");
+          expect(dialog.message()).toBe("Die Datei enthält keinen vollständigen VermögensNavigator-Fall.");
+          await dialog.accept();
+        });
+        await (await chooser).setFiles({ name: `synthetic-h2-${kind}.json`, mimeType: "application/json",
+          buffer: Buffer.from(JSON.stringify(damaged)) });
+        await rejected;
+        expect(await page.evaluate((key) => localStorage.getItem(key), CASE_STORAGE_KEY)).toBe(originalBytes);
+        expect(await stored(page)).toEqual([original]);
+        expect(await page.locator(".print-metrics").innerText()).toBe(metrics);
+        const current = (await currentJson(page, info, `h2-rejected-${kind}`)).item;
+        expect(current).toEqual(original);
+        expect(current.plans.map(p => buildPlanWealthStructure(current.depot, p))).toEqual(expectedWealth);
+        expect(current.plans.map(p => planAssetAmounts(p).total).every(Number.isFinite)).toBe(true);
+      }
+      console.log("PASS H2 browser: string needs and two Audit-06 allocations rejected; original bytes, active case, print metrics and numeric projections unchanged");
+    });
     await test.step("P3 E: duplicate plan identity in actual JSON backup rejects without changing store, case or view", async () => {
       const originalBytes = await page.evaluate((key) => localStorage.getItem(key), CASE_STORAGE_KEY);
       const invalidBackup = JSON.parse(await readFile(backup.path, "utf8"));
@@ -632,6 +671,7 @@ test.describe("Planung und Fallidentität", () => {
       expect(Date.parse(reopened.updatedAt)).toBeLessThanOrEqual(Date.now());
       validRelations(reopened);
     }
+    console.log("PASS H2 browser: valid numeric JSON imported with fresh case identity; both healthy cases saved and reopened after real reload");
     expect((await stored(page)).map((c) => c.id).sort()).toEqual([original.id, imported.id].sort());
     expect({ ...(await stored(page)).find((c) => c.id === original.id), updatedAt: original.updatedAt }).toEqual(original);
     await test.step("P3 B: deleting non-active preferred variant preserves active and persists zero preference", async () => {
