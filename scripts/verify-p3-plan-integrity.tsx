@@ -280,7 +280,7 @@ test("actual Restore handler rejects corrupt snapshot, leaves current state/hist
   ]) {
   const c = fixture(); corrupt(c);
   const store = new Store(); writeCaseStore(store, [c]); const bytes = [...store.values], before = JSON.stringify(c); let changes = 0;
-  const oldWindow = globalThis.window; Object.assign(globalThis, { window: { confirm: () => true } });
+  const oldWindow = globalThis.window; Object.assign(globalThis, { window: { confirm: () => true, alert: (message: string) => assert.equal(message, "Diese historische Version kann aufgrund beschädigter Daten nicht wiederhergestellt werden. Der aktuelle Arbeitsstand bleibt unverändert.") } });
   try { button(view(c, () => { changes++; }), "Wiederherstellen")!.onClick!(); }
   finally { Object.assign(globalThis, { window: oldWindow }); }
   assert.equal(changes, 0); assert.equal(JSON.stringify(c), before); assert.deepEqual([...store.values], bytes);

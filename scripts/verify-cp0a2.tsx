@@ -268,7 +268,7 @@ function runReferences() {
   let restored: AdvisoryCase | undefined;
   const oldWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
   try {
-    Object.defineProperty(globalThis, "window", { configurable: true, value: { confirm: () => true } });
+    Object.defineProperty(globalThis, "window", { configurable: true, value: { confirm: () => true, alert: (message: string) => assert.equal(message, "Diese historische Version kann aufgrund beschädigter Daten nicht wiederhergestellt werden. Der aktuelle Arbeitsstand bleibt unverändert.") } });
     const corruptCopy = structuredClone(copy);
     corruptCopy.versions[0].snapshot.depot[2].depotId = "missing-depot";
     const corruptBefore = JSON.stringify(corruptCopy);

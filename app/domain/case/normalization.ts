@@ -264,6 +264,10 @@ export function normalizeImportedCase(
   if (item.depotAccounts) {
     const ids = item.depotAccounts.map((account) => account?.id);
     if (ids.some((id) => typeof id !== "string" || !id) || new Set(ids).size !== ids.length) return null;
+    // Missing/blank legacy names keep their default; present invalid types do
+    // not become names and must be rejected before the existing trim operation.
+    if (item.depotAccounts.some((account) =>
+      account.name !== undefined && typeof account.name !== "string")) return null;
   }
   const sourceSchemaVersion = Number(item.schemaVersion) || 0;
   if (sourceSchemaVersion > 11) return null;
