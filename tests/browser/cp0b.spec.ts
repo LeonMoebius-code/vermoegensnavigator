@@ -714,6 +714,95 @@ test.describe("Planung und Fallidentität", () => {
       await expect(page.locator(".maturity-summary article")).toHaveCount(0);
       console.log("PASS P3 C browser: no preferred target has visible hint, no fallback output; JSON stays available");
     });
+    await test.step("H3: real JSON import, damaged history, controlled Restore, healthy Restore and explicit save/reload", async () => {
+      const pageErrors: string[] = [];
+      const onPageError = (error: Error) => pageErrors.push(error.message);
+      page.on("pageerror", onPageError);
+      const neighbors = await stored(page);
+      const source = structuredClone(original);
+      source.advisory.caseName = "CP0B H3 beschädigte Historie";
+      const good = structuredClone(historical);
+      good.id = "cp0b-h3-good"; good.label = "H3 gesunder Zwischenstand";
+      good.snapshot.advisory.caseName = "CP0B H3 gesunder Stand";
+      source.versions = [good];
+      for (const [id, label, damage] of [
+        ["snapshot", "H3 beschädigter Snapshot", (v: AdvisoryCase["versions"][number]) => Reflect.set(v, "snapshot", null)],
+        ["goals", "H3 beschädigte Sparziele", (v: AdvisoryCase["versions"][number]) => Reflect.set(v.snapshot, "savingsGoals", [null])],
+        ["account", "H3 beschädigter Kontoname", (v: AdvisoryCase["versions"][number]) => Reflect.set(v.snapshot.depotAccounts[0], "name", 123)],
+        ["money", "H3 beschädigter Finanzbetrag", (v: AdvisoryCase["versions"][number]) => Reflect.set(v.snapshot.advisory, "reserve", "100")],
+      ] as const) {
+        const version = { ...structuredClone(good), id: `cp0b-h3-${id}`, label };
+        damage(version); source.versions.push(version);
+      }
+      const invalidLabel = { ...structuredClone(good), id: "cp0b-h3-label" };
+      Reflect.set(invalidLabel, "label", { synthetic: "invalid React child" });
+      source.versions.push(invalidLabel);
+      const chooser = page.waitForEvent("filechooser");
+      await nav(page, "Ergebnis & Export");
+      await page.getByRole("button", { name: /JSON importieren/ }).click();
+      await (await chooser).setFiles({ name: "synthetic-h3-history.json", mimeType: "application/json",
+        buffer: Buffer.from(JSON.stringify({ case: source })) });
+      await expect(page.getByLabel("Bezeichnung des Testfalls")).toHaveValue(source.advisory.caseName);
+      await expect.poll(async () => (await stored(page)).length).toBe(neighbors.length + 1);
+      const imported = (await currentJson(page, info, "h3-imported")).item;
+      expect(imported.id).not.toBe(source.id); expect(imported.versions).toEqual(source.versions);
+      // Read the real application store on a new page lifecycle before testing Restore.
+      await page.reload(); await openCase(page, source.advisory.caseName);
+      const before = (await currentJson(page, info, "h3-reloaded-before-restore")).item;
+      expect(before.versions).toEqual(source.versions);
+      const history = page.locator(".version-history");
+      await expect(history.locator("article")).toHaveCount(6);
+      await expect(history.getByText("Version ohne gültige Bezeichnung", { exact: true })).toBeVisible();
+      await expect(history.getByText("Historische Vorschau nicht verfügbar", { exact: true })).toBeVisible();
+      await expect(history.getByText(good.label, { exact: true })).toBeVisible();
+      const mainBytes = await page.evaluate(key => localStorage.getItem(key), CASE_STORAGE_KEY);
+      const storageBefore = await page.evaluate(() => ({ ...localStorage }));
+      const failure = "Diese historische Version kann aufgrund beschädigter Daten nicht wiederhergestellt werden. Der aktuelle Arbeitsstand bleibt unverändert.";
+      for (const version of source.versions.slice(1, 5)) {
+        const dialogs: string[] = [];
+        const handle = async (dialog: import("@playwright/test").Dialog) => {
+          dialogs.push(dialog.type());
+          if (dialog.type() === "confirm") expect(dialog.message()).toContain(version.label);
+          else { expect(dialog.type()).toBe("alert"); expect(dialog.message()).toBe(failure); }
+          await dialog.accept();
+        };
+        page.on("dialog", handle);
+        try {
+          await history.locator("article").filter({ hasText: version.label }).getByRole("button", { name: "Wiederherstellen", exact: true }).click();
+          await expect.poll(() => dialogs).toEqual(["confirm", "alert"]);
+        } finally { page.off("dialog", handle); }
+        expect((await currentJson(page, info, `h3-rejected-${version.id}`)).item).toEqual(before);
+        expect(await page.evaluate(key => localStorage.getItem(key), CASE_STORAGE_KEY)).toBe(mainBytes);
+        expect(await page.evaluate(() => ({ ...localStorage }))).toEqual(storageBefore);
+      }
+      // The fallback label is also the actual safe confirmation text. Cancel is inert.
+      const cancel = page.waitForEvent("dialog").then(async dialog => {
+        expect(dialog.type()).toBe("confirm"); expect(dialog.message()).toBe("Version ohne gültige Bezeichnung als aktuellen Arbeitsstand wiederherstellen?");
+        await dialog.dismiss();
+      });
+      await history.locator("article").filter({ hasText: "Version ohne gültige Bezeichnung" }).getByRole("button", { name: "Wiederherstellen", exact: true }).click();
+      await cancel; expect((await currentJson(page, info, "h3-label-cancelled")).item).toEqual(before);
+      expect(await page.evaluate(() => ({ ...localStorage }))).toEqual(storageBefore);
+      const confirm = page.waitForEvent("dialog").then(dialog => dialog.accept());
+      const started = Date.now();
+      await history.locator("article").filter({ hasText: good.label }).getByRole("button", { name: "Wiederherstellen", exact: true }).click();
+      await confirm;
+      const restored = (await currentJson(page, info, "h3-good-restored")).item;
+      expect(restored.id).toBe(imported.id); expect(restored.versions).toEqual(source.versions);
+      expect(content(restored)).toEqual(content({ ...good.snapshot, versions: [] } as AdvisoryCase));
+      expect(restored.activePlanId).toBe(good.snapshot.activePlanId);
+      expect(restored.plans.filter(p => p.preferred).map(p => p.id)).toEqual(good.snapshot.plans.filter(p => p.preferred).map(p => p.id));
+      expect(Date.parse(restored.updatedAt)).toBeGreaterThanOrEqual(started);
+      expect(await page.evaluate(() => ({ ...localStorage }))).toEqual(storageBefore);
+      await save(page); await page.reload(); await openCase(page, restored.advisory.caseName, restored.status);
+      const reopened = (await currentJson(page, info, "h3-final-reload")).item;
+      expect(reopened.id).toBe(imported.id); expect(content(reopened)).toEqual(content(restored));
+      expect(reopened.versions).toEqual(source.versions); validRelations(reopened);
+      const finalStore = await stored(page);
+      for (const neighbor of neighbors) expect({ ...finalStore.find(c => c.id === neighbor.id), updatedAt: neighbor.updatedAt }).toEqual(neighbor);
+      expect(pageErrors).toEqual([]); page.off("pageerror", onPageError);
+      console.log("PASS H3 browser: all 6 originals visible; 4 invalid Restores rejected with byte-identical store; healthy Restore, safe label/cancel, explicit save and real reload; no pageerror");
+    });
   });
 });
 

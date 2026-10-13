@@ -6222,6 +6222,25 @@ function DepotOptimizer({
   );
 }
 
+function historicalVersionLabel(label: unknown): string {
+  return typeof label === "string" && label.trim() !== ""
+    ? label : "Version ohne gültige Bezeichnung";
+}
+
+function historicalVersionPreview(snapshot: unknown): string {
+  const record = (value: unknown): value is Record<string, unknown> =>
+    value !== null && typeof value === "object" && !Array.isArray(value);
+  const unavailable = "Historische Vorschau nicht verfügbar";
+  if (!record(snapshot) || !Array.isArray(snapshot.plans)) return unavailable;
+  const plans = snapshot.plans;
+  // Read only display metadata. Snapshots remain opaque until explicit Restore.
+  if (plans.some((plan) => !record(plan) || typeof plan.preferred !== "boolean" ||
+    typeof plan.name !== "string" || plan.name.trim() === "")) return unavailable;
+  const preferred = plans.filter((plan) => plan.preferred === true);
+  if (preferred.length > 1) return unavailable;
+  return `${plans.length} Planungen · bevorzugt: ${preferred[0]?.name ?? "–"}`;
+}
+
 export function ExportCenter({
   item: sourceItem,
   setItem,
@@ -6587,12 +6606,20 @@ export function ExportCenter({
     if (!version) return;
     if (
       !window.confirm(
-        `${version.label} als aktuellen Arbeitsstand wiederherstellen?`,
+        `${historicalVersionLabel(version.label)} als aktuellen Arbeitsstand wiederherstellen?`,
       )
     )
       return;
-    const restored = normalizeImportedCase(version.snapshot, false);
-    if (!restored) return;
+    let restored: AdvisoryCase | null;
+    try {
+      restored = normalizeImportedCase(version.snapshot, false);
+    } catch {
+      restored = null;
+    }
+    if (!restored) {
+      window.alert("Diese historische Version kann aufgrund beschädigter Daten nicht wiederhergestellt werden. Der aktuelle Arbeitsstand bleibt unverändert.");
+      return;
+    }
     setItem({
       ...restored,
       id: item.id,
@@ -6686,11 +6713,9 @@ export function ExportCenter({
             {[...item.versions].reverse().map((version) => (
               <article key={version.id}>
                 <div>
-                  <strong>{version.label}</strong>
+                  <strong>{historicalVersionLabel(version.label)}</strong>
                   <small>
-                    {version.snapshot.plans.length} Planungen · bevorzugt:{" "}
-                    {version.snapshot.plans.find((plan) => plan.preferred)
-                      ?.name || "–"}
+                    {historicalVersionPreview(version.snapshot)}
                   </small>
                 </div>
                 <button
