@@ -1,4 +1,5 @@
 import { uid, iso, clone } from "./runtime";
+import { validCaseFinancialInputs } from "./financial-validation";
 import { validCurrentPlanGraph } from "../planning/plan-identity";
 import { withDepotValue } from "../depot/lifecycle";
 import {
@@ -266,6 +267,7 @@ export function normalizeImportedCase(
   }
   const sourceSchemaVersion = Number(item.schemaVersion) || 0;
   if (sourceSchemaVersion > 11) return null;
+  if (!validCaseFinancialInputs(item, sourceSchemaVersion)) return null;
   if (sourceSchemaVersion >= 10 && !validCurrentPlanGraph(item)) return null;
   const normalized = clone(item) as AdvisoryCase;
   normalized.schemaVersion = 11;
@@ -472,5 +474,5 @@ export function normalizeImportedCase(
   });
   // Existing historical migrations may resolve old relations; ambiguous identities
   // without a documented migration must still never become a current live case.
-  return validCurrentPlanGraph(normalized) ? normalized : null;
+  return validCaseFinancialInputs(normalized) && validCurrentPlanGraph(normalized) ? normalized : null;
 }
