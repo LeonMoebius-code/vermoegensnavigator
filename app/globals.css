@@ -857,6 +857,29 @@ h4 {
 .inline-amount input {
   padding-right: 30px;
 }
+input[aria-invalid="true"] {
+  border-color: #a33124;
+}
+small.amount-input-error {
+  display: block;
+  color: #a33124;
+  font-size: 11px;
+  line-height: 1.4;
+  margin-top: 6px;
+  white-space: normal;
+}
+.amount-field > div:has(.amount-input-error) > b,
+.inline-amount:has(.amount-input-error) > b {
+  top: 18px;
+}
+.staged-value-field:has(.amount-input-error) > select {
+  grid-column: 2;
+  grid-row: 1;
+}
+.staged-value-field > .amount-input-error {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
 .check-row {
   display: flex;
   align-items: flex-start;
@@ -2210,6 +2233,14 @@ h4 {
   display: flex;
   align-items: center;
   gap: 3px;
+}
+.bucket-items > div > div:has(> .amount-input-error) {
+  flex-wrap: wrap;
+  max-width: 240px;
+}
+.bucket-items > div > div > .amount-input-error {
+  flex-basis: 100%;
+  order: 1;
 }
 .bucket-items input {
   width: 72px;
