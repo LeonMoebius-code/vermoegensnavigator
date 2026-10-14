@@ -3,9 +3,11 @@
 > **Kanonischer Produkt- und Entscheidungsstand**
 >
 > Letzte fachliche Aktualisierung: **01.10.2026 (D1)**
+> Letzte Versions- und Statusaktualisierung: **14.10.2026 (V0.18.3-Releasevorbereitung)**
 > Aktuell veröffentlichte Version: **V0.18.2**
-> Implementierter Entwicklungsstand dieser Spezifikation: **V0.18.2 / Schema 11 einschließlich D1**
+> Vorbereiteter technischer Entwicklungsstand: **V0.18.3 / Schema 11 einschließlich A1–A11, P1–P4, D1 und H1–H4**
 > Veröffentlichte Codebasis: **Release-Artefakt aus Commit `50a8a06d73ddc59472a2d66ef46ac624597e2c0f`**
+> Releasezustand V0.18.3: **Noch nicht veröffentlicht; unabhängige PR-Abnahme und fachliche Gesamtumfangsfreigabe ausstehend**
 > Zielumgebung: **Desktop-Prototyp**
 > Öffentliche Testversion: GitHub Pages
 
@@ -18,6 +20,7 @@ Dieses Dokument ist die zentrale **Source of Truth** für Produktkonzept, fachli
 Es ersetzt **nicht** den Quellcode und **nicht** einzelne Work-Prompts. Es dokumentiert den aktuellen fachlichen Sollstand der Anwendung und trennt klar zwischen:
 
 - bereits umgesetzt und veröffentlicht
+- implementiert und unabhängig abgenommen, aber noch nicht veröffentlicht
 - beschlossen, aber noch nicht umgesetzt
 - in Konzeption
 - fachlich offen
@@ -45,6 +48,7 @@ Für V0.18.2 gilt der [verbindliche Zero-Touch-Nachtrag](V0182_ZeroTouch_CSV_Onl
 | Status | Bedeutung |
 |---|---|
 | ✅ **UMGESETZT** | Auf `main`, veröffentlicht und grundsätzlich abgenommen |
+| 🔵 **INTEGRIERT / UNVERÖFFENTLICHT** | Auf `main` und unabhängig abgenommen, aber noch nicht veröffentlicht; die fachliche Gesamtumfangsfreigabe bleibt gesondert erforderlich |
 | 🟢 **BESCHLOSSEN / WORK-READY** | Fachlich fertig konzipiert, kann als Work-Paket umgesetzt werden |
 | 🟡 **IN KONZEPTION** | Grundidee steht, konkrete Entscheidungen fehlen noch |
 | 🔴 **FACHLICH OFFEN** | Fachmodell oder zentrale Logik muss erst entwickelt werden |
@@ -281,7 +285,12 @@ V0.18.1 härtet den bestehenden Multi-Depot-Lifecycle, korrigiert die Semantik d
 - `Aktuellen Plan ergänzen` verwendet den strategischen Restbetrag. `Aktuellen Plan ersetzen` und `Als neue Variante` ersetzen ausschließlich den strategischen Teil und erhalten gültige nicht-strategische Planung und Umsetzungsbezüge.
 - `Zins & Laufzeiten` zeigt marktwertgewichtet die **Ø modellierte YTM** und die **Ø laufende Verzinsung** mit jeweils eigener Coverage des direkten Anleihebestands; Excel- und Druckexport übernehmen beide Kennzahlen samt Coverage.
 
-## 3.6 V0.18.2 – implementierter Feature-Stand, fachliche Abnahme offen
+## 3.6 V0.18.2 – historischer Feature-Stand des veröffentlichten Prototyps
+
+Die öffentliche V0.18.2-Codebasis ist im Dokumentkopf nachgewiesen. Die
+nachfolgenden offenen Quellvoraussetzungen bleiben davon unberührt. D1 und die
+späteren Integritäts-, Architektur- und Hardeningarbeiten sind separat abgenommen
+und integriert; ihre gemeinsame Veröffentlichung wird als V0.18.3 vorbereitet.
 
 CP1–CP4 sind getrennte Implementierungscheckpoint-Arbeiten. CP4 umfasst Gesamtpfade, tatsächliche XLSX-/JSON-Dateien, Druck-HTML, Browserbedienung, Schema-Migration und Regressionen. Der [CP4-Nachweis](V0182_CP4_Gesamtabnahme.md) trennt technische Resultate, offene Quellvoraussetzungen und Komfortarbeiten. Dies ist keine automatische Merge-/Releasefreigabe.
 
@@ -293,6 +302,29 @@ CP1–CP4 sind getrennte Implementierungscheckpoint-Arbeiten. CP4 umfasst Gesamt
 - CP4 korrigiert eng begrenzt explizite `Aktienanleihe`-Signale (strukturierte Produkte, keine Standardbondrechnung) und priorisiert explizite Mischfonds-/Multi-Asset-Signale vor breiten Aktien-/Renten-Segmenten. Die tatsächlichen Klassifikationscodes und die wirtschaftliche Durchschau der realen Quelle bleiben fachlich zu prüfen.
 - Die [gezielte wirtschaftliche Nachprüfung nach CP4](V0182_Anlageklassifikation_Nachpruefung.md) belegt und korrigiert zusätzlich die pauschale CSV-Anlageklassenzuordnung unbekannter Mischfonds/strukturierter Produkte. Bekannte Produktmixe behalten Vorrang; ohne belegte Quoten bleibt der Betrag separat ungeklärt. Produktart, Quellsegment und wirtschaftliche Anlageklasse sind getrennt. Gespeicherte/manuelle Altzuordnungen werden nicht automatisch überschrieben.
 - Neu gemeldete agree21-/Original-CSV-Erkenntnisse zu Preisen, Stückzinsen und Währungen sind **noch kein freigegebener Quellvertrag**. Kein Freischalten von EUR-Aggregaten durch Zahlenpassung und keine zusätzliche Performance-CSV.
+
+## 3.7 🔵 Integrierte Stabilisierung / V0.18.3 in Releasevorbereitung
+
+Architektur A1–A11, Integritätsverträge P1–P4, D1 und H1–H4 sind in `main`
+integriert und unabhängig abgenommen. D1 ist damit keine offene Einzelabnahme
+mehr; seine verbindlichen Berechnungs- und Ausgabevorgaben bleiben unverändert.
+Die ursprünglichen Astra-Findings F-001 bis F-007 sind 7/7 geschlossen. Ein
+eigenständiger READ-ONLY-Abschlussaudit auf Main bestätigte den H1–H4-Abschluss.
+Der anschließende Release-Readiness-Audit vom 13.10.2026 ergab **B – bedingt vorbereitet**.
+
+Die Projektleitung hat **V0.18.3 als nächstes Stabilisierungsrelease beschlossen**.
+Dieser technische Versions- und Dokumentationsstand ist noch nicht veröffentlicht.
+Die fachliche Gesamtumfangsfreigabe einschließlich D1-Ausgaben und vorhandener
+Produktdaten sowie die administrativen Releasevoraussetzungen bleiben offen.
+Der spätere Veröffentlichungsumfang umfasst den gesamten integrierten Main;
+eine Auswahl ausschließlich H1–H4 existiert im Releaseworkflow nicht.
+Umfang und Voraussetzungen: [V0.18.3-Releasevorbereitung](V0183_Releasevorbereitung.md).
+
+V0.18.3 bleibt eine öffentliche Testversion / ein Desktop-Prototyp mit
+browserlokaler, nicht revisionssicherer Speicherung. Keine Freigabe für produktive
+Bankberatung; keine echten Kundendaten in der Freigabeprüfung.
+**V0.19 bleibt für den freien Planvergleich vorgesehen.** V0.20 und alle weiteren
+Fachkonzepte werden durch diese Vorbereitung nicht geändert oder freigegeben.
 
 ---
 
@@ -1882,6 +1914,13 @@ Keine zentrale fachliche Entscheidung offen. Paket ist umgesetzt.
 ---
 
 # 19. Entscheidungslog
+
+## 13.10.2026 – Versionsentscheidung; dokumentiert am 14.10.2026
+
+- V0.18.3 als nächstes Stabilisierungsrelease beschlossen; technische Versions- und Dokumentationsvorbereitung, keine neue Fachfunktion.
+- A1–A11, P1–P4, D1 und H1–H4 integriert und unabhängig abgenommen; F-001 bis F-007 geschlossen. READ-ONLY-Abschlussaudit durchgeführt; Release-Readiness B – bedingt vorbereitet.
+- Öffentlich bleibt V0.18.2 aus `50a8a06d73ddc59472a2d66ef46ac624597e2c0f`; V0.18.3 / Schema 11 ist noch nicht veröffentlicht.
+- Fachliche Gesamtumfangsfreigabe und administrative Releasevoraussetzungen bleiben offen. V0.19-Planvergleich und V0.20-Fachkonzept unverändert.
 
 ## 01.10.2026 – D1
 
