@@ -25,13 +25,34 @@ npm run verify
 auf dasselbe Gate. Der Produktionsbuild liegt anschließend in `.pages-dist`;
 dieser lokale Build veröffentlicht nichts.
 
-### CP0A1: Umfang und Referenzstand des Gates
+### Aktuelles Verify-Gate (V0.18.3-Releasevorbereitung)
+
+Die ausführbare Liste in `package.json` enthält aktuell **20 direkte
+Fachtest-Einstiege**: die unten dokumentierten 16 einschließlich P1–P4 und D1,
+anschließend `test:h1-amount-inputs`, `test:h2-financial-data`,
+`test:h3-history-restore` und `test:h4-installment-safety`.
+Danach folgen Typecheck, **genau ein Produktionsbuild** und CP0B mit **3/3**
+Browser-Lebenszyklen; ein Worker, keine Retries. CP0A2 umfasst **23 A / 0 B / 0 C / 0 D**.
+H1 prüft 9 Gruppen; H2 16 Gruppen / 476 Ablehnungen; H3 11 Gruppen /
+33 Render- und 34 Restorefälle; H4 13 Gruppen / 38 aktuelle und 170 historische
+Ablehnungen. Diese Härtungen erweitern die historische Gatebeschreibung.
+
+**Separat nach Verify** prüft R1 mit `node scripts/verify-release-artifact.mjs "$(git rev-parse HEAD)"`
+das seit Build/CP0B unveränderte Artefakt gegen den tatsächlich ausgecheckten Commit.
+`node --test scripts/verify-r1.test.mjs` führt die **55 Operationaltests ohne Skips**
+aus. Beides gehört zur Feature-CI, ist aber kein zusätzlicher Fachtesteinstieg in
+`npm run verify` und erzeugt keinen weiteren Produktionsbuild.
+Zielversion, gesamter integrierter Umfang und offene Releasevoraussetzungen:
+[V0.18.3-Releasevorbereitung](docs/V0183_Releasevorbereitung.md).
+V0.18.3 ist noch nicht veröffentlicht; öffentlich bleibt V0.18.2.
+
+### Historische CP0A1-Gatebeschreibung und Fortschreibung bis D1
 
 Inventarisiert am 23.09.2026 anhand des frisch abgerufenen Remote-`main`
 `6ec5ced21704e0474dc91cc27fc5c80d7ad73792`. Dieser Stand entspricht dem im
 CP0A1-Auftrag genannten Referenzcommit; es gab keine Abweichung.
 
-Das Gate führt in dieser Reihenfolge die sechzehn direkten Fachtest-Einstiege und
+Die historische, bis D1 fortgeschriebene Beschreibung führt die sechzehn direkten Fachtest-Einstiege und
 anschließend Typecheck, Produktionsbuild und die drei CP0B-Browserabläufe aus:
 
 | Nr. | npm-Skript | Einstieg / Prüfung |
@@ -131,8 +152,9 @@ Befunde bekannt. CP0A1 dokumentiert sie; ein grünes Gate widerlegt sie nicht:
   vor destruktiver Normalisierung validiert; ungültige Originale bleiben geschützt.
   Active und preferred sind unabhängig, null preferred ist gültig und führt zum
   sichtbaren Zielhinweis. Löschung wählt den ursprünglichen Nachbarn ohne neue Präferenz.
-- **Architektur:** CSV-Klassifikation ist an das umfangreichere Analysemodul
-  gekoppelt; historische abgeleitete Ergebnisse können durch später veränderte
+- **Architektur (historischer CP0A1-Befund):** Die damalige Kopplung der
+  CSV-Klassifikation an das Analysemodul wurde durch A1 aufgelöst;
+  historische abgeleitete Ergebnisse können durch später veränderte
   Produktkatalogstände beeinflusst werden.
 - **Betrieb (historischer CP0A1-Befund, durch R1 behoben):** Damals waren Merge
   und Veröffentlichung gekoppelt. R1 trennt beide und prüft den Artefaktumfang
