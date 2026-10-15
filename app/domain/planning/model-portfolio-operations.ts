@@ -1,4 +1,6 @@
 import { duplicateStructurePlan } from "./plan-identity";
+import type { ModelPortfolio } from "../catalog/contracts";
+import { managedPortfolios } from "../../data/managed-portfolios";
 import {
   allocationCapitalPotAmounts,
   allocationAmountInCapitalPot,
@@ -12,6 +14,25 @@ import type {
 } from "./contracts";
 
 export type ModelPortfolioAction = "new" | "supplement" | "replace";
+
+/** Same whole-euro allocation as the existing model application. */
+export function modelPortfolioHoldingAmount(amount: number, weight: number) {
+  return Math.round((amount * weight) / 100);
+}
+
+/** Only the three explicitly approved Private Select model strategies. */
+export function modelPortfolioMinimumInvestments(model: ModelPortfolio, amount: number) {
+  if (!Number.isFinite(amount) || amount < 0) return [];
+  return model.holdings.flatMap((holding) => {
+    if (!["ps-defensiv", "ps-ausgewogen", "ps-offensiv"].includes(holding.productId)) return [];
+    const strategy = managedPortfolios.find((entry) => entry.id === holding.productId);
+    if (!strategy) return [];
+    const investment = modelPortfolioHoldingAmount(amount, holding.weight);
+    return [{ productId: strategy.id, name: strategy.name, weight: holding.weight,
+      amount: investment, minimum: strategy.minimum,
+      shortfall: Math.max(0, strategy.minimum - investment) }];
+  });
+}
 
 export function positiveStrategicPot(pots: CapitalPot[]) {
   const candidates = pots.filter((pot) => pot.id === "strategic");

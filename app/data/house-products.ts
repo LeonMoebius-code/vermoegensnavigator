@@ -22,14 +22,14 @@ const mixedSplits: Record<string, AssetMix> = {
 };
 
 const productMix = (id: string, category: string): AssetMix | null => {
+  // Express project-lead classification; not a complete certificate look-through.
+  if (id === "zinsfix" || id === "mea") return mix(0, 0, 100);
   if (mixedSplits[id]) return mixedSplits[id];
   if (category === "Aktienfonds") return mix(0, 0, 100);
   if (category === "Rentenfonds" || category === "Geldmarkt")
     return mix(0, 100);
   if (category === "Immobilienfonds") return mix(0, 0, 0, 0, 100);
   if (category === "Alternative Anlagen") return mix(0, 0, 0, 100);
-  // Für die beiden zusätzlichen Modellbausteine ZinsFix Index und MEA Einzelwert
-  // liefert die Fonds-Matrix keine fachlich freigegebene Durchschau.
   return null;
 };
 

@@ -120,6 +120,9 @@ export const managedPortfolios: ManagedPortfolio[] = [
     ),
     sourceLabel: "Bezeichnung aus VV-Selektionsmatrix",
   },
+  // Approved model-implied targets: back-solved from the 01.07.2026 model
+  // totals and remaining holdings; each Private Select strategy has 50% weight.
+  // These are not evidence of the current actual managed depot composition.
   {
     ...vv(
       "ps-defensiv",
@@ -133,13 +136,12 @@ export const managedPortfolios: ManagedPortfolio[] = [
       2,
       125000,
       "VoBa pur",
-      "Strategiebezeichnung aus der Modellportfolio-Unterlage",
+      "75 % Geldwerte / 25 % Substanzwerte (modellimplizite Zielquoten)",
       "noch abzustimmen",
-      mix(),
+      mix(0, 75, 25),
       false,
     ),
-    assetMix: null,
-    sourceLabel: "Bezeichnung aus Modellportfolio-Unterlage",
+    sourceLabel: "Bezeichnung aus Modellportfolio-Unterlage · modellimplizite Zielquoten vom 01.07.2026, keine nachgewiesene aktuelle Depotzusammensetzung",
   },
   {
     ...vv(
@@ -154,13 +156,12 @@ export const managedPortfolios: ManagedPortfolio[] = [
       3,
       125000,
       "VoBa pur",
-      "Strategiebezeichnung aus der Modellportfolio-Unterlage",
+      "55 % Geldwerte / 45 % Substanzwerte (modellimplizite Zielquoten)",
       "noch abzustimmen",
-      mix(),
+      mix(0, 55, 45),
       false,
     ),
-    assetMix: null,
-    sourceLabel: "Bezeichnung aus Modellportfolio-Unterlage",
+    sourceLabel: "Bezeichnung aus Modellportfolio-Unterlage · modellimplizite Zielquoten vom 01.07.2026, keine nachgewiesene aktuelle Depotzusammensetzung",
   },
   {
     ...vv(
@@ -175,13 +176,12 @@ export const managedPortfolios: ManagedPortfolio[] = [
       4,
       125000,
       "VoBa pur",
-      "Strategiebezeichnung aus der Modellportfolio-Unterlage",
+      "35 % Geldwerte / 65 % Substanzwerte (modellimplizite Zielquoten)",
       "noch abzustimmen",
-      mix(),
+      mix(0, 35, 65),
       false,
     ),
-    assetMix: null,
-    sourceLabel: "Bezeichnung aus Modellportfolio-Unterlage",
+    sourceLabel: "Bezeichnung aus Modellportfolio-Unterlage · modellimplizite Zielquoten vom 01.07.2026, keine nachgewiesene aktuelle Depotzusammensetzung",
   },
   vv(
     "mondial-ausgewogen",
