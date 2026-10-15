@@ -97,6 +97,9 @@ for (const [label, asset] of [["Aktien", "Substanzwerte"], ["Aktienfonds", "Subs
   assert.equal(depotAssetAmounts(holdings).amounts[asset as keyof typeof ist.amounts], 1000);
 }
 for (const product of houseProducts.filter((p) => p.assetMix)) {
+  // The newly approved certificate model IDs have no individual WKN. Their
+  // explicit-ID mixes are covered by verify-modelportfolio; never infer them from '-'.
+  if (product.id === "zinsfix" || product.id === "mea") continue;
   const row = parse([`Synthetic;${product.wkn};Aktien;;;;10000`]).rows[0];
   assert.equal(row.productId, product.id);
   const amounts = depotAssetAmounts(addDepotAccount(createCase(), [row], "Mix control").depot);

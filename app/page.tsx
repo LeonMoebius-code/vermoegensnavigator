@@ -157,6 +157,8 @@ import {
 import { DepotCsvResult, parseDepotCsv } from "./depot-csv";
 import { depotCountryName } from "./depot-country-codes";
 import { AmountInput } from "./presentation/amount-input";
+import { ModelPortfolioAmount } from "./presentation/model-portfolio-amount";
+import { modelPortfolioHoldingAmount } from "./domain/planning/model-portfolio-operations";
 import {
   bondPortfolioAnalysis,
   buildDepotAnalysisPositions,
@@ -2875,7 +2877,7 @@ function PlannerView({
     if (!modelPot || !Number.isFinite(modelDialog.amount) || modelDialog.amount <= 0) return;
     const modelAllocations: PlannerAllocation[] = model.holdings.map(
       (holding): PlannerAllocation => {
-        const amount = Math.round((modelDialog.amount * holding.weight) / 100);
+        const amount = modelPortfolioHoldingAmount(modelDialog.amount, holding.weight);
         return {
           id: uid("allocation"),
           productId: holding.productId,
@@ -4548,10 +4550,11 @@ function PlannerView({
                 <small>Nur strategische Allokationen ersetzen; andere Kapitaltöpfe bleiben erhalten.</small>
               </button>
             </div>
-            <AmountField
+            <ModelPortfolioAmount
+              key={`${plan.id}:${modelDialog.id}:${modelDialog.action}`}
               identity={`${plan.id}:${modelDialog.id}:${modelDialog.action}`}
-              label="Betroffener Betrag"
-              value={modelDialog.amount}
+              model={modelPortfolios.find((entry) => entry.id === modelDialog.id)!}
+              amount={modelDialog.amount}
               onChange={(amount) => setModelDialog({ ...modelDialog, amount })}
             />
             {!positiveStrategicPot(visibleCapitalPots) && <p role="alert">Kein positives strategisches Kapital verfügbar. Modellportfolios können nicht angewendet werden.</p>}

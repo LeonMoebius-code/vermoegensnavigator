@@ -1,4 +1,8 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { houseProducts, managedPortfolios, modelPortfolios, assetClasses } from "../app/investment-data";
+import { planAssetAmounts, productAssetMix } from "../app/domain/wealth-structure/projection";
+import { modelPortfolioHoldingAmount, modelPortfolioMinimumInvestments } from "../app/domain/planning/model-portfolio-operations";
 import {
   allocationAmountInCapitalPot,
   capitalPots,
@@ -230,4 +234,51 @@ check(
   "12: Umsetzungsreferenzen sind auf neue Varianten-IDs remappt",
 );
 
-console.log(`Modellportfolio-Regressionsprüfung erfolgreich: ${assertions} Assertions.`);
+const approved = {
+  "ps-defensiv": [0, 75, 25, 0, 0],
+  "ps-ausgewogen": [0, 55, 45, 0, 0],
+  "ps-offensiv": [0, 35, 65, 0, 0],
+  zinsfix: [0, 0, 100, 0, 0], mea: [0, 0, 100, 0, 0],
+};
+for (const [id, quotas] of Object.entries(approved)) {
+  assert.deepEqual(assetClasses.map(asset => productAssetMix(id)![asset]), quotas, id);
+  assert.equal(Object.values(productAssetMix(id)!).reduce((sum, q) => sum + q, 0), 100, id);
+}
+// Classification baseline captured from main 80c3317 before implementation.
+assert.equal(createHash("sha256").update(JSON.stringify([...houseProducts, ...managedPortfolios]
+  .filter(p => !(p.id in approved)).map(p => [p.id, p.assetMix]))).digest("hex"),
+  "f7e3d1ab6ac586eeef61732e508e3c1106b5d8443e9f65159da0c67a9f21f698",
+  "all remaining catalogue classifications unchanged");
+assert.equal(productAssetMix("unknown-model-product"), null);
+for (const model of modelPortfolios) {
+  const allocations = model.holdings.map((h, index) => ({
+    ...allocation(`approved-${index}`, modelPortfolioHoldingAmount(160000, h.weight), strategicPot),
+    productId: h.productId, productName: h.name, source: "model" as const, modelId: model.id,
+  }));
+  const projected = planAssetAmounts({ ...basePlan, total: 160000, allocations });
+  assert.equal(projected.total, 160000);
+  assert.equal(projected.unresolved, 0);
+  assert.deepEqual(projected.amounts, Object.fromEntries(assetClasses.map(a => [a, 1600 * model.mix[a]])));
+  for (const action of ["new", "supplement", "replace"] as const) {
+    const applied = action === "new" ? createModelPortfolioVariant(basePlan, allocations, pots, model.name)
+      : action === "supplement" ? supplementPlanWithModelPortfolio(basePlan, allocations, pots)
+      : replaceStrategicPlanAllocations(basePlan, allocations, pots);
+    assert.equal(applied.allocations.filter(a => a.source === "model").reduce((sum, a) => sum + a.amount, 0), 160000);
+    const privateSelect = applied.allocations.find(a => a.productId === model.holdings[0].productId)!;
+    assert.equal(privateSelect.amount, modelPortfolioMinimumInvestments(model, 160000)[0].amount);
+  }
+  for (const [amount, investment, shortfall] of [[160000, 80000, 45000], [249998, 124999, 1],
+    [250000, 125000, 0], [300000, 150000, 0]]) {
+    assert.deepEqual(modelPortfolioMinimumInvestments(model, amount), [{
+      productId: model.holdings[0].productId, name: model.holdings[0].name,
+      weight: 50, amount: investment, minimum: 125000, shortfall,
+    }]);
+  }
+  // Uses the actual weight and existing allocation rounding, not a fixed 250k model threshold.
+  const changedWeight = { ...model, holdings: [{ ...model.holdings[0], weight: 25 }] };
+  assert.equal(modelPortfolioMinimumInvestments(changedWeight, 160000)[0].amount, 40000);
+  assert.equal(modelPortfolioMinimumInvestments(model, 249999.99)[0].amount, 125000);
+  assert.deepEqual(modelPortfolioMinimumInvestments(model, NaN), []);
+  assert.deepEqual(modelPortfolioMinimumInvestments({ ...model, holdings: [{ productId: "ps-sicherheit", name: "Existing", weight: 50 }] }, 160000), []);
+}
+console.log(`Modellportfolio-Regressionsprüfung erfolgreich: ${assertions} bestehende Assertions; fünf Mixe, unveränderter Restkatalog, RB2/3/4, drei Aktionen und dynamische Mindestanlagen geprüft.`);
