@@ -49,12 +49,17 @@ for (const [risk, strategy, moneyQuota, substanceQuota, alternativeQuota, psSubs
         }
         await dialog.getByRole("button", { name: new RegExp(`^${label}`) }).click();
         await amount.fill("160.000");
+        await expect(amount).toHaveValue("160.000");
         // No Tab/blur before assertions: the notice must react during typing.
         await expect(amount).toBeFocused();
         await expect(dialog).toContainText(`Private Select ${strategy}: 50 % von ${money(160000)} = ${money(80000)}`);
         await expect(warning).toContainText(money(45000));
         await expect(dialog.getByRole("button", { name: "Ausgewählte Aktion anwenden", exact: true })).toBeEnabled();
+        await amount.press("Escape");
+        await expect(amount).toHaveValue(action === "supplement" ? "120.000" : "160.000");
+        await expect(warning).toContainText(money(action === "supplement" ? 65000 : 45000));
         await amount.fill("249.998");
+        await expect(amount).toHaveValue("249.998");
         await expect(warning).toContainText(`Es fehlen ${money(1)}`);
         await amount.fill("250.000");
         await expect(warning).toHaveCount(0);
@@ -67,6 +72,7 @@ for (const [risk, strategy, moneyQuota, substanceQuota, alternativeQuota, psSubs
         await expect(warning).toHaveCount(0);
         await expect(dialog).toContainText(`= ${money(125000)} Einzelanlage`);
         await amount.fill("160.000");
+        await expect(amount).toHaveValue("160.000");
         await expect(warning).toContainText(money(45000));
         await dialog.getByRole("button", { name: "Ausgewählte Aktion anwenden", exact: true }).click();
         await expect(dialog).toHaveCount(0); // Warning is informational and does not block.

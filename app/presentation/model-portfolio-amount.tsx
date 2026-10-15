@@ -26,9 +26,11 @@ export function ModelPortfolioAmount({ model, amount, identity, onChange }: {
   const [draft, setDraft] = useState<string | null>(null);
   const parsed = draft === null ? { status: "valid" as const, value: amount } : parseAmountDraft(draft);
   return <>
-    <label className="field amount-field" onInputCapture={(event) => {
+    <label className="field amount-field" onChange={(event) => {
       if (event.target instanceof HTMLInputElement) setDraft(event.target.value);
-    }} onBlurCapture={() => setDraft(null)}>
+    }} onBlur={() => setDraft(null)} onKeyDown={(event) => {
+      if (event.key === "Escape") setDraft(null);
+    }}>
       <span>Betroffener Betrag</span>
       <div><AmountInput identity={identity} value={amount} placeholder="0" onValueChange={onChange} /><b>€</b></div>
     </label>
