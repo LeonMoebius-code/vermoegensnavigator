@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import "./verify-modelportfolio-lookthrough";
+import "./verify-quality-needs-recovery-house";
 import * as fs from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

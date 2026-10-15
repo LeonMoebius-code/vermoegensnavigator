@@ -1,3 +1,4 @@
+import { addLocalMonthsClamped, localDateParts } from "./calendar";
 import type { AdvisoryData } from "../advisory/contracts";
 import type { BucketId, CapitalPot } from "./contracts";
 
@@ -53,43 +54,44 @@ type Assert<T extends true> = T;
 type _BucketIdContractMatchesRuntime =
   Assert<SameUnion<BucketId, (typeof maturityBuckets)[number]["id"]>>;
 
+/** Nearest whole month; a half month rounds up (Math.round for nonnegative years).
+ * This is the established planning granularity, not a day-count convention. */
+function relativeNeedMonths(years: number) {
+  return Math.max(0, Math.round(years * 12));
+}
+
+/** An explicit calendar date leads. Relative durations retain the reference day,
+ * clamped to the last day of the target month (e.g. Jan 31 -> Feb 28/29).
+ * The application's callers supply the fixed case createdAt, never reload time. */
+export function targetDateForNeed(
+  need: AdvisoryData["needs"][number],
+  referenceDate: Date | string = new Date(),
+): string {
+  if (need.dueDate && localDateParts(need.dueDate)) return need.dueDate.slice(0, 10);
+  const target = addLocalMonthsClamped(referenceDate, relativeNeedMonths(need.years));
+  if (!target) throw new Error("Kapitalbedarf kann ohne gültige Laufzeit und festes Referenzdatum nicht berechnet werden.");
+  return target;
+}
+
 export function monthsUntilNeed(
   need: AdvisoryData["needs"][number],
   referenceDate: Date | string = new Date(),
 ): number {
-  const dueDate = (need as AdvisoryData["needs"][number] & { dueDate?: string })
-    .dueDate;
-  if (dueDate) {
-    const due = new Date(`${dueDate}T12:00:00`);
-    if (!Number.isNaN(due.getTime())) {
-      const now =
-        referenceDate instanceof Date ? referenceDate : new Date(referenceDate);
-      return Math.max(
-        0,
-        (due.getFullYear() - now.getFullYear()) * 12 +
-          due.getMonth() -
-          now.getMonth(),
-      );
-    }
+  if (need.dueDate && localDateParts(need.dueDate)) {
+    const due = localDateParts(need.dueDate)!;
+    const reference = localDateParts(referenceDate);
+    if (!reference) throw new Error("Ungültiges festes Fallreferenzdatum.");
+    // Existing month-based horizon: days within a calendar month do not add a month.
+    return Math.max(0, (due.year - reference.year) * 12 + due.month - reference.month);
   }
-  return Math.max(0, Math.round(need.years * 12));
-}
-
-function referenceYear(referenceDate: Date | string) {
-  const date =
-    referenceDate instanceof Date ? referenceDate : new Date(referenceDate);
-  return Number.isNaN(date.getTime()) ? new Date().getFullYear() : date.getFullYear();
+  return relativeNeedMonths(need.years);
 }
 
 export function targetYearForNeed(
   need: AdvisoryData["needs"][number],
   referenceDate: Date | string = new Date(),
 ) {
-  if (need.dueDate) {
-    const year = Number(need.dueDate.slice(0, 4));
-    if (Number.isFinite(year) && year > 1900) return year;
-  }
-  return referenceYear(referenceDate) + Math.max(0, Math.round(need.years));
+  return Number(targetDateForNeed(need, referenceDate).slice(0, 4));
 }
 
 export function capitalPots(
@@ -119,9 +121,8 @@ export function capitalPots(
   for (const [year, needs] of [...needsByYear.entries()].sort(
     ([left], [right]) => left - right,
   )) {
-    const exactDates = needs
-      .map((need) => need.dueDate)
-      .filter((date): date is string => Boolean(date))
+    const targetDates = needs
+      .map((need) => targetDateForNeed(need, referenceDate))
       .sort();
     const minMonths = Math.min(
       ...needs.map((need) => monthsUntilNeed(need, referenceDate)),
@@ -134,7 +135,7 @@ export function capitalPots(
       total: needs.reduce((sum, need) => sum + need.amount, 0),
       year,
       needs,
-      earliestDueDate: exactDates[0],
+      earliestDueDate: targetDates[0],
       minMonths,
       legacyBucketId: bucketForMonths(minMonths),
     });
@@ -172,13 +173,14 @@ export function bucketForMonths(months: number): BucketId {
 export function bucketTargets(
   data: AdvisoryData,
   total: number,
+  referenceDate: Date | string = new Date(),
 ): Record<BucketId, number> {
   const targets = Object.fromEntries(
     maturityBuckets.map((bucket) => [bucket.id, 0]),
   ) as Record<BucketId, number>;
   targets.reserve = data.reserve;
   for (const need of data.needs)
-    targets[bucketForMonths(monthsUntilNeed(need))] += need.amount;
+    targets[bucketForMonths(monthsUntilNeed(need, referenceDate))] += need.amount;
   const fixed =
     data.reserve + data.needs.reduce((sum, need) => sum + need.amount, 0);
   targets.year10plus += Math.max(0, total - fixed);

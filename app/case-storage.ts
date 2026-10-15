@@ -24,10 +24,18 @@ export type CaseStoreRead = {
   original: string | null;
   recoveryNeeded: boolean;
   malformed: boolean;
+  optionalData: { positions: number; categories: string[] };
 };
 
+function optionalFieldCategory(field: string) {
+  if (["maturity", "lastPurchaseDate", "valuationStart", "valuationEnd"].includes(field)) return "Datumsangaben";
+  if (["coupon", "nominalOrUnits", "averageEntryPrice", "purchaseCosts", "currentPrice", "gainLossPercent", "gainLossAmount", "accruedInterest", "sourceDepotShare", "averageEntryFx", "fxRate", "holdingAtValuationStart", "holdingAtValuationEnd"].includes(field)) return "Kurs-, Zins-, Bestands- und Devisenangaben";
+  if (field === "importIssues") return "Import-Prüfhinweise";
+  return "Optionale Klassifikationsangaben";
+}
+
 export function readCaseStore(original: string | null): CaseStoreRead {
-  const result: CaseStoreRead = { cases: [], protectedEntries: [], recoveryEntries: [], original, recoveryNeeded: false, malformed: false };
+  const result: CaseStoreRead = { cases: [], protectedEntries: [], recoveryEntries: [], original, recoveryNeeded: false, malformed: false, optionalData: { positions: 0, categories: [] } };
   if (original === null) return result;
   let entries: unknown;
   try { entries = JSON.parse(original); } catch { result.malformed = result.recoveryNeeded = true; return result; }
@@ -43,9 +51,25 @@ export function readCaseStore(original: string | null): CaseStoreRead {
       const normalized = normalizeImportedCase(entry, false);
       if (!normalized || !normalized.plans.length) throw new Error("invalid-case");
       result.cases.push(normalized);
-      if (Array.isArray(entry.depot) && entry.depot.some((holding: AdvisoryCase["depot"][number]) =>
-        JSON.stringify(sanitizeOptionalHolding(holding)) !== JSON.stringify(holding) ||
-        (holding.bondSource !== undefined && JSON.stringify(validBondSource(holding.bondSource, holding)) !== JSON.stringify(holding.bondSource)))) {
+      let optionalChanged = false;
+      if (Array.isArray(entry.depot)) for (const holding of entry.depot as AdvisoryCase["depot"]) {
+        const sanitized = sanitizeOptionalHolding(holding);
+        const sourceChanged = holding.bondSource !== undefined &&
+          JSON.stringify(validBondSource(holding.bondSource, holding)) !== JSON.stringify(holding.bondSource);
+        // Identical recovery predicate to P1/H2: diagnostics never decide protection.
+        if (JSON.stringify(sanitized) !== JSON.stringify(holding) || sourceChanged) {
+          optionalChanged = true;
+          result.optionalData.positions += 1;
+          const categories = new Set(result.optionalData.categories);
+          for (const key of new Set([...Object.keys(holding), ...Object.keys(sanitized)])) {
+            if (JSON.stringify(holding[key as keyof typeof holding]) === JSON.stringify(sanitized[key as keyof typeof sanitized])) continue;
+            categories.add(optionalFieldCategory(key));
+          }
+          if (sourceChanged) categories.add("Anleihe-Quellnachweise");
+          result.optionalData.categories = [...categories].sort();
+        }
+      }
+      if (optionalChanged) {
         result.recoveryNeeded = true;
         result.recoveryEntries.push(entry);
       }

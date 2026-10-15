@@ -1,3 +1,4 @@
+import { caseStoreNotice } from "./presentation/case-store-notice";
 import type { AdvisoryCase } from "./domain/case/contracts";
 import type { AdvisorId, CustomerChecklistCategory, ModuleState } from "./domain/advisory/contracts";
 import type {
@@ -101,6 +102,8 @@ import {
 import {
   maturityBuckets,
   monthsUntilNeed,
+  targetDateForNeed,
+  targetYearForNeed,
   capitalPots,
   planningShortfall,
   bucketForMonths,
@@ -435,6 +438,7 @@ export default function Home() {
   const setActiveCase: Dispatch<SetStateAction<AdvisoryCase>> = (action) =>
     setActiveCaseState((current) => enforceCaseDepotValue(typeof action === "function" ? action(current) : action));
   const [storageNotice, setStorageNotice] = useState("");
+  const [storageNoticeSeverity, setStorageNoticeSeverity] = useState<"info" | "error">("error");
   const recoveryOriginal = useRef<string | null>(null);
   const [backups, setBackups] = useState<ReturnType<typeof recoveryBackups>>([]);
   const storageLoaded = useRef(false);
@@ -466,9 +470,9 @@ export default function Home() {
           setSavedCases(loaded.cases);
           if (loaded.recoveryNeeded) {
             recoveryOriginal.current = stored;
-            setStorageNotice(loaded.malformed
-              ? "Der lokale Fallbestand konnte nicht gelesen werden. Die Originaldaten bleiben unverändert. Speichern ist zum Schutz des Bestands gesperrt."
-              : `${loaded.protectedEntries.length} beschädigte Fälle geschützt. Gesunde Fälle sind verfügbar. Fehlerhafte optionale Positionsdaten werden nicht ausgewertet. Die Originaldaten bleiben wiederherstellbar.`);
+            const notice = caseStoreNotice(loaded)!;
+            setStorageNoticeSeverity(notice.severity);
+            setStorageNotice(notice.text);
           }
         } else {
           const old = window.localStorage.getItem("vermoegensnavigator-draft");
@@ -483,6 +487,7 @@ export default function Home() {
         }
         storageLoaded.current = true;
       } catch {
+        setStorageNoticeSeverity("error");
         setStorageNotice("Lokale Fälle konnten nicht vollständig geladen werden. Es wurden keine Originaldaten gelöscht.");
       }
     }, 0);
@@ -497,6 +502,7 @@ export default function Home() {
       setBackups(recoveryBackups(window.localStorage));
       return saved;
     } catch (error) {
+      setStorageNoticeSeverity("error");
       setStorageNotice(error instanceof Error ? error.message : "Speichern fehlgeschlagen. Der vorhandene Bestand bleibt erhalten.");
       return null;
     }
@@ -690,7 +696,7 @@ export default function Home() {
         </div>
       </aside>
       <section className="workspace">
-        {storageNotice && <div className="csv-error" role="alert">
+        {storageNotice && <div className={`case-store-notice ${storageNoticeSeverity === "info" ? "csv-privacy-note" : "csv-error"}`} role={storageNoticeSeverity === "info" ? "status" : "alert"}>
           <p>{storageNotice}</p>
           {recoveryOriginal.current !== null && <button onClick={() => download(
             new Blob([recoveryOriginal.current!], { type: "application/json" }), "fallbestand-original-wiederherstellung.json",
@@ -1555,7 +1561,7 @@ export function SituationStep({
   );
 }
 
-function NeedsStep({
+export function NeedsStep({
   data,
   referenceDate,
   update,
@@ -1647,7 +1653,9 @@ function NeedsStep({
                   type="number"
                   min="0"
                   max="50"
-                  value={need.years}
+                  step="any"
+                  value={need.dueDate ? "" : need.years}
+                  placeholder={need.dueDate ? "Konkreter Termin ist führend" : undefined}
                   onChange={(event) =>
                     updateNeed(need.id, {
                       years: Math.max(0, Number(event.target.value)),
@@ -1657,11 +1665,7 @@ function NeedsStep({
                 />
               </label>
               <span className="derived-bucket">
-                {need.dueDate
-                  ? `Bedarfsjahr ${need.dueDate.slice(0, 4)}`
-                  : `Zieljahr ${pots.find((pot) =>
-                      pot.needs.some((entry) => entry.id === need.id),
-                    )?.year}`}
+                {`${need.dueDate ? "Termin" : "Rechnerischer Termin"}: ${germanDate(targetDateForNeed(need, referenceDate))} · ${monthsUntilNeed(need, referenceDate)} Monate · Zieljahr ${targetYearForNeed(need, referenceDate)}`}
               </span>
               <button
                 className="delete-button"
@@ -3072,7 +3076,7 @@ function PlannerView({
     }
     const need = item.advisory.needs.find((candidate) => candidate.id === entry.targetRef?.id);
     return need
-      ? `Zielbezug: ${need.purpose || "Kapitalbedarf"} · bestehender Kapitalbedarf`
+      ? `Zielbezug: ${need.purpose || "Kapitalbedarf"} · ${germanDate(targetDateForNeed(need, item.createdAt))}`
       : "Ohne Zielbezug";
   };
   const addSavingsPlan = () => {
@@ -3655,7 +3659,7 @@ function PlannerView({
                       <span>{selectedPot.range}</span>
                       <h2>{selectedPot.label}</h2>
                       {selectedPot.earliestDueDate && (
-                        <small>Frühester konkreter Bedarf {germanDate(selectedPot.earliestDueDate)}</small>
+                        <small>Frühester Bedarf (konkret oder berechnet) {germanDate(selectedPot.earliestDueDate)}</small>
                       )}
                     </div>
                     <div>
@@ -3677,9 +3681,7 @@ function PlannerView({
                           <span>
                             <strong>{need.purpose || "Kapitalbedarf"}</strong>
                             <small>
-                              {need.dueDate
-                                ? germanDate(need.dueDate)
-                                : `in ca. ${need.years} ${need.years === 1 ? "Jahr" : "Jahren"}`}
+                              {`${germanDate(targetDateForNeed(need, item.createdAt))}${need.dueDate ? "" : ` · berechnet aus ${monthsUntilNeed(need, item.createdAt)} Monaten`}`}
                             </small>
                           </span>
                           <b>{euro.format(need.amount)}</b>
@@ -4898,6 +4900,9 @@ export function WealthHouse({
       {(!shown || !comparison) && <p role="status">Keine bevorzugte Zielvariante gewählt. Bitte in der Strukturplanung eine Variante als bevorzugt markieren.</p>}
       {shown && comparison && <>
       <div className="house-layout">
+        <div>
+        <p className="house-scroll-hint">Fünf Säulen · Bei wenig Platz das gesamte Haus horizontal verschieben.</p>
+        <div className="house-scroll" role="region" aria-label="Vermögenshaus mit fünf Säulen, horizontal verschiebbar" tabIndex={0}>
         <div className="wealth-house">
           <div className="house-roof">
             <span>
@@ -4989,6 +4994,8 @@ export function WealthHouse({
                 : "vollständig durchgeschaut"}
             </b>
           </div>
+        </div>
+        </div>
         </div>
         {!compact && context === "planner" && mode === "plan" && <section className="panel house-table">
           <div className="comparison-table">
@@ -6358,12 +6365,10 @@ export function ExportCenter({
         item.advisory.needs.map((need) => ({
           Zweck: need.purpose,
           Betrag: need.amount,
-          Termin: need.dueDate || "",
+          Termin: targetDateForNeed(need, item.createdAt),
           Relative_Angabe: need.dueDate ? "" : `in ca. ${need.years} Jahren`,
           Monate: monthsUntilNeed(need, item.createdAt),
-          Zieljahr: exportPots.find((pot) =>
-            pot.needs.some((entry) => entry.id === need.id),
-          )?.year,
+          Zieljahr: targetYearForNeed(need, item.createdAt),
           Laufzeitband: maturityBuckets.find(
             (bucket) =>
               bucket.id ===
@@ -6870,11 +6875,7 @@ export function ExportCenter({
                 <div key={need.id}>
                   <span>{need.purpose || "Nicht bezeichnet"}</span>
                   <span>
-                    {need.dueDate
-                      ? new Intl.DateTimeFormat("de-DE").format(
-                          new Date(`${need.dueDate}T12:00:00`),
-                        )
-                      : `in ${need.years} Jahren`}
+                    {`${germanDate(targetDateForNeed(need, item.createdAt))}${need.dueDate ? "" : ` · berechnet (${monthsUntilNeed(need, item.createdAt)} Monate)`}`}
                   </span>
                   <b>{euro.format(need.amount)}</b>
                 </div>
