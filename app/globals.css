@@ -3165,6 +3165,15 @@ small.amount-input-error {
   padding-left: 9px;
   margin: 10px 0 !important;
 }
+.case-store-notice {
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 13px;
+}
+.case-store-notice.csv-privacy-note {
+  background: #f3f8fc;
+  color: #344f68;
+}
 .csv-preview-actions {
   display: flex;
   flex-wrap: wrap;
@@ -3178,123 +3187,9 @@ small.amount-input-error {
   margin-top: 3px;
 }
 
-/* V0.10: Vermögenshaus als fünf präsente Säulen */
-.house-layout {
-  grid-template-columns: 1fr;
-}
-.wealth-house {
-  display: block;
-  overflow: hidden;
-  padding: 0;
-  background: #fff;
-  border: 1px solid #d9e1e8;
-  border-radius: 10px;
-  clip-path: none;
-}
-.wealth-house .house-roof {
-  position: relative;
-  top: auto;
-  left: auto;
-  right: auto;
-  display: grid;
-  place-content: center;
-  min-height: 104px;
-  padding: 28px 24px 16px;
-  background: var(--navy) !important;
-  clip-path: polygon(50% 0, 100% 100%, 0 100%);
-}
-.wealth-house .house-roof span {
-  color: #fff;
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  text-transform: none;
-}
-.wealth-house .house-roof strong {
-  color: #fff;
-  font-size: 12px;
-}
-.house-pillars {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(145px, 1fr));
-  gap: 8px;
-  padding: 10px 12px 12px;
-  min-width: 820px;
-}
-.wealth-house > .house-pillars {
-  background: #fff;
-}
-.house-pillars article {
-  position: relative;
-  isolation: isolate;
-  display: flex;
-  flex-direction: column;
-  min-height: 235px;
-  overflow: hidden;
-  border: 1px solid #d9dee4;
-  border-top: 6px solid var(--pillar-color);
-  background: #f2f3f4;
-  padding: 14px 12px 12px;
-}
-.house-pillars .pillar-fill {
-  position: absolute;
-  z-index: -1;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: var(--pillar-fill);
-  background: var(--pillar-color);
-  opacity: 0.18;
-}
-.house-pillars header {
-  display: block;
-}
-.house-pillars header span {
-  display: block;
-  min-height: 34px;
-  color: var(--navy);
-  font-size: 11px;
-  font-weight: 800;
-  line-height: 1.2;
-}
-.house-pillars header strong {
-  display: block;
-  color: var(--pillar-color);
-  font-size: 20px;
-  margin-top: 8px;
-}
-.house-pillars p {
-  color: #485568;
-  font-size: 8px;
-  line-height: 1.55;
-  margin: 15px 0;
-}
-.house-pillars footer {
-  margin-top: auto;
-  color: var(--navy);
-  font-size: 12px;
-  font-weight: 800;
-}
-.house-foundation {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  border-top: 7px solid var(--navy);
-  background: #eef4f9;
-  color: #506075;
-  padding: 10px 14px;
-  font-size: 8px;
-}
-.house-foundation b {
-  color: var(--navy);
-}
-
 @media (max-width: 1100px) {
   .investment-plan-fields {
     grid-template-columns: repeat(4, minmax(120px, 1fr));
-  }
-  .wealth-house {
-    overflow-x: auto;
   }
 }
 @media (max-width: 760px) {
@@ -4801,69 +4696,6 @@ input[inputmode="numeric"],
   line-height: 1.5;
   margin: 5px 0 0;
 }
-.house-layout {
-  display: grid;
-  grid-template-columns: 420px minmax(0, 1fr);
-  gap: 16px;
-  align-items: stretch;
-}
-.wealth-house {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  gap: 5px;
-  padding: 70px 18px 18px;
-  background: #eef2f4;
-  border-radius: 10px 10px 5px 5px;
-  clip-path: polygon(50% 0, 100% 24%, 100% 100%, 0 100%, 0 24%);
-}
-.house-roof {
-  position: absolute;
-  top: 27px;
-  left: 0;
-  right: 0;
-  text-align: center;
-  border: 0 !important;
-  background: transparent !important;
-}
-.house-roof span,
-.house-roof strong {
-  display: block;
-}
-.house-roof span {
-  color: #617184;
-  font-size: 8px;
-  text-transform: uppercase;
-}
-.house-roof strong {
-  color: var(--navy);
-  font-size: 16px;
-  margin-top: 4px;
-}
-.wealth-house > div:not(.house-roof) {
-  background: #fff;
-  border-left: 6px solid;
-  padding: 10px 13px;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 3px 12px;
-  align-items: center;
-}
-.wealth-house > div span {
-  color: #47556b;
-  font-size: 9px;
-  font-weight: 700;
-}
-.wealth-house > div strong {
-  color: var(--navy);
-  font-size: 11px;
-}
-.wealth-house > div small {
-  grid-column: 1/-1;
-  color: #87909e;
-  font-size: 7px;
-}
 .house-table {
   margin: 0;
   padding: 20px;
@@ -5837,9 +5669,6 @@ body[data-print-mode="customer"] .internal-only {
   .plan-toolbar .danger {
     grid-row: 2;
   }
-  .house-layout {
-    grid-template-columns: 1fr;
-  }
   .export-actions {
     grid-template-columns: repeat(3, 1fr);
   }
@@ -5894,9 +5723,6 @@ body[data-print-mode="customer"] .internal-only {
   }
   .vv-result-grid {
     grid-template-columns: 1fr;
-  }
-  .wealth-house {
-    min-height: 420px;
   }
   .print-document {
     padding: 22px 17px;
@@ -6069,116 +5895,72 @@ body[data-print-mode="customer"] .internal-only {
   }
 }
 
-/* V0.10 house overrides must follow the legacy house rules. */
+/* One geometry for roof, five equal pillars and foundation at every container width. */
 .house-layout {
-  grid-template-columns: 1fr;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  min-width: 0;
 }
-.wealth-house {
-  display: block;
-  overflow: hidden;
-  padding: 0;
-  background: #fff;
+.house-layout > div { min-width: 0; }
+.house-scroll-hint {
+  margin: 0 0 8px;
+  color: #506075;
+  font-size: 12px;
+}
+.house-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 4px; /* Keep focus outlines and raised pillar buttons visible. */
   border: 1px solid #d9e1e8;
   border-radius: 10px;
-  clip-path: none;
+}
+.house-scroll:focus-visible { outline: 2px solid var(--navy-2); }
+.wealth-house {
+  width: 100%;
+  min-width: 920px;
+  background: #fff;
 }
 .wealth-house .house-roof {
-  position: relative;
-  top: auto;
-  left: auto;
-  right: auto;
   display: grid;
-  place-content: center;
-  min-height: 104px;
-  padding: 28px 24px 16px;
-  background: var(--navy) !important;
-  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  justify-items: center;
+  text-align: center;
+  min-height: 130px;
+  padding: 70px 24px 16px;
+  background: var(--navy);
+  clip-path: polygon(50% 0, 100% 60px, 100% 100%, 0 100%, 0 60px);
 }
 .wealth-house .house-roof span,
 .wealth-house .house-roof strong {
+  display: block;
   color: #fff;
+  overflow-wrap: anywhere;
 }
 .wealth-house .house-roof span {
   font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.02em;
-  text-transform: none;
 }
-.wealth-house .house-roof strong {
-  font-size: 12px;
-}
+.wealth-house .house-roof strong { font-size: 16px; margin-top: 4px; }
 .wealth-house > .house-pillars {
   display: grid;
-  grid-template-columns: repeat(5, minmax(145px, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: stretch;
   gap: 8px;
-  min-width: 820px;
   padding: 10px 12px 12px;
-  background: #fff;
-}
-.wealth-house .house-pillars article {
-  position: relative;
-  isolation: isolate;
-  display: flex;
-  flex-direction: column;
-  min-height: 235px;
-  overflow: hidden;
-  border: 1px solid #d9dee4;
-  border-top: 6px solid var(--pillar-color);
-  background: #f2f3f4;
-  padding: 14px 12px 12px;
-}
-.wealth-house .house-pillars .pillar-fill {
-  position: absolute;
-  z-index: -1;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: var(--pillar-fill);
-  border: 0;
-  padding: 0;
-  background: var(--pillar-color);
-  opacity: 0.18;
-}
-.wealth-house .house-pillars header span {
-  display: block;
-  min-height: 34px;
-  color: var(--navy);
-  font-size: 11px;
-  font-weight: 800;
-  line-height: 1.2;
-}
-.wealth-house .house-pillars header strong {
-  display: block;
-  color: var(--pillar-color);
-  font-size: 20px;
-  margin-top: 8px;
-}
-.wealth-house .house-pillars p {
-  color: #485568;
-  font-size: 8px;
-  line-height: 1.55;
-  margin: 15px 0;
-}
-.wealth-house .house-pillars footer {
-  margin-top: auto;
-  color: var(--navy);
-  font-size: 12px;
-  font-weight: 800;
 }
 .wealth-house > .house-foundation {
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  border: 0;
   border-top: 7px solid var(--navy);
   background: #eef4f9;
   color: #506075;
   padding: 10px 14px;
-  font-size: 8px;
+  font-size: 12px;
 }
-.wealth-house > .house-foundation b {
-  color: var(--navy);
-}
+.wealth-house > .house-foundation b { color: var(--navy); }
+
 .print-house-pillars {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -6210,15 +5992,11 @@ body[data-print-mode="customer"] .internal-only {
   font-size: 8px;
   margin-top: 4px;
 }
-@media (max-width: 1100px) {
-  .wealth-house {
-    overflow-x: auto;
-  }
-}
 
 /* Block 1: interaktives Vermögenshaus und klarer Rückweg aus Vertiefungen. */
 .house-mode-tabs {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   margin: 18px 0 12px;
@@ -6244,7 +6022,8 @@ body[data-print-mode="customer"] .internal-only {
 }
 .house-mode-tabs select {
   margin-left: auto;
-  min-width: 230px;
+  min-width: min(230px, 100%);
+  max-width: 100%;
   border: 1px solid #cbd7e2;
   border-radius: 6px;
   background: #fff;
@@ -6253,6 +6032,8 @@ body[data-print-mode="customer"] .internal-only {
   font-size: 14px;
 }
 .wealth-house > .house-pillars > button {
+  min-width: 0;
+  overflow-wrap: anywhere;
   position: relative;
   isolation: isolate;
   display: flex;
@@ -6266,14 +6047,6 @@ body[data-print-mode="customer"] .internal-only {
   color: inherit;
   text-align: left;
   transition: transform 160ms ease, box-shadow 160ms ease;
-}
-.wealth-house > div.house-pillars {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(145px, 1fr));
-  align-items: stretch;
-  gap: 8px;
-  border-left: 0;
-  padding: 10px 12px 12px;
 }
 .wealth-house > .house-pillars > button:hover,
 .wealth-house > .house-pillars > button.active {
