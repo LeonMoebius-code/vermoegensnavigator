@@ -258,7 +258,9 @@ test("schema 0-9 valid migrations and explicitly converted legacy monetary field
       {...c.plans[0].investmentPlans[1],contributionAmount:"25.125"},
       {...c.plans[0].investmentPlans[0],stagedValue:"500.125"},
     ]);
-    // Schema 7 phased candidates are deliberately ambiguous, so its documented migration drops it.
+    // H5a forbids ambiguous phased deletion. Give this monetary conversion
+    // fixture a unique product match; ambiguity rejection is checked separately.
+    if(schema<8)c.plans[0].allocations[1].productId="synthetic-other";
     const n=normalizeImportedCase(c,false);assert.ok(n,`legacy strings ${schema}`);
     assert.equal(n.savingsGoals[0].targetAmount,5000.1234);assert.equal(n.depot[0].plannedSale,50.1234);
     assert.equal(n.plans[0].allocations[0].capitalPotAmounts?.strategic,1000);

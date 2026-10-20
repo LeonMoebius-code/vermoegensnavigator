@@ -61,10 +61,14 @@ wird nicht erzeugt. IST und aktive PLAN-Betrachtung bleiben nutzbar.
 
 ## Legacy, Recovery und Restore
 
-Dokumentierte Migrationen für Schema 0–9 bleiben erhalten: Legacy-Buckets und
-Reviewbeträge, Schema-6-retain-Auswahl, Schema-7-Produkt-/Topfkonversion zum
-gestaffelten Einstieg und Sparratenkonversion, Entfernung mehrdeutiger alter
-Einstiege, Schema-8-Risikomigration und Schema-9-Einzeldepotmigration. Der fertige
+Verlustfreie dokumentierte Migrationen für Schema 0–9 bleiben erhalten:
+eindeutige Legacy-Buckets und vorhandene Reviewbeträge, Schema-6-retain-Auswahl,
+eindeutige Schema-7-Produkt-/Topfkonversion zum gestaffelten Einstieg und
+Sparratenkonversion, Schema-8-Risikomigration und Schema-9-Einzeldepotmigration.
+[H5a](H5a_Legacy_Verlustschutz.md) schützt vor der Konvertierung historische
+Kapitalbindungen und mehrdeutige Altdarstellungen, deren Zuordnungen, Beträge
+oder Einstiege sonst verloren gehen oder umgedeutet würden. Die frühere stille
+Entfernung mehrdeutiger Einstiege ist dadurch ersetzt. Der fertige
 migrierte Graph wird ebenfalls geprüft; es gibt keine neue allgemeine ID-Reparatur.
 
 `readCaseStore` schützt aktuelle ungültige Originale in `protectedEntries` und

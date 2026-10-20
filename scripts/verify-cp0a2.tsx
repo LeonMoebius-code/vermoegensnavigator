@@ -175,9 +175,14 @@ function runReferences() {
 
   for (const schema of [11, 9, 6]) {
     const source = { ...c, schemaVersion: schema, ...(schema < 10 ? { depotAccounts: undefined } : {}),
-      plans: c.plans.map((p) => ({ ...p, depotMode: "retain", depotHoldingIds: schema < 7 ? [] : p.depotHoldingIds })) };
+      plans: c.plans.map((p) => ({ ...p, depotMode: "retain", depotHoldingIds: schema < 7 ? [] : p.depotHoldingIds,
+        // A positive legacy bucket needs an unambiguous destination. The old
+        // zero-total synthetic combination instead created an unresolved review.
+        total: schema < 10 && p.allocations.length ? 3000 : p.total })) };
     const loaded = readCaseStore(JSON.stringify([source])); assert.equal(loaded.cases.length, 1);
     const n = loaded.cases[0], ni = new Ids();
+    assert.equal(n.plans[0].allocations.length, source.plans[0].allocations.length);
+    assert.equal(n.plans[0].allocations[0].amount, 3000);
     // Preserve old entities in the same registry, even when migration creates a depot.
     register(ni, c); register(ni, n);
     record(ref(`schema-${schema}`, "A", "Unterstützte Strukturen normalisieren zu Schema 11 unter Identitätserhalt",

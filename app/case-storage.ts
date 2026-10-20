@@ -110,7 +110,7 @@ export function removeCaseFromStore(storage: StorageAccess, id: string) {
   return mutateCaseStore(storage, ({ cases, protectedEntries }) => {
     if (typeof id !== "string" || !id) throw new Error("Löschen erfordert eine gültige Fall-ID.");
     if (protectedEntries.some((entry) => (entry as { id?: unknown } | null)?.id === id))
-      throw new Error("Ein beschädigter Originalfall mit derselben ID ist geschützt.");
+      throw new Error("Ein Originalfall mit derselben ID ist geschützt.");
     return cases.filter((current) => current.id !== id);
   });
 }
@@ -124,7 +124,7 @@ function mutateCaseStore(storage: StorageAccess, select: (loaded: CaseStoreRead)
   const protectedIds = new Set(loaded.protectedEntries.map((entry) => (entry as { id?: unknown } | null)?.id));
   if (cases.some((item) => typeof item.id !== "string" || !item.id) || new Set(cases.map((item) => item.id)).size !== cases.length)
     throw new Error("Fälle mit fehlenden oder doppelten IDs können nicht gespeichert werden.");
-  if (cases.some((item) => protectedIds.has(item.id))) throw new Error("Ein beschädigter Originalfall mit derselben ID ist geschützt.");
+  if (cases.some((item) => protectedIds.has(item.id))) throw new Error("Ein Originalfall mit derselben ID ist geschützt.");
   // Inspect original Runtime values before derived depot values can mask damage.
   if (cases.some((item) => !validCaseFinancialInputs(item)))
     throw new Error("Ungültige Finanzbeträge oder Ratenzahlen können nicht gespeichert werden. Der Bestand bleibt erhalten.");

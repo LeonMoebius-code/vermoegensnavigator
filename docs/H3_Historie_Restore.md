@@ -42,6 +42,12 @@ folgendem Browserhinweis:
 
 > Diese historische Version kann aufgrund beschädigter Daten nicht wiederhergestellt werden. Der aktuelle Arbeitsstand bleibt unverändert.
 
+Ergänzung durch [H5a](H5a_Legacy_Verlustschutz.md): Bei geschützten historischen
+Kapitalbindungen erscheint stattdessen ein sachlicher Hinweis auf fachliche
+Prüfung und Originalerhalt. Eine mögliche verlustbehaftete Konvertierung wird
+nicht als bewiesene Beschädigung des Originals bezeichnet. Die vollständige
+Prüfung und die Seiteneffektfreiheit der Ablehnung bleiben bestehen.
+
 Keine Rohdaten im Fehlertext. Abbruch vor Normalisierung bleibt folgenlos.
 Erst erfolgreiche Normalisierung ruft die bisherige State-Aktualisierung auf:
 aktuelle äußere Fall-ID und vollständige Historie bleiben erhalten, `updatedAt`

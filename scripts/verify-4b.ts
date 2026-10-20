@@ -290,10 +290,11 @@ legacy.plans[0].allocations.push({
   id: "legacy-allocation-duplicate",
 });
 const ambiguous = normalizeImportedCase(legacy, false);
-assert.ok(ambiguous);
-assert.equal(ambiguous.plans[0].investmentPlans.some((entry) => entry.type === "phased"), false);
+assert.equal(ambiguous, null, "H5a protects ambiguous phased entries instead of silently deleting them");
 
 const schemaSix = JSON.parse(JSON.stringify(legacy));
+// Test retain migration independently of the now-protected ambiguous entry.
+schemaSix.plans[0].allocations.pop();
 schemaSix.schemaVersion = 6;
 schemaSix.plans[0].depotMode = "retain";
 schemaSix.plans[0].depotHoldingIds = [];

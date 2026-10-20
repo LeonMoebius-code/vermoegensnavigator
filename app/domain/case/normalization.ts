@@ -1,5 +1,6 @@
 import { uid, iso, clone } from "./runtime";
 import { validCaseFinancialInputs } from "./financial-validation";
+import { legacyCapitalProtection } from "./legacy-capital-protection";
 import { validCurrentPlanGraph } from "../planning/plan-identity";
 import { legacyPhasedInstallments } from "../planning/installment-validation";
 import { withDepotValue } from "../depot/lifecycle";
@@ -275,6 +276,7 @@ export function normalizeImportedCase(
   if (sourceSchemaVersion > 11) return null;
   if (!validCaseFinancialInputs(item, sourceSchemaVersion)) return null;
   if (sourceSchemaVersion >= 10 && !validCurrentPlanGraph(item)) return null;
+  if (sourceSchemaVersion < 10 && legacyCapitalProtection(item) !== "safe") return null;
   const normalized = clone(item) as AdvisoryCase;
   normalized.schemaVersion = 11;
   if (regenerateId) normalized.id = uid("fall-import");

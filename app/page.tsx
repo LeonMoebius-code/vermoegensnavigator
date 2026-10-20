@@ -1,4 +1,4 @@
-import { caseStoreNotice } from "./presentation/case-store-notice";
+import { caseStoreNotice, historicalCapitalProtectionMessage } from "./presentation/case-store-notice";
 import type { AdvisoryCase } from "./domain/case/contracts";
 import type { AdvisorId, CustomerChecklistCategory, ModuleState } from "./domain/advisory/contracts";
 import type {
@@ -575,7 +575,13 @@ export default function Home() {
     const file = event.target.files?.[0];
     if (!file) return;
     try {
-      const imported = normalizeImportedCase(JSON.parse(await file.text()));
+      const source = JSON.parse(await file.text());
+      const imported = normalizeImportedCase(source);
+      const protectionMessage = !imported ? historicalCapitalProtectionMessage(source) : null;
+      if (protectionMessage) {
+        window.alert(protectionMessage);
+        return;
+      }
       if (!imported) throw new Error("invalid");
       const saved = persist(() => insertCaseIntoStore(window.localStorage, imported));
       if (!saved) return;
@@ -6643,7 +6649,7 @@ export function ExportCenter({
       restored = null;
     }
     if (!restored) {
-      window.alert("Diese historische Version kann aufgrund beschädigter Daten nicht wiederhergestellt werden. Der aktuelle Arbeitsstand bleibt unverändert.");
+      window.alert(historicalCapitalProtectionMessage(version.snapshot) || "Diese historische Version kann aufgrund beschädigter Daten nicht wiederhergestellt werden. Der aktuelle Arbeitsstand bleibt unverändert.");
       return;
     }
     setItem({
