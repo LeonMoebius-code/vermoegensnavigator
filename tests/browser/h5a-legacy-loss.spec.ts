@@ -107,8 +107,11 @@ test.describe("H5a zulässige alte Bucketmigration", () => {
     old.advisory.caseName = "Synthetischer eindeutiger Bucketimport"; old.plans[0].investmentPlans = [];
     delete old.plans[0].allocations[0].capitalPotId; delete old.plans[0].allocations[0].capitalPotAmounts;
     await page.goto("./"); await openNeighbor(page); await importCase(page, old);
-    await expect(page.getByLabel("Bezeichnung des Testfalls")).toHaveValue(old.advisory.caseName);
+    // Import preserves currentStep=3: the case-name input lives in step 1.
+    await expect(page.locator(".wizard-head .eyebrow")).toHaveText(old.advisory.caseName);
     const imported = await current(page, info, "bucket-import"); expect(imported.id).not.toBe(old.id);
+    expect(imported.advisory.caseName).toBe(old.advisory.caseName);
+    expect(imported.currentStep).toBe(old.currentStep);
     expect(imported.plans[0].allocations[0].amount).toBe(10000);
     expect(imported.plans[0].allocations[0].id).toBe(old.plans[0].allocations[0].id);
     expect(imported.plans[0].allocations[0].capitalPotAmounts).toEqual({ "year-2028": 10000 });
