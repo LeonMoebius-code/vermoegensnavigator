@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { CASE_STORAGE_KEY as KEY } from "../app/case-storage";
 import { beginRecovery,selectRecoverySource,previewRecovery,confirmRecovery,commitRecovery,recoveryConservation,recoverySourceEntries } from "../app/capital-recovery";
 import { diagnoseCapitalRecovery } from "../app/domain/case/capital-recovery-diagnosis";
-import { sha256 } from "../app/domain/case/recovery-hash";
+import { sha256,jsonHash } from "../app/domain/case/recovery-hash";
 import { h5bCase,h5bNeighbor,h5bDecisions,h5bDeadline } from "./h5b-fixtures";
 import { caseSnapshot,createPlan,normalizeImportedCase,getPreferredStructurePlan,type AdvisoryCase } from "../app/case-model";
 import { readCaseStore,saveCaseToStore,insertCaseIntoStore,RECOVERY_PREFIX } from "../app/case-storage";
@@ -48,7 +48,18 @@ test("R12 semantic change detected despite valid IDs and current coverage",()=>{
   const c=h5bCase();c.plans[0].investmentPlans=[];
   c.advisory.needs.push({id:102,purpose:"bleibt",amount:5000,years:1,dueDate:"2027-12-31"},{id:103,purpose:"anderer",amount:10000,years:2,dueDate:"2028-12-31"});
   c.plans[0].allocations[0].amount=25000;c.plans[0].allocations[0].capitalPotAmounts={"year-2027":5000,"year-2028":20000};
+  c.plans[0].allocations[0].bucketAmounts={year3:25000};
   assert(diagnoseCapitalRecovery(c,zone).findings.some(f=>f.category==="B"&&f.subject==="year-2027"));
+  const x=setup(c),ds:RecoveryDecision[]=[
+    {kind:"binding",planId:"h5a-plan",allocationId:"h5a-allocation",fromPotId:"year-2027",targets:[{potId:"year-2027",amount:5000}]},
+    {kind:"binding",planId:"h5a-plan",allocationId:"h5a-allocation",fromPotId:"year-2028",targets:[{potId:"year-2028",amount:20000}]},
+    {kind:"primary",planId:"h5a-plan",allocationId:"h5a-allocation",targetPotId:"year-2027"},
+    {kind:"legacy",planId:"h5a-plan",allocationId:"h5a-allocation"},
+  ];
+  const preview=previewRecovery(x.storage,x.session,zone,ds);assert.deepEqual(preview.blockers,[]);assert.deepEqual(preview.diff,[]);
+  const confirmation=confirmRecovery(x.storage,x.session,zone,ds,"Bestehende gültige Zuordnung trotz geänderter Bedarfsmitgliedschaft bewusst beibehalten.",c.advisorId,true);
+  const result=commitRecovery(x.storage,x.session,zone,ds,confirmation);
+  assert.deepEqual(result.item.plans,c.plans);assert.notEqual(result.item.id,c.id);
 });
 test("X05 earlier deadline is detected and cannot be acknowledged away",()=>{
   const c=h5bDeadline(),{storage,session}=setup(c);
@@ -91,6 +102,7 @@ test("R09 historical snapshot as explicit source retains complete opaque history
   const {item}=commitRecovery(storage,session,zone,ds,approve(storage,session,ds));
   assert.equal(JSON.stringify(item.versions),before);assert.equal(item.capitalPotRecovery!.source.snapshotId,"old-version");
   assert.equal(JSON.stringify(JSON.parse(storage.getItem(KEY)!)[1].versions),before);assert.notEqual(item.id,c.id);
+  assert.deepEqual(JSON.parse(storage.getItem(KEY)!).find((entry:AdvisoryCase)=>entry.id===c.id),c);
 });
 test("R11 Schema 10 works, Schema 0–9 remains protected including X04",()=>{
   const c=h5bCase();Reflect.set(c,"schemaVersion",10);assert.deepEqual(finish(c).result.item.schemaVersion,11);
@@ -240,5 +252,13 @@ test("H1-compatible exact drafts never round typed input or loosen new amount li
   assert.throws(()=>parseRecoveryAmountDraft("1.000,00",10000));
   assert.throws(()=>parseRecoveryAmountDraft("100000000000000",1000),/H1/);
   assert.equal(parseRecoveryAmountDraft("1e20",1e20),1e20);
+});
+test("P1 unchanged-source insert guard validates fresh raw identity and never bypasses candidate checks",()=>{
+  const original=h5bNeighbor(),raw=JSON.stringify([original]),storage=new Store(raw),candidate={...h5bNeighbor(),id:"new-independent"};
+  const guard={id:original.id,entryHash:jsonHash(original)};
+  for(const source of [{...guard,entryHash:"0".repeat(64)},{...guard,id:"missing"}]){assert.throws(()=>insertCaseIntoStore(storage,candidate,source));assert.equal(storage.getItem(KEY),raw);}
+  assert.throws(()=>insertCaseIntoStore(storage,original,guard));assert.equal(storage.getItem(KEY),raw);
+  const damaged=clone(candidate);damaged.advisory.liquidAssets=-1;assert.throws(()=>insertCaseIntoStore(storage,damaged,guard));assert.equal(storage.getItem(KEY),raw);
+  insertCaseIntoStore(storage,candidate,guard);assert.deepEqual(JSON.parse(storage.getItem(KEY)!).find((c:AdvisoryCase)=>c.id===original.id),original);
 });
 console.log(`H5b recovery: ${passed} groups passed; R01–R12 and X01–X06 covered with synthetic sources.`);

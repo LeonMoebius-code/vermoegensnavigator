@@ -242,6 +242,6 @@ export function commitRecovery(storage:RecoveryStorage,session:RecoverySession,z
   if(item.id===source.owner.id||!validCaseFinancialInputs(item)||!validCurrentPlanGraph(item)||!normalizeImportedCase(item,false))throwError("Abschließende Kopienprüfung fehlgeschlagen.");
   // No awaited work or UI-list write between fresh verification and P1 insert.
   verifyRecoverySession(storage,session);
-  const cases=insertCaseIntoStore(storage,item);
+  const cases=insertCaseIntoStore(storage,item,source.kind==="local"?{id:source.owner.id,entryHash:jsonHash(source.owner)}:undefined);
   return {item:cases.find(c=>c.id===item.id)!,cases};
 }

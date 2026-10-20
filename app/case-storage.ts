@@ -1,3 +1,4 @@
+import { jsonHash } from "./domain/case/recovery-hash";
 import type { AdvisoryCase } from "./domain/case/contracts";
 import { validCaseFinancialInputs } from "./domain/case/financial-validation";
 import { enforceCaseDepotValue, normalizeImportedCase } from "./case-model";
@@ -97,12 +98,19 @@ export function saveCaseToStore(storage: StorageAccess, item: AdvisoryCase) {
 }
 
 /** Insert an independent case (notably a P4 import); never overwrite an existing ID. */
-export function insertCaseIntoStore(storage: StorageAccess, item: AdvisoryCase) {
+export type UnchangedCopySource = { id: string; entryHash: string };
+
+/** Optional H5b copy-source guard: preserve this freshly read source entry
+ * exactly, including its technical timestamp. No caller-supplied raw object,
+ * replacement, same-ID repair or validation exception is accepted. */
+export function insertCaseIntoStore(storage: StorageAccess, item: AdvisoryCase, unchangedSource?: UnchangedCopySource) {
+  if (unchangedSource && item.id === unchangedSource.id)
+    throw new Error("Eine unabhängige Fallkopie benötigt eine neue äußere Fall-ID.");
   return mutateCaseStore(storage, ({ cases }) => {
     if (cases.some((current) => current.id === item.id))
       throw new Error("Ein Fall mit derselben ID ist bereits gespeichert. Import wurde abgebrochen.");
     return [item, ...cases];
-  });
+  }, unchangedSource);
 }
 
 /** Remove only this healthy ID; missing IDs are safe, protected originals are not deleted. */
@@ -116,10 +124,22 @@ export function removeCaseFromStore(storage: StorageAccess, id: string) {
 }
 
 // Read once immediately before selecting the mutation; share validation and recovery.
-function mutateCaseStore(storage: StorageAccess, select: (loaded: CaseStoreRead) => AdvisoryCase[]) {
+function mutateCaseStore(storage: StorageAccess, select: (loaded: CaseStoreRead) => AdvisoryCase[], unchangedSource?: UnchangedCopySource) {
   const original = storage.getItem(CASE_STORAGE_KEY);
   const loaded = readCaseStore(original);
   if (loaded.malformed) throw new Error("Der lokale Fallbestand ist beschädigt. Originaldaten zuerst zur Wiederherstellung sichern. Der Bestand wurde nicht überschrieben.");
+  let originalSource: unknown;
+  if (unchangedSource) {
+    if (typeof unchangedSource.id !== "string" || !unchangedSource.id ||
+      typeof unchangedSource.entryHash !== "string" || !/^[a-f0-9]{64}$/.test(unchangedSource.entryHash) ||
+      Object.keys(unchangedSource).some((key) => key !== "id" && key !== "entryHash"))
+      throw new Error("Ungültiger Originalerhalt für die unabhängige Fallkopie.");
+    const matches = (original === null ? [] : JSON.parse(original) as unknown[])
+      .filter((entry) => (entry as { id?: unknown } | null)?.id === unchangedSource.id);
+    if (matches.length !== 1 || jsonHash(matches[0]) !== unchangedSource.entryHash)
+      throw new Error("Der unverändert zu erhaltende Quellfall fehlt, ist mehrdeutig oder wurde verändert.");
+    originalSource = matches[0];
+  }
   const cases = select(loaded);
   const protectedIds = new Set(loaded.protectedEntries.map((entry) => (entry as { id?: unknown } | null)?.id));
   if (cases.some((item) => typeof item.id !== "string" || !item.id) || new Set(cases.map((item) => item.id)).size !== cases.length)
@@ -130,7 +150,10 @@ function mutateCaseStore(storage: StorageAccess, select: (loaded: CaseStoreRead)
     throw new Error("Ungültige Finanzbeträge oder Ratenzahlen können nicht gespeichert werden. Der Bestand bleibt erhalten.");
   const normalized = cases.map(enforceCaseDepotValue);
   if (normalized.some((item) => !normalizeImportedCase(item, false))) throw new Error("Ein beschädigter Fall kann nicht gespeichert werden. Der Bestand bleibt erhalten.");
-  const serialized = JSON.stringify([...normalized, ...loaded.protectedEntries]);
+  // Validation above remains complete. Only the already-existing source record
+  // is serialized from the freshly read original; the new candidate is ordinary P1.
+  const serialized = JSON.stringify([...normalized.map((entry) =>
+    unchangedSource && entry.id === unchangedSource.id ? originalSource : entry), ...loaded.protectedEntries]);
   // Reuse a verified original containing every still-damaged entry (including
   // duplicate multiplicity). Healthy-case edits do not require endless backups.
   const alreadyBackedUp = loaded.recoveryNeeded && recoveryBackups(storage).some((backup) => {

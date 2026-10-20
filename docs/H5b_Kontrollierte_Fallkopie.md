@@ -135,6 +135,12 @@ Unmittelbar vor dem Insert: aktueller Bestand und Malformed-Zustand, Quelle,
 Sicherung, Erhaltungsdiff, Finanz-/Depot-/Graph-/Identitäts-/Raten-/Umsetzungs-
 und Deckungsprüfungen sowie konkrete Bestätigung erneut prüfen. Danach neue
 äußere UUID, keine Änderung innerer IDs, ausschließlich `insertCaseIntoStore`.
+Der Insert besitzt dafür eine eng begrenzte optionale Quellenerhaltungsprüfung:
+Fall-ID und kanonischer Hash müssen genau einen frisch gelesenen Originaleintrag
+bezeichnen. Dieser bestehende Eintrag wird unverändert serialisiert, auch wenn
+er gesund ist. Insbesondere darf P1 dessen technisches `updatedAt` nicht als
+Nebenwirkung neu schreiben. Es gibt weder einen übergebenen Rohdatenpatch noch
+eine Validierungsausnahme. Alle anderen P1-Operationen behalten ihren Vertrag.
 Erst der erfolgreiche P4/P1-Commit erlaubt die Aktivierung der Kopie.
 
 Sicherungsfehler verhindern den Entwurf. Hauptschreibfehler erhalten den
@@ -152,7 +158,7 @@ Historische Zeilen und Snapshots werden nicht umgeschrieben.
 ## Regressionen und Abnahme
 
 `npm run test:h5b-recovery` ist im kanonischen Verify zusätzlich eingebunden.
-35 synthetische Gruppen decken R01–R12 und X01–X06 ab: keine Bindung, gleiche
+36 synthetische Gruppen decken R01–R12 und X01–X06 ab: keine Bindung, gleiche
 ID/andere Bedarfe, Voll-/Teilverlustschutz, Einstiegserhalt, inaktive Varianten,
 Sparziele, unabhängige Fehler, Snapshotquelle, Nachbarn, Schemabegrenzung,
 semantisch geänderte volle Deckung; Sicherungs-/Schreibfehler, Grenzen der
