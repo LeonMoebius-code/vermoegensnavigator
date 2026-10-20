@@ -1,3 +1,4 @@
+import { validCapitalPotRecovery } from "./recovery-contract";
 import { uid, iso, clone } from "./runtime";
 import { validCaseFinancialInputs } from "./financial-validation";
 import { legacyCapitalProtection } from "./legacy-capital-protection";
@@ -272,6 +273,7 @@ export function normalizeImportedCase(
     if (item.depotAccounts.some((account) =>
       account.name !== undefined && typeof account.name !== "string")) return null;
   }
+  if (item.capitalPotRecovery !== undefined && !validCapitalPotRecovery(item.capitalPotRecovery)) return null;
   const sourceSchemaVersion = Number(item.schemaVersion) || 0;
   if (sourceSchemaVersion > 11) return null;
   if (!validCaseFinancialInputs(item, sourceSchemaVersion)) return null;
