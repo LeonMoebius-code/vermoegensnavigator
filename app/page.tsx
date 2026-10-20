@@ -1,3 +1,5 @@
+import { CapitalRecoveryView } from "./presentation/capital-recovery-view";
+import { recoveryConfirmationStatus } from "./domain/case/recovery-contract";
 import { caseStoreNotice, historicalCapitalProtectionMessage } from "./presentation/case-store-notice";
 import type { AdvisoryCase } from "./domain/case/contracts";
 import type { AdvisorId, CustomerChecklistCategory, ModuleState } from "./domain/advisory/contracts";
@@ -174,7 +176,7 @@ import {
   hasMixedValuationDates,
 } from "./depot-analysis";
 
-type View = "home" | "cases" | "wizard" | "planner" | "depot" | "export";
+type View = "recovery" | "home" | "cases" | "wizard" | "planner" | "depot" | "export";
 
 const riskText = riskProfiles;
 
@@ -671,6 +673,7 @@ export default function Home() {
             <span>▤</span>Beratungsfälle{" "}
             <em className="nav-count">{savedCases.length}</em>
           </button>
+          <button className={view === "recovery" ? "active" : ""} onClick={() => setView("recovery")}>Historische Fälle prüfen</button>
           <button onClick={() => start()}>
             <span>＋</span>Neue Beratung
           </button>
@@ -714,6 +717,15 @@ export default function Home() {
             new Blob([backup.original], { type: "application/json" }), `fallbestand-original-${index + 1}.json`,
           )}>Originalsicherung {index + 1} herunterladen</button>)}
         </details>}
+        {view === "recovery" && <CapitalRecoveryView advisorId={newCaseAdvisorId} onCommitted={(item, cases) => {
+          setSavedCases(cases);
+          setActiveCase(item);
+          setBackups(recoveryBackups(window.localStorage));
+          setStorageNoticeSeverity("info");
+          setStorageNotice(`Geprüfte unabhängige Fallkopie ${item.id} gespeichert. Das Original bleibt erhalten.`);
+          setView("wizard");
+        }}/>}
+        {view !== "recovery" && activeCase.capitalPotRecovery && <p className="csv-privacy-note">Historische Fallkopie aus {activeCase.capitalPotRecovery.source.caseId}. {recoveryConfirmationStatus(activeCase) === "content-bound" ? "Der aktuelle Inhalt entspricht der damaligen Kopienfreigabe zur weiteren Bearbeitung." : "Der aktuelle Inhalt hat sich seit der Kopienfreigabe verändert; die frühere Bestätigung gilt nicht für diese Inhalte."}</p>}
         {view === "home" && (
           <HomeView
             start={start}
@@ -6656,6 +6668,7 @@ export function ExportCenter({
       ...restored,
       id: item.id,
       versions: item.versions,
+      ...(item.capitalPotRecovery ? { capitalPotRecovery: item.capitalPotRecovery } : {}),
       updatedAt: new Date().toISOString(),
     });
   };

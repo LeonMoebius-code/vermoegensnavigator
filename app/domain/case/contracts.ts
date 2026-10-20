@@ -1,3 +1,4 @@
+import type { CapitalPotRecovery } from "./recovery-contract";
 import type { AdvisoryData, AdvisorId, ModuleState, CustomerChecklistItem } from "../advisory/contracts";
 import type { StructurePlan, SavingsGoal } from "../planning/contracts";
 import type { DepotHolding, DepotAccount } from "../depot/contracts";
@@ -22,6 +23,7 @@ export type AdvisoryCase = {
   createdAt: string;
   updatedAt: string;
   versions: CaseVersion[];
+  capitalPotRecovery?: CapitalPotRecovery;
 };
 
 export type CaseSnapshot = Omit<AdvisoryCase, "versions">;

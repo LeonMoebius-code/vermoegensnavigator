@@ -2,7 +2,8 @@ import { useId, useState, type InputHTMLAttributes } from "react";
 
 // Below 2^46 EUR every cent remains distinguishable in the existing number model.
 // The integer-cent intermediate also stays below Number.MAX_SAFE_INTEGER.
-export const MAX_AMOUNT_CENTS = BigInt(2 ** 46) * 100n - 1n;
+import { MAX_AMOUNT_CENTS } from "../domain/case/amount-limits";
+export { MAX_AMOUNT_CENTS } from "../domain/case/amount-limits";
 export type AmountDraftResult =
   | { status: "valid"; value: number }
   | { status: "incomplete"; empty: boolean }

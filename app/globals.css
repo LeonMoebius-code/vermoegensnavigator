@@ -7149,3 +7149,21 @@ body[data-print-mode="customer"] .internal-only {
     padding: 6px;
   }
 }
+
+/* H5b keeps its raw-source workflow separate from the ordinary editor. */
+.h5b-panel { margin: 20px 0; padding: 24px; border: 1px solid var(--border, #d8dce3); border-radius: 12px; background: white; }
+.h5b-panel label { display: block; margin: 12px 0; }
+.h5b-panel select, .h5b-panel textarea, .h5b-panel input:not([type=checkbox]) { display: block; max-width: 100%; width: 100%; padding: 10px; border: 1px solid #aab2c0; border-radius: 6px; background: white; }
+.h5b-panel textarea { min-height: 100px; }
+.h5b-panel button { margin-top: 8px; }
+.h5b-panel button:disabled { opacity: .5; cursor: not-allowed; }
+.h5b-scroll { overflow-x: auto; margin: 12px 0; }
+.h5b-panel table { border-collapse: collapse; width: 100%; text-align: left; }
+.h5b-panel th, .h5b-panel td { padding: 10px; border-bottom: 1px solid #d8dce3; vertical-align: top; overflow-wrap: anywhere; }
+.h5b-panel th { background: #f1f4f8; }
+.h5b-panel pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+.h5b-panel details { margin: 14px 0; }
+.h5b-panel summary { cursor: pointer; font-weight: 600; }
+.h5b-binding { margin: 16px 0; padding: 16px; border: 1px solid #aab2c0; border-radius: 8px; }
+.h5b-row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.h5b-row label { flex: 1; min-width: 180px; }
