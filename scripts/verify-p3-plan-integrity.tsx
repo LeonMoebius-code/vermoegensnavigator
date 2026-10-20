@@ -174,22 +174,30 @@ test("save, insert and full write reject before store or recovery mutation", () 
 test("legacy schema 0-9 documented migrations remain loadable", () => {
   for (let schemaVersion = 0; schemaVersion <= 9; schemaVersion++) {
     const source = fixture(); Reflect.set(source, "schemaVersion", schemaVersion);
+    // Before schema 8 phased/savings entries used product/installment fields.
+    // Relabelling current fields alone is not a documented historical format.
+    if (schemaVersion < 8) source.plans.forEach(p => p.investmentPlans.forEach(e => {
+      if (e.type === "phased") Object.assign(e, { productId: "synthetic-product", installmentAmount: e.stagedValue / e.installments });
+      else { Reflect.set(e, "installmentAmount", e.contributionAmount); Reflect.deleteProperty(e, "targetRef"); }
+    }));
     const before = JSON.stringify(source), loaded = normalizeImportedCase(source, false); assert.ok(loaded, `schema ${schemaVersion}`);
     assert.equal(loaded.schemaVersion, 11); assert.equal(loaded.activePlanId, source.activePlanId);
     assert.deepEqual(loaded.versions, source.versions); assert.equal(JSON.stringify(source), before);
   }
 });
-test("legacy schema 6 retain-empty and invalid pots follow documented cleanup", () => {
+test("legacy schema 6 retain-empty migrates; invalid pots are protected by H5a", () => {
   const c = fixture(); Reflect.set(c, "schemaVersion", 6); c.plans[0].depotHoldingIds = [];
+  c.plans.forEach(p => { p.investmentPlans = []; });
+  const retained = normalizeImportedCase(c, false); assert.ok(retained);
+  assert.deepEqual(retained.plans[0].depotHoldingIds, ["p3-holding"]);
   const invalid = { ...c.plans[0].allocations[0], id: "legacy-bad-pot" };
   Reflect.set(invalid, "capitalPotId", "old-invalid"); Reflect.set(invalid, "capitalPotAmounts", { "old-invalid": 1 });
   c.plans[0].allocations.push(invalid);
-  const loaded = normalizeImportedCase(c, false); assert.ok(loaded);
-  assert.deepEqual(loaded.plans[0].depotHoldingIds, ["p3-holding"]);
-  assert.ok(!loaded.plans[0].allocations.some((a) => a.id === "legacy-bad-pot"));
+  assert.equal(normalizeImportedCase(c, false), null, "Invalid binding must not disappear");
 });
-test("legacy schema 7 phased product conversion and ambiguous removal; savings amount conversion", () => {
+test("legacy schema 7 phased product conversion and ambiguity protection; savings amount conversion", () => {
   const c = fixture(); Reflect.set(c, "schemaVersion", 7);
+  c.plans.forEach(p => { p.investmentPlans = []; });
   Reflect.set(c.plans[0], "investmentPlans", [
     { id: "legacy-phased", type: "phased", productId: "synthetic-product", capitalPotId: "strategic",
       installmentAmount: 1000, installments: 4, frequency: "monthly" },
@@ -201,7 +209,7 @@ test("legacy schema 7 phased product conversion and ambiguous removal; savings a
   assert.equal(Reflect.get(loaded.plans[0].investmentPlans[0], "stagedValue"), 4000);
   assert.equal(Reflect.get(loaded.plans[0].investmentPlans[1], "contributionAmount"), 123);
   c.plans[0].allocations.push({ ...c.plans[0].allocations[0], id: "legacy-ambiguous" });
-  assert.equal(normalizeImportedCase(c, false)?.plans[0].investmentPlans.some((i) => i.type === "phased"), false);
+  assert.equal(normalizeImportedCase(c, false), null, "H5a protects the original ambiguous phased entry");
 });
 test("legacy schema 8 risk migration and schema 9 single-depot assignment preserved", () => {
   const risk = fixture(); Reflect.set(risk, "schemaVersion", 8); risk.advisory.risk = 4;
