@@ -35,7 +35,7 @@ async function house(p:Page) {
 // Permanent translation of audit PR #43's F020 persistence assertion, with the
 // mandated active conflict solution and real UI/JSON/XLSX/print observations.
 for(const surface of ["wizard","depot"]) for(const correction of ["sale","value"]) test(`F020 ${surface} conflict, every save/output path, conscious ${correction} correction`,async({page},info)=>{
-  const errors=monitor(page),c=saleCase(),neighbor=controlCase("f020-neighbor");await seed(page,[c,neighbor]);await open(page,c);await save(page);
+  const errors=monitor(page),c=saleCase(),neighbor=controlCase("sale-neighbor");await seed(page,[c,neighbor]);await open(page,c);await save(page);
   const baseline=(await raw(page))!;await market(page,surface,5000);
   await expect(conflict(page)).toBeVisible();await expect(conflict(page)).toContainText("AUDIT Depot A: AUDIT Position A");
   await expect(conflict(page)).toContainText("5.000,00");await expect(conflict(page)).toContainText("8.000,00");
@@ -120,7 +120,7 @@ for(const surface of ["wizard","depot"]) test(`F020 ${surface} CSV replacement r
     const chooser=page.waitForEvent("filechooser");await target.getByRole("button",{name:"CSV ersetzen",exact:true}).click();
     await(await chooser).setFiles({name:"f020-replacement.csv",mimeType:"text/csv",buffer:Buffer.from(replacementCsv())});
   } else {
-    const chooser=page.waitForEvent("filechooser");await page.getByRole("button",{name:"CSV importieren",exact:true}).click();
+    const chooser=page.waitForEvent("filechooser");await page.getByRole("button",{name:"Depot-CSV importieren",exact:true}).click();
     await(await chooser).setFiles({name:"f020-replacement.csv",mimeType:"text/csv",buffer:Buffer.from(replacementCsv())});
     // Use the actual preview's replace selector, independently of wizard entry.
     await page.locator(".csv-preview").getByRole("combobox").first().selectOption("audit-depot-A");
