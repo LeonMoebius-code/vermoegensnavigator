@@ -1,3 +1,6 @@
+import { depotSaleConflicts } from "./domain/depot/sale-validation";
+import { validCaseFinancialInputs } from "./domain/case/financial-validation";
+import { DepotSaleConflicts } from "./presentation/depot-sale-conflicts";
 import { CapitalRecoveryView } from "./presentation/capital-recovery-view";
 import { recoveryConfirmationStatus } from "./domain/case/recovery-contract";
 import { caseStoreNotice, historicalCapitalProtectionMessage } from "./presentation/case-store-notice";
@@ -511,6 +514,13 @@ export default function Home() {
   };
 
   const saveCase = (withVersion = false) => {
+    // Reject the untouched draft before cloning or constructing a history entry.
+    if (depotSaleConflicts(activeCase.depot).length) return;
+    if (!validCaseFinancialInputs(activeCase)) {
+      setStorageNoticeSeverity("error");
+      setStorageNotice("Ungültige Finanzdaten. Speichern wurde abgebrochen; der Entwurf bleibt zur Korrektur erhalten.");
+      return;
+    }
     const updated: AdvisoryCase = {
       ...clone(enforceCaseDepotValue(activeCase)),
       updatedAt: new Date().toISOString(),
@@ -555,7 +565,8 @@ export default function Home() {
       persist(() => removeCaseFromStore(window.localStorage, id));
   };
 
-  const exportJson = () =>
+  const exportJson = () => {
+    if (depotSaleConflicts(activeCase.depot).length) return;
     download(
       new Blob(
         [
@@ -573,6 +584,7 @@ export default function Home() {
       ),
       `${safeFileName(activeCase.advisory.caseName)}.json`,
     );
+  };
   const importJson = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -726,6 +738,7 @@ export default function Home() {
           setView("wizard");
         }}/>}
         {view !== "recovery" && activeCase.capitalPotRecovery && <p className="csv-privacy-note">Historische Fallkopie aus {activeCase.capitalPotRecovery.source.caseId}. {recoveryConfirmationStatus(activeCase) === "content-bound" ? "Der aktuelle Inhalt entspricht der damaligen Kopienfreigabe zur weiteren Bearbeitung." : "Der aktuelle Inhalt hat sich seit der Kopienfreigabe verändert; die frühere Bestätigung gilt nicht für diese Inhalte."}</p>}
+        {["wizard", "planner", "depot"].includes(view) && <DepotSaleConflicts depot={activeCase.depot} accounts={activeCase.depotAccounts} />}
         {view === "home" && (
           <HomeView
             start={start}
@@ -1533,6 +1546,16 @@ export function SituationStep({
                           })
                         }
                         placeholder="0"
+                      />
+                      <b>€</b>
+                    </div>
+                    <div className="inline-amount sale">
+                      <AmountInput
+                        identity={holding.id}
+                        aria-label={`Geplanter Verkauf ${depotAccounts.find(account => account.id === holding.depotId)?.name}: ${holding.name}`}
+                        value={holding.plannedSale}
+                        onValueChange={(amount) => updateHolding(holding.id, { plannedSale: Math.min(holding.value, amount) })}
+                        title="Geplanter Verkauf"
                       />
                       <b>€</b>
                     </div>
@@ -6303,6 +6326,7 @@ export function ExportCenter({
   importJson: () => void;
 }) {
   const item = enforceCaseDepotValue(sourceItem);
+  const saleBlocked = depotSaleConflicts(item.depot).length > 0;
   const breakdown = preferredPlan ? buildPlanWealthStructure(item.depot, preferredPlan) : null;
   const exportPots = preferredPlan ? capitalPots(
     item.advisory,
@@ -6332,7 +6356,7 @@ export function ExportCenter({
     return item.advisory.needs.find((need) => need.id === entry.targetRef?.id)?.purpose || "";
   };
   const print = (mode: "customer" | "internal") => {
-    if (!preferredPlan) return;
+    if (saleBlocked || !preferredPlan) return;
     document.body.dataset.printMode = mode;
     window.setTimeout(() => {
       window.print();
@@ -6340,7 +6364,7 @@ export function ExportCenter({
     }, 60);
   };
   const exportExcel = () => {
-    if (!preferredPlan || !breakdown || !exportBondData) return;
+    if (saleBlocked || !preferredPlan || !breakdown || !exportBondData) return;
     const workbook = XLSX.utils.book_new();
     const depotExport = buildMultiDepotExportData(
       item.depotAccounts,
@@ -6705,31 +6729,32 @@ export function ExportCenter({
           </button>
         </div>
       </div>
+      <DepotSaleConflicts depot={item.depot} accounts={item.depotAccounts} />
       {!preferredPlan && <p role="status">Keine bevorzugte Zielvariante gewählt. Bitte in der Strukturplanung eine Variante als bevorzugt markieren.</p>}
       {exportBondData && exportBondData.analysis.directCount > 0 && <p className="analysis-note no-print">{BOND_EXPORT_SCOPE_NOTICE}</p>}
       <div className="export-actions no-print">
-        <button disabled={!preferredPlan} onClick={() => print("customer")}>
+        <button disabled={saleBlocked || !preferredPlan} onClick={() => print("customer")}>
           <span>PDF</span>
           <strong>Kundenübersicht</strong>
           <small>
             Ausgangslage, Ziele, Strukturen, Lösungsbausteine und nächste Schritte
           </small>
         </button>
-        <button disabled={!preferredPlan} onClick={() => print("internal")}>
+        <button disabled={saleBlocked || !preferredPlan} onClick={() => print("internal")}>
           <span>PDF+</span>
           <strong>Interne Arbeitsunterlage</strong>
           <small>
             zusätzlich Datenstände, Warnungen, Produkte und Prüfpunkte
           </small>
         </button>
-        <button disabled={!preferredPlan} onClick={exportExcel}>
+        <button disabled={saleBlocked || !preferredPlan} onClick={exportExcel}>
           <span>XLSX</span>
           <strong>Excel-Arbeitsmappe</strong>
           <small>
             separate Blätter für Bedarfe, Pläne, Anlageklassen, Depot und VV
           </small>
         </button>
-        <button onClick={exportJson}>
+        <button disabled={saleBlocked} onClick={() => { if (!saleBlocked) exportJson(); }}>
           <span>JSON</span>
           <strong>Vollständige Sicherung</strong>
           <small>kann anschließend wieder importiert werden</small>
@@ -6774,7 +6799,7 @@ export function ExportCenter({
           </div>
         </section>
       )}
-      {preferredPlan && breakdown && exportBondData && <article className="print-document">
+      {!saleBlocked && preferredPlan && breakdown && exportBondData && <article className="print-document">
         <header>
           <div>
             <BrandLogos compact />

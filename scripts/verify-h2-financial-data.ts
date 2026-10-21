@@ -106,6 +106,10 @@ test("optional amounts retain absent/default contracts but reject present corrup
 test("integer, cent, higher precision and zero remain valid and unrounded", () => {
   for (const [name,set] of [...mandatory,...optional]) for (const v of [0, 1, 1000.5, 1000.123456789]) {
     const c=fixture(); set(c,v);
+    // F020: these are positive numeric-precision controls. Keep the other
+    // amount valid for the new cross-field invariant; do not change tested v.
+    if(name === "holding.value") c.depot[0].plannedSale=0;
+    if(name === "holding.plannedSale") c.depot[0].value=Math.max(c.depot[0].value,v);
     if(name !== "stagedValue" && name !== "contributionAmount") c.plans[0].investmentPlans=[];
     if(name === "plan.total") c.plans[0].allocations=[];
     assert.equal(validCaseFinancialInputs(c),true);

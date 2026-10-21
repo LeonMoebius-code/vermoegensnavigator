@@ -326,7 +326,8 @@ export function normalizeImportedCase(
             ? holding.depotId
             : legacyMigrationDepotId!,
         value: Math.max(0, Number(holding.value) || 0),
-        plannedSale: Math.min(
+        // Current inputs already passed the invariant; only historical migration caps.
+        plannedSale: sourceSchemaVersion >= 10 ? holding.plannedSale : Math.min(
           Math.max(0, Number(holding.value) || 0),
           Math.max(0, Number(holding.plannedSale) || 0),
         ),

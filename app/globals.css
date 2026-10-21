@@ -7167,3 +7167,13 @@ body[data-print-mode="customer"] .internal-only {
 .h5b-binding { margin: 16px 0; padding: 16px; border: 1px solid #aab2c0; border-radius: 8px; }
 .h5b-row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
 .h5b-row label { flex: 1; min-width: 180px; }
+
+/* F-020: the wizard exposes both deliberate amounts for conflict correction. */
+.situation-holdings > div {
+  grid-template-columns: minmax(140px, 1.6fr) minmax(110px, 0.8fr) minmax(110px, 0.8fr) minmax(120px, 1fr) 30px;
+}
+.depot-sale-conflicts { margin: 12px 0; }
+.depot-sale-conflicts li { margin: 8px 0; }
+@media (max-width: 800px) {
+  .situation-holdings > div { grid-template-columns: 1fr 1fr; }
+}
