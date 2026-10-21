@@ -47,7 +47,7 @@ for(const surface of ["wizard","depot"]) for(const correction of ["sale","value"
   const wizardSaves=page.getByRole("button",{name:"Fall speichern",exact:true});expect(await wizardSaves.count()).toBe(2);
   for(const b of await wizardSaves.all()){await b.click();expect(await raw(page)).toBe(baseline);}
   // Keep an unrelated unsaved draft edit through every rejection.
-  await page.getByLabel("Bezeichnung des Testfalls",{exact:true}).fill("F020 UNGESPEICHERTER ENTWURF");
+  await page.getByRole("textbox",{name:/Bezeichnung des Testfalls/}).fill("F020 UNGESPEICHERTER ENTWURF");
   await page.locator(".wizard-steps").getByRole("button").nth(5).click();
   await page.getByRole("button",{name:"Vollständigen Fall als JSON",exact:true}).click();
   await nav(page,"Strukturplanung");
