@@ -1,3 +1,4 @@
+import { localDateParts } from "../planning/calendar";
 import { validPhasedInstallments, legacyPhasedInstallments } from "../planning/installment-validation";
 
 /** Financial and phased-count trust boundary. Optional depot/Bond metadata and historical
@@ -35,7 +36,11 @@ export function validCaseFinancialInputs(value: unknown, sourceSchemaVersion = 1
   const advisory = value.advisory;
   if (![advisory.liquidAssets, advisory.depotValue, advisory.otherAssets, advisory.reserve]
     .every(finiteNonnegativeAmount) || !Array.isArray(advisory.needs) ||
-    advisory.needs.some((need) => !record(need) || !finiteNonnegativeAmount(need.amount))) return false;
+    advisory.needs.some((need) => !record(need) || !finiteNonnegativeAmount(need.amount) ||
+      // Match the calendar's existing explicit-date priority. Only a duration
+      // actually used for relative calculation is mandatory; never coerce it.
+      (!(typeof need.dueDate === "string" && localDateParts(need.dueDate)) &&
+        !finiteNonnegativeAmount(need.years)))) return false;
 
   if (value.depot !== undefined && (!Array.isArray(value.depot) || value.depot.some((holding) =>
     !record(holding) || !finiteNonnegativeAmount(holding.value) ||
