@@ -19,7 +19,7 @@ export function saleCase(): AdvisoryCase {
   c.depot = ["A", "B"].map((s, i) => ({ id: `audit-holding-${s}`, depotId: `audit-depot-${s}`,
     name: `AUDIT Position ${s}`, value: i ? 6000 : 10000, plannedSale: 0, risk: 3,
     assetClass: "Substanzwerte", region: "Deutschland", note: "Synthetisch", wkn: i ? "ZZAF02" : "ZZAF01",
-    classificationStatus: "mapped", securityType: "Aktie", currency: "EUR", valuationEnd: "2026-10-15" }));
+    excludeFromBondAggregates: false, classificationStatus: "mapped", securityType: "Aktie", currency: "EUR", valuationEnd: "2026-10-15" }));
   c.advisory.hasDepot = true; c.advisory.depotValue = 16000;
   c.plans[0].depotMode = "afterSales"; c.plans[0].depotHoldingIds = c.depot.map(h => h.id);
   c.plans[0].depotSelectionInitialized = true; c.plans[0].depotModeSelectionInitialized = true;
