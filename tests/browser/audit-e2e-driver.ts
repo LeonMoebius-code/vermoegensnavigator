@@ -34,7 +34,7 @@ export async function current(p: Page, info: TestInfo, tag: string): Promise<Adv
 export async function excel(p: Page, info: TestInfo, tag: string) {
   await nav(p, "Ergebnis & Export"); const bytes = await download(p, info, /Excel-Arbeitsmappe/, tag);
   const wb = XLSX.read(bytes, { type: "buffer" });
-  const sheets = Object.fromEntries(wb.SheetNames.filter(n => ["Fall", "Kapitalbedarfe", "Kapitaltöpfe", "Depot", "Depotübersicht", "Vermögensstruktur"].includes(n) || n.startsWith("Plan "))
+  const sheets = Object.fromEntries(wb.SheetNames.filter(n => ["Fall", "Kapitalbedarfe", "Kapitaltöpfe", "Depot", "Depotübersicht", "Vermögensstruktur"].includes(n) || n.startsWith("Plan"))
     .map(n => [n, { rows: XLSX.utils.sheet_to_json(wb.Sheets[n]), cells: Object.fromEntries(Object.entries(wb.Sheets[n]).filter(([k]) => !k.startsWith("!")).map(([k, v]) => [k, (v as XLSX.CellObject).v])) }]));
   return { sha256: sha(bytes), bytes: bytes.length, sheetNames: wb.SheetNames, sheets };
 }
@@ -113,6 +113,7 @@ export async function riskFlow(p: Page, info: TestInfo, risk: RiskLevel, product
   await chooseRisk(p, risk, assessment); const added = await addProduct(p, productName, true);
   if (changeRisk) { await chooseRisk(p, changeRisk); await nav(p, "Strukturplanung"); }
   const planner = await p.locator(".capital-pot-workspace").innerText();
+  await p.screenshot({ path: info.outputPath("f017-planner.png"), fullPage: true });
   await save(p); const stored = await raw(p); await p.reload(); await open(p, c);
   const item = await current(p, info, "f017-reloaded-json"); const resultText = await p.locator(".export-view").innerText();
   const printText = await p.locator(".print-document").textContent();
@@ -120,6 +121,9 @@ export async function riskFlow(p: Page, info: TestInfo, risk: RiskLevel, product
   await p.evaluate(() => { (window as unknown as { auditPrints: number }).auditPrints = 0; window.print = () => { (window as unknown as { auditPrints: number }).auditPrints++; }; });
   await p.getByRole("button", { name: /Kundenübersicht/ }).click();
   await expect.poll(() => p.evaluate(() => (window as unknown as { auditPrints: number }).auditPrints)).toBe(1);
+  await p.emulateMedia({ media: "print" });
+  await p.screenshot({ path: info.outputPath("f017-print.png"), fullPage: true });
+  await p.emulateMedia({ media: "screen" });
   const workbook = await excel(p, info, "f017-xlsx");
   const observation = { risk, assessment, changeRisk, productName, added, planner, productWarning: productConflict(planner), stored,
     usedRisk: item.advisory.risk, riskSource: item.advisory.riskSelectionSource, item, resultText, printText, workbook, errors };
