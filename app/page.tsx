@@ -1,3 +1,5 @@
+import { allocationProductRisk, planProductRisks, productRiskMessage, PRODUCT_RISK_SCOPE } from "./domain/risk/product-risk";
+import { ProductRiskNotice, ProductRiskWarnings } from "./presentation/product-risk-warnings";
 import { depotSaleConflicts } from "./domain/depot/sale-validation";
 import { validCaseFinancialInputs } from "./domain/case/financial-validation";
 import { DepotSaleConflicts } from "./presentation/depot-sale-conflicts";
@@ -2369,6 +2371,7 @@ function ResultStep({
           </p>
         </div>
       )}
+      <ProductRiskWarnings plans={item.plans} advisory={item.advisory} createdAt={item.createdAt} />
       <section className="result-section result-house-section">
         <div className="result-section-head">
           <div>
@@ -3608,6 +3611,7 @@ function PlannerView({
               </div>
             </aside>
             <section className="capital-pot-workspace">
+              <ProductRiskWarnings plans={[plan]} advisory={item.advisory} createdAt={item.createdAt} />
               <div className="capital-timeline" aria-label="Zeitstruktur der Kapitaltöpfe">
                 {visibleCapitalPots.map((pot, index) => {
                   const potCoverage = Number(coverageByCapitalPot[pot.id]) || 0;
@@ -3782,6 +3786,7 @@ function PlannerView({
                                     : itemSolution?.name}
                                 {conflict ? " · Mindesthorizont bis zum frühesten Bedarf prüfen" : ""}
                               </small>
+                              <ProductRiskNotice check={allocationProductRisk(allocation, item.advisory.risk)} />
                               <small className="coverage-summary">
                                 {visibleCapitalPots
                                   .filter((pot) => allocationAmountInCapitalPot(allocation, pot.id) > 0)
@@ -6667,6 +6672,20 @@ export function ExportCenter({
       ),
       "Kunden-Checkliste",
     );
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(
+      item.plans.flatMap(plan => planProductRisks(plan, item.advisory.risk).map(check => {
+        const allocation = plan.allocations.find(entry => entry.id === check.allocationId)!;
+        return {
+          Plan: plan.name, Plan_ID: plan.id, Bevorzugt: plan.preferred ? "Ja" : "Nein",
+          Zuordnung_ID: check.allocationId, Produkt: check.productName, Produkt_ID: check.productId,
+          Quelle: check.source, Modell: allocation.modelId || "",
+          Kapitaltöpfe: Object.entries(allocationCapitalPotAmounts(allocation))
+            .map(([id, amount]) => `${id}: ${amount}`).join(" | "),
+          Kaufbetrag: check.amount, Betragsstatus: check.amount === 0 ? "Vorschau ohne Kaufbetrag" : "Geplanter Kaufbetrag",
+          Kundenrisikostufe: check.customerRisk, Produktrisikoklasse: check.productRisk ?? "Nicht bestimmbar",
+          Ergebnis: productRiskMessage(check), Prüfumfang: PRODUCT_RISK_SCOPE,
+        };
+      }))), "Produktrisikoprüfung");
     XLSX.writeFile(workbook, `${safeFileName(item.advisory.caseName)}.xlsx`);
   };
   const restoreVersion = (versionId: string) => {
@@ -6765,6 +6784,7 @@ export function ExportCenter({
           <small>legt einen eigenständigen neuen Testfall an</small>
         </button>
       </div>
+      <div className="no-print"><ProductRiskWarnings plans={item.plans} advisory={item.advisory} createdAt={item.createdAt} /></div>
       <CustomerChecklistEditor
         item={item}
         setItem={setItem}
@@ -6824,6 +6844,7 @@ export function ExportCenter({
             Verantwortlich: {advisor.name}, {advisor.title}
           </p>
         </section>
+        <ProductRiskWarnings plans={[preferredPlan]} advisory={item.advisory} createdAt={item.createdAt} />
         <div className="print-metrics">
           <div>
             <span>Liquidität</span>

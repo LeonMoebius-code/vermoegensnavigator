@@ -7177,3 +7177,11 @@ body[data-print-mode="customer"] .internal-only {
 @media (max-width: 800px) {
   .situation-holdings > div { grid-template-columns: 1fr 1fr; }
 }
+
+/* F-017: independent product risk notices, also visible in both print modes. */
+.product-risk-warnings { margin: 16px 0; padding: 16px; border: 2px solid #a35b00; background: #fff6e5; color: #603600; border-radius: 8px; }
+.product-risk-warnings li { margin: 10px 0; break-inside: avoid; }
+.product-risk-notice { display: block; margin: 8px 0; padding: 8px; border-left: 4px solid #a35b00; color: #603600; background: #fff6e5; white-space: normal; }
+.product-risk-warnings p { font-size: 0.85rem; }
+@media print { .product-risk-warnings { border-radius: 0; } .product-risk-notice { color: #000; } }
+.bucket-items > div > span .product-risk-notice { color: #603600; font-size: 12px; line-height: 1.5; }
