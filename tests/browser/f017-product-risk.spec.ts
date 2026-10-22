@@ -12,6 +12,14 @@ async function workbook(page: Parameters<typeof nav>[0], info: Parameters<typeof
 const rowFor=(page:Parameters<typeof nav>[0],name:string)=>page.locator(".bucket-items > div").filter({has:page.getByLabel(`Kaufbetrag ${name}`,{exact:true})});
 const allocation=(id:string,source:PlannerAllocation["source"]="product",amount=10000):PlannerAllocation=>({id:`${id}-${source}`,productId:id,productName:[...houseProducts,...managedPortfolios].find(x=>x.id===id)?.name||"Unbekannter Altbaustein",source,amount,bucketId:"year10plus",solutionId:"mixed",allocationMode:"single",capitalPotId:"strategic",capitalPotAmounts:{strategic:amount},bucketAmounts:{year10plus:amount}});
 
+function unchangedNeighbor(actual: ReturnType<typeof riskCase> | undefined, before: ReturnType<typeof riskCase>) {
+  expect(actual).toBeDefined();
+  // Existing P1 normalizes technical updatedAt on read/save (same contract as CP0B).
+  // All business data, identities, plans, history and every other field stay exact.
+  expect({...actual,updatedAt:before.updatedAt}).toEqual(before);
+  expect(Date.parse(actual!.updatedAt)).toBeGreaterThanOrEqual(Date.parse(before.updatedAt));
+}
+
 // Same seven diagnostic rows and two-pot assertion from #43, strengthened with
 // actual result, both print modes, XLSX cells, store and reload assertions.
 for(const row of [
@@ -34,7 +42,7 @@ for(const row of [
   await save(page);const saved=await data(page),stored=saved.find(x=>x.id===c.id)!;
   expect(stored.advisory.risk).toBe("change" in row?row.change:row.risk);expect(stored.advisory.riskSelectionSource).toBe("assessment" in row?"assessment":"manual");
   expect(stored.plans[0].allocations).toHaveLength(1);expect(stored.plans[0].allocations[0].amount).toBe(row.product.startsWith("Private Select")?125000:10000);
-  expect(saved.find(x=>x.id===neighbor.id)).toEqual(neighbor);
+  unchangedNeighbor(saved.find(x=>x.id===neighbor.id),neighbor);
   await nav(page,"Strukturplanung");await page.getByRole("button",{name:"← Zurück zur Beratung",exact:true}).click();
   await page.locator(".wizard-steps").getByRole("button").last().click();
   await expect(page.locator(".result-page .product-risk-warnings")).toHaveCount(row.conflict?1:0);
@@ -47,7 +55,7 @@ for(const row of [
   expect(wb.rows[0].Produktrisikoklasse).toBe([...houseProducts,...managedPortfolios].find(x=>x.id===stored.plans[0].allocations[0].productId)!.risk);
   const print=await prints(page,info,row.conflict,captured);
   if(captured)await screenshot(page,info,"f017-result",".export-view");
-  await save(page);expect((await data(page)).find(x=>x.id===c.id)!.plans).toEqual(stored.plans);expect((await data(page)).find(x=>x.id===neighbor.id)).toEqual(neighbor);
+  await save(page);expect((await data(page)).find(x=>x.id===c.id)!.plans).toEqual(stored.plans);unchangedNeighbor((await data(page)).find(x=>x.id===neighbor.id),neighbor);
   expect(errors).toEqual([]);await emit(page,info,"f017-matrix",{row,added,planner,actual,wb,print,errors});
 });
 
@@ -109,7 +117,7 @@ test("F017 actual H3 restore re-evaluates final risk and preserves snapshot and 
   const before=await raw(page);page.on("dialog",async d=>d.accept());await page.getByRole("article").filter({hasText:"F017 synthetischer Snapshot"}).getByRole("button",{name:"Wiederherstellen",exact:true}).click();
   const actual=await current(page,info,"f017-restored");expect(actual.advisory.risk).toBe(1);expect(actual.versions).toEqual(c.versions);expect(await raw(page)).toBe(before);
   await expect(page.locator(".print-document .product-risk-warnings")).toContainText("Produktrisikoklasse 2 liegt über");await save(page);
-  const stored=(await data(page)).find(x=>x.id===c.id)!;expect(stored.versions).toEqual(c.versions);expect((await data(page)).find(x=>x.id===neighbor.id)).toEqual(neighbor);
+  const stored=(await data(page)).find(x=>x.id===c.id)!;expect(stored.versions).toEqual(c.versions);unchangedNeighbor((await data(page)).find(x=>x.id===neighbor.id),neighbor);
   await page.reload();await open(page,c);const reloaded=await current(page,info,"f017-restored-reloaded");expect(reloaded.versions).toEqual(c.versions);expect(reloaded.advisory.risk).toBe(1);
   expect(errors).toEqual([]);await emit(page,info,"f017-h3",{before,actual,reloaded,errors});
 });

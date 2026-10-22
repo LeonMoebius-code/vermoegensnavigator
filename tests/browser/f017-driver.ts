@@ -10,7 +10,7 @@ export function riskCase(id = "f017"): AdvisoryCase {
   Object.assign(c.advisory, { caseName: `F017 SYNTHETISCH ${id}`, scope: "private", liquidAssets: 200000,
     reserve: 0, horizon: 20, risk: 1, riskSelectionSource: "default",
     needs: [{ id: 702, purpose: "Synthetisch langer Topf", amount: 20000, years: 15 }] });
-  Object.assign(c.plans[0], { id: `${id}-plan`, name: "F017 Zielvariante", total: 200000, preferred: true, allocations: [], investmentPlans: [] });
+  Object.assign(c.plans[0], { id: `${id}-plan`, name: "F017 Zielvariante", total: 200000, preferred: true, depotSelectionInitialized: false, depotModeSelectionInitialized: false, allocations: [], investmentPlans: [] });
   c.activePlanId = c.plans[0].id; c.vvFilters.amount = 200000;return c;
 }
 // F017 UI operations translated from the unchanged diagnostic PR #43.
@@ -69,5 +69,6 @@ export async function prints(p: Page, info: TestInfo, conflict: boolean, capture
     await expect.poll(()=>p.evaluate(()=>document.body.dataset.printMode)).toBeUndefined();
   }
   expect(await p.evaluate(()=>(window as unknown as {f017Prints:string[]}).f017Prints)).toEqual(["customer","internal"]);
+  expect(results[0].internalVisible).toBe(false);expect(results[1].internalVisible).toBe(true);
   return results;
 }

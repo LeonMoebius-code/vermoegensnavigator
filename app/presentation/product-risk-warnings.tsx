@@ -8,7 +8,7 @@ const euro = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR"
 
 export function ProductRiskNotice({ check }: { check: ProductRiskCheck }) {
   if (check.status === "clear") return null;
-  return <small className="product-risk-notice" role="alert" data-risk-status={check.status}>
+  return <small className="product-risk-notice" role="note" data-risk-status={check.status}>
     <strong>{check.productName}: </strong>{productRiskMessage(check)}
     {check.amount === 0 && " Vorschau ohne Kaufbetrag."}
   </small>;
