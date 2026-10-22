@@ -7185,3 +7185,19 @@ body[data-print-mode="customer"] .internal-only {
 .product-risk-warnings p { font-size: 0.85rem; }
 @media print { .product-risk-warnings { border-radius: 0; } .product-risk-notice { color: #000; } }
 .bucket-items > div > span .product-risk-notice { color: #603600; font-size: 12px; line-height: 1.5; }
+
+/* F-012: local term drafts and explicit, detailed loss confirmation. */
+.need-row-v2 { grid-template-columns: 30px 1.3fr .8fr 2fr .9fr 30px; }
+.need-term-editor { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; min-width: 0; }
+.need-term-editor label { min-width: 0; }
+.need-term-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.need-term-actions button { padding: 7px 10px; font-size: 11px; }
+.need-term-actions small { font-size: 11px; color: #76501a; }
+.need-term-dialog { border: 1px solid #c6d5db; border-radius: 12px; padding: 24px; width: min(850px, 94vw); max-height: 85vh; overflow: auto; color: #19384c; }
+.need-term-dialog::backdrop { background: rgb(16 35 48 / 55%); }
+.need-term-dialog p, .need-term-dialog li { font-size: 14px; line-height: 1.55; }
+.need-term-dialog li { margin-bottom: 16px; overflow-wrap: anywhere; }
+.need-term-dialog footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; margin-top: 20px; }
+.need-term-dialog footer button { white-space: normal; }
+.need-term-error { color: #8c2924; }
+@media (max-width: 900px) { .need-row-v2 { grid-template-columns: 30px 1fr; } .need-row-v2 .need-term-editor { grid-column: 2 / -1; } }
