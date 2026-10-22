@@ -52,7 +52,7 @@ assert.equal(capitalPotDeadline(mixed, c.createdAt), "2028-04-15");
 assert.equal(phasedEntryScheduleValidation({ startDate: "2028-03-15", installments: 2, frequency: "monthly" }, mixed, c.createdAt).valid, true);
 assert.equal(phasedEntryScheduleValidation({ startDate: "2028-03-16", installments: 2, frequency: "monthly" }, mixed, c.createdAt).valid, false);
 assert.equal(bucketTargets(c.advisory, 160000, c.createdAt).year3, 35000);
-const renderedNeeds = renderToStaticMarkup(<NeedsStep data={c.advisory} referenceDate={c.createdAt} update={() => {}} addNeed={() => {}} updateNeed={() => {}} removeNeed={() => {}} />);
+const renderedNeeds = renderToStaticMarkup(<NeedsStep data={c.advisory} referenceDate={c.createdAt} update={() => {}} addNeed={() => {}} updateNeed={() => {}} removeNeed={() => {}} applyTerm={() => {}} />);
 assert.equal((renderedNeeds.match(/15.04.2028/g) || []).length, 2);
 assert.ok(renderedNeeds.includes('placeholder="Konkreter Termin ist führend" value=""'));
 assert.ok(!renderedNeeds.includes('value="9"'));

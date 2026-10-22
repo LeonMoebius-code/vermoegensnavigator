@@ -1,3 +1,4 @@
+import { NeedTermEditor, useNeedTermChange, type NeedTermInput } from "./presentation/need-term-editor";
 import { isAssetClass } from "./domain/assets/contracts";
 import { validDepotClassifications, CLASSIFICATION_ERROR, currentClassificationError } from "./domain/depot/classification-validation";
 import { allocationProductRisk, planProductRisks, productRiskMessage, PRODUCT_RISK_SCOPE } from "./domain/risk/product-risk";
@@ -981,6 +982,7 @@ function WizardView({
   exportJson: () => void;
 }) {
   const [openModuleId, setOpenModuleId] = useState<string | null>(null);
+  const termChange = useNeedTermChange(item, setItem);
   const data = item.advisory;
   const step = item.currentStep;
   const updateData = <K extends keyof AdvisoryData>(
@@ -1000,13 +1002,8 @@ function WizardView({
   const updateNeed = (
     id: number,
     changes: Partial<AdvisoryData["needs"][number]>,
-  ) =>
-    updateData(
-      "needs",
-      data.needs.map((need) =>
-        need.id === id ? { ...need, ...changes } : need,
-      ),
-    );
+  ) => setItem((current) => updateCaseAdvisory(current, "needs",
+    current.advisory.needs.map((need) => need.id === id ? { ...need, ...changes } : need)));
   const removeNeed = (id: number) => {
     const needs = data.needs.filter((need) => need.id !== id);
     const nextAdvisory = { ...data, needs };
@@ -1044,6 +1041,7 @@ function WizardView({
 
   return (
     <div className="wizard-view">
+      {termChange.feedback}
       <div className="wizard-head">
         <button className="back-link" onClick={() => setView("home")}>
           ← Übersicht
@@ -1111,6 +1109,9 @@ function WizardView({
               addNeed={addNeed}
               updateNeed={updateNeed}
               removeNeed={removeNeed}
+              applyTerm={termChange.request}
+              termBusy={termChange.busy}
+              termReset={termChange.reset}
             />
           )}
           {step === 4 && (
@@ -1624,6 +1625,9 @@ export function NeedsStep({
   addNeed,
   updateNeed,
   removeNeed,
+  applyTerm,
+  termBusy = false,
+  termReset = 0,
 }: {
   data: AdvisoryData;
   referenceDate: string;
@@ -1637,6 +1641,9 @@ export function NeedsStep({
     changes: Partial<AdvisoryData["needs"][number]>,
   ) => void;
   removeNeed: (id: number) => void;
+  applyTerm: (id: number, input: NeedTermInput) => void;
+  termBusy?: boolean;
+  termReset?: number;
 }) {
   const pots = capitalPots(data, data.liquidAssets, referenceDate);
   const total = data.needs.reduce((sum, need) => sum + need.amount, 0);
@@ -1693,33 +1700,7 @@ export function NeedsStep({
                   <b>€</b>
                 </div>
               </label>
-              <label>
-                <span>Konkreter Termin</span>
-                <input
-                  type="date"
-                  value={need.dueDate || ""}
-                  onChange={(event) =>
-                    updateNeed(need.id, { dueDate: event.target.value })
-                  }
-                />
-              </label>
-              <label>
-                <span>Alternativ in Jahren</span>
-                <input
-                  type="number"
-                  min="0"
-                  max="50"
-                  step="any"
-                  value={need.dueDate ? "" : need.years}
-                  placeholder={need.dueDate ? "Konkreter Termin ist führend" : undefined}
-                  onChange={(event) =>
-                    updateNeed(need.id, {
-                      years: Math.max(0, Number(event.target.value)),
-                      dueDate: "",
-                    })
-                  }
-                />
-              </label>
+              <NeedTermEditor key={`${need.id}-${termReset}`} need={need} busy={termBusy} onApply={(input) => applyTerm(need.id, input)} />
               <span className="derived-bucket">
                 {`${need.dueDate ? "Termin" : "Rechnerischer Termin"}: ${germanDate(targetDateForNeed(need, referenceDate))} · ${monthsUntilNeed(need, referenceDate)} Monate · Zieljahr ${targetYearForNeed(need, referenceDate)}`}
               </span>
