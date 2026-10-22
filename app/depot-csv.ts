@@ -8,7 +8,7 @@ import {
   OptionalNumberField,
 } from "./depot-validation";
 
-import { assetClasses } from "./domain/assets/contracts";
+import { isAssetClass } from "./domain/assets/contracts";
 import { houseProducts } from "./data/house-products";
 import { depotRegionForCountry } from "./depot-country-codes";
 import { isAgree21Profile, structureOverviewSource } from "./bond-source";
@@ -161,8 +161,8 @@ export function parseDepotCsv(buffer: ArrayBuffer): DepotCsvResult {
     const risk = column(headers, "RK", "Risikoklasse");
     const note = column(headers, "Notiz");
     const parsed = rows.slice(1).map((row, index) => {
-      const rawClass = valueAt(row, asset) as AssetClass;
-      const recognized = assetClasses.includes(rawClass);
+      const rawClass = valueAt(row, asset);
+      const recognized = isAssetClass(rawClass);
       const parsedRisk = strictNumber(valueAt(row, risk));
       const riskValue = parsedRisk.value;
       const validRisk = riskValue !== undefined && Number.isInteger(riskValue) && riskValue >= 0 && riskValue <= 5;
