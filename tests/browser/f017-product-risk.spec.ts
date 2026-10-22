@@ -118,7 +118,7 @@ test("F017 actual H3 restore re-evaluates final risk and preserves snapshot and 
   const actual=await current(page,info,"f017-restored");expect(actual.advisory.risk).toBe(1);expect(actual.versions).toEqual(c.versions);expect(await raw(page)).toBe(before);
   await expect(page.locator(".print-document .product-risk-warnings")).toContainText("Produktrisikoklasse 2 liegt über");await save(page);
   const stored=(await data(page)).find(x=>x.id===c.id)!;expect(stored.versions).toEqual(c.versions);unchangedNeighbor((await data(page)).find(x=>x.id===neighbor.id),neighbor);
-  await page.reload();await open(page,c);const reloaded=await current(page,info,"f017-restored-reloaded");expect(reloaded.versions).toEqual(c.versions);expect(reloaded.advisory.risk).toBe(1);
+  await page.reload();await open(page,stored);const reloaded=await current(page,info,"f017-restored-reloaded");expect(reloaded.versions).toEqual(c.versions);expect(reloaded.advisory.risk).toBe(1);
   expect(errors).toEqual([]);await emit(page,info,"f017-h3",{before,actual,reloaded,errors});
 });
 
