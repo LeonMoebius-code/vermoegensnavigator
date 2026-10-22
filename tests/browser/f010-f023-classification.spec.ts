@@ -59,7 +59,7 @@ for(const asset of assetClasses)test(`F010 explicit ${asset} – Situation, Depo
     await page.getByRole("button",{name:"Version speichern",exact:true}).click();const versioned=(await data(page)).find(x=>x.id===imported.id)!;expect(versioned.versions).toHaveLength(1);
     await situation(page);await page.getByRole("combobox",{name:"Anlageklasse",exact:true}).selectOption("Sachwerte");await nav(page,"Ergebnis & Export");const beforeRestore=await raw(page);
     page.once("dialog",d=>d.accept());await page.getByRole("button",{name:"Wiederherstellen",exact:true}).click();const restored=await current(page,info,"f010-h3-restored");expect(restored.depot).toEqual(saved.depot);expect(restored.id).toBe(imported.id);expect(restored.versions).toEqual(versioned.versions);expect(await raw(page)).toBe(beforeRestore);
-    await save(page);await page.reload();await open(page,restored);expect((await current(page,info,"f010-h3-reloaded")).depot).toEqual(saved.depot);
+    await save(page);await page.reload();await nav(page,"Beratungsfälle");const persisted=await data(page),restoredIndex=persisted.findIndex(x=>x.id===restored.id);expect(restoredIndex).toBeGreaterThanOrEqual(0);const rows=page.locator(".case-table .case-main");await expect(rows).toHaveCount(persisted.length);await rows.nth(restoredIndex).click();const reloadedRestore=await current(page,info,"f010-h3-reloaded");expect(reloadedRestore.id).toBe(restored.id);expect(reloadedRestore.depot).toEqual(saved.depot);
   }
   expect(errors).toEqual([]);await emit(page,info,"f010-classes",{asset,input:c,saved,depot,modes,result,output,reloaded,errors});
 });
