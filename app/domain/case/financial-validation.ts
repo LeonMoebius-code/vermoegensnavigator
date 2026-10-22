@@ -1,3 +1,4 @@
+import { validDepotSale } from "../depot/sale-validation";
 import { localDateParts } from "../planning/calendar";
 import { validPhasedInstallments, legacyPhasedInstallments } from "../planning/installment-validation";
 
@@ -44,7 +45,7 @@ export function validCaseFinancialInputs(value: unknown, sourceSchemaVersion = 1
 
   if (value.depot !== undefined && (!Array.isArray(value.depot) || value.depot.some((holding) =>
     !record(holding) || !finiteNonnegativeAmount(holding.value) ||
-    !(current ? finiteNonnegativeAmount(holding.plannedSale) : migratableAmount(holding.plannedSale))))) return false;
+    !(current ? validDepotSale(holding.value, holding.plannedSale) : migratableAmount(holding.plannedSale))))) return false;
   if (value.savingsGoals !== undefined && (!Array.isArray(value.savingsGoals) ||
     value.savingsGoals.some((goal) => !record(goal) ||
       !(current ? finiteNonnegativeAmount(goal.targetAmount) : migratableAmount(goal.targetAmount))))) return false;
