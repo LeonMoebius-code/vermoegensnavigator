@@ -43,6 +43,7 @@
     "scripts/verify-h1-amount-inputs.tsx",
     "scripts/verify-h2-financial-data.ts",
     "scripts/verify-h3-history-restore.tsx",
-    "scripts/verify-h5a-legacy-loss.tsx"
+    "scripts/verify-h5a-legacy-loss.tsx",
+    "scripts/verify-f010-f023.tsx"
   ]
 }

@@ -1,3 +1,5 @@
+import { isAssetClass } from "./domain/assets/contracts";
+import { validDepotClassifications, CLASSIFICATION_ERROR, currentClassificationError } from "./domain/depot/classification-validation";
 import { allocationProductRisk, planProductRisks, productRiskMessage, PRODUCT_RISK_SCOPE } from "./domain/risk/product-risk";
 import { ProductRiskNotice, ProductRiskWarnings } from "./presentation/product-risk-warnings";
 import { depotSaleConflicts } from "./domain/depot/sale-validation";
@@ -518,6 +520,11 @@ export default function Home() {
   const saveCase = (withVersion = false) => {
     // Reject the untouched draft before cloning or constructing a history entry.
     if (depotSaleConflicts(activeCase.depot).length) return;
+    if (!validDepotClassifications(activeCase.depot)) {
+      setStorageNoticeSeverity("error");
+      setStorageNotice(CLASSIFICATION_ERROR);
+      return;
+    }
     if (!validCaseFinancialInputs(activeCase)) {
       setStorageNoticeSeverity("error");
       setStorageNotice("Ungültige Finanzdaten. Speichern wurde abgebrochen; der Entwurf bleibt zur Korrektur erhalten.");
@@ -592,6 +599,8 @@ export default function Home() {
     if (!file) return;
     try {
       const source = JSON.parse(await file.text());
+      const classificationError = currentClassificationError(source);
+      if (classificationError) { window.alert(classificationError); return; }
       const imported = normalizeImportedCase(source);
       const protectionMessage = !imported ? historicalCapitalProtectionMessage(source) : null;
       if (protectionMessage) {
@@ -1563,13 +1572,17 @@ export function SituationStep({
                     </div>
                     <select
                       aria-label="Anlageklasse"
-                      value={holding.assetClass}
-                      onChange={(event) =>
-                        updateHolding(holding.id, {
-                          assetClass: event.target.value as AssetClass,
-                        })
-                      }
+                      value={holding.productId && productAssetMix(holding.productId) ? "catalog"
+                        : holding.classificationStatus === "unresolved" || !isAssetClass(holding.assetClass) ? "" : holding.assetClass}
+                      disabled={Boolean(holding.productId && productAssetMix(holding.productId))}
+                      title="Bei Katalogprodukten gilt die Produktdurchschau."
+                      onChange={(event) => {
+                        if (!isAssetClass(event.target.value) || (holding.productId && productAssetMix(holding.productId))) return;
+                        updateHolding(holding.id, { assetClass: event.target.value, classificationStatus: "mapped" });
+                      }}
                     >
+                      <option value="" disabled>Durchschau ungeklärt</option>
+                      {holding.productId && productAssetMix(holding.productId) && <option value="catalog">Katalogdurchschau</option>}
                       {assetClasses.map((name) => (
                         <option key={name}>{name}</option>
                       ))}
@@ -4787,6 +4800,7 @@ export function WealthHouse({
     valueFor: (holding: DepotHolding) => number,
   ) =>
     holdings.flatMap((entry) => {
+      if (!isAssetClass(entry.assetClass)) return [];
       const mix = entry.productId
         ? productAssetMix(entry.productId)?.[asset] || 0
         : entry.classificationStatus !== "unresolved" &&
@@ -6184,14 +6198,18 @@ function DepotOptimizer({
                   {total ? `${percent.format((holding.value / total) * 100)} %` : "–"}
                 </strong>
                 <select
-                  value={holding.assetClass}
-                  onChange={(event) =>
-                    updateHolding(holding.id, {
-                      assetClass: event.target.value as AssetClass,
-                      classificationStatus: "mapped",
-                    })
-                  }
+                  aria-label="Anlageklasse"
+                  value={holding.productId && productAssetMix(holding.productId) ? "catalog"
+                    : holding.classificationStatus === "unresolved" || !isAssetClass(holding.assetClass) ? "" : holding.assetClass}
+                  disabled={Boolean(holding.productId && productAssetMix(holding.productId))}
+                  title="Bei Katalogprodukten gilt die Produktdurchschau."
+                  onChange={(event) => {
+                    if (!isAssetClass(event.target.value) || (holding.productId && productAssetMix(holding.productId))) return;
+                    updateHolding(holding.id, { assetClass: event.target.value, classificationStatus: "mapped" });
+                  }}
                 >
+                  <option value="" disabled>Durchschau ungeklärt</option>
+                  {holding.productId && productAssetMix(holding.productId) && <option value="catalog">Katalogdurchschau</option>}
                   {assetClasses.map((name) => (
                     <option key={name}>{name}</option>
                   ))}
@@ -6342,13 +6360,14 @@ export function ExportCenter({
   const exportRiskAssessment = completeRiskAssessment(item.advisory.riskAssessmentV2);
   const exportBondData = preferredPlan ? buildBondIstExportData(item.depot, preferredPlan, item.depotAccounts) : null;
   const economicAssetLabel = (entry: DepotHolding) => {
+    if (!isAssetClass(entry.assetClass)) return "Nicht durchgeschaut";
     const mix = entry.productId ? productAssetMix(entry.productId) : null;
     if (mix) {
       const classes = assetClasses.filter((asset) => mix[asset] > 0);
       return classes.length === 1 ? classes[0]
         : classes.map((asset) => `${asset}: ${percent.format(mix[asset])} %`).join(" · ");
     }
-    return entry.classificationStatus === "unresolved" ? "Nicht durchgeschaut" : entry.assetClass;
+    return entry.classificationStatus === "unresolved" || !isAssetClass(entry.assetClass) ? "Nicht durchgeschaut" : entry.assetClass;
   };
   const exportTargetLabel = (entry: SavingsPlan): string => {
     if (!entry.targetRef) return "";
@@ -6704,7 +6723,7 @@ export function ExportCenter({
       restored = null;
     }
     if (!restored) {
-      window.alert(historicalCapitalProtectionMessage(version.snapshot) || "Diese historische Version kann aufgrund beschädigter Daten nicht wiederhergestellt werden. Der aktuelle Arbeitsstand bleibt unverändert.");
+      window.alert(currentClassificationError(version.snapshot) || historicalCapitalProtectionMessage(version.snapshot) || "Diese historische Version kann aufgrund beschädigter Daten nicht wiederhergestellt werden. Der aktuelle Arbeitsstand bleibt unverändert.");
       return;
     }
     setItem({

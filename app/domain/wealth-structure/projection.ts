@@ -1,5 +1,5 @@
 import type { AssetClass, AssetMix } from "../assets/contracts";
-import { assetClasses } from "../assets/contracts";
+import { assetClasses, isAssetClass } from "../assets/contracts";
 import type { DepotHolding } from "../depot/contracts";
 import type { StructurePlan } from "../planning/contracts";
 import { houseProducts } from "../../data/house-products";
@@ -49,10 +49,12 @@ export function depotAssetAmounts(
     const assetMix = holding.productId
       ? productAssetMix(holding.productId)
       : null;
-    if (assetMix) {
+    if (!isAssetClass(holding.assetClass)) {
+      unresolved += value;
+    } else if (assetMix) {
       for (const name of assetClasses)
         amounts[name] += (value * assetMix[name]) / 100;
-    } else if (holding.classificationStatus !== "unresolved") {
+    } else if (holding.classificationStatus !== "unresolved" && isAssetClass(holding.assetClass)) {
       amounts[holding.assetClass] += value;
     } else {
       unresolved += value;

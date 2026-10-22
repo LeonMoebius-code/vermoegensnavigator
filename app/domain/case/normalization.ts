@@ -1,4 +1,5 @@
 import { validCapitalPotRecovery } from "./recovery-contract";
+import { validDepotClassifications } from "../depot/classification-validation";
 import { uid, iso, clone } from "./runtime";
 import { validCaseFinancialInputs } from "./financial-validation";
 import { legacyCapitalProtection } from "./legacy-capital-protection";
@@ -276,6 +277,7 @@ export function normalizeImportedCase(
   if (item.capitalPotRecovery !== undefined && !validCapitalPotRecovery(item.capitalPotRecovery)) return null;
   const sourceSchemaVersion = Number(item.schemaVersion) || 0;
   if (sourceSchemaVersion > 11) return null;
+  if (sourceSchemaVersion >= 10 && !validDepotClassifications(item.depot)) return null;
   if (!validCaseFinancialInputs(item, sourceSchemaVersion)) return null;
   if (sourceSchemaVersion >= 10 && !validCurrentPlanGraph(item)) return null;
   if (sourceSchemaVersion < 10 && legacyCapitalProtection(item) !== "safe") return null;

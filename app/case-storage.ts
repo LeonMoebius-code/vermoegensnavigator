@@ -1,4 +1,5 @@
 import { jsonHash } from "./domain/case/recovery-hash";
+import { validDepotClassifications, CLASSIFICATION_ERROR } from "./domain/depot/classification-validation";
 import type { AdvisoryCase } from "./domain/case/contracts";
 import { validCaseFinancialInputs } from "./domain/case/financial-validation";
 import { enforceCaseDepotValue, normalizeImportedCase } from "./case-model";
@@ -146,6 +147,8 @@ function mutateCaseStore(storage: StorageAccess, select: (loaded: CaseStoreRead)
     throw new Error("Fälle mit fehlenden oder doppelten IDs können nicht gespeichert werden.");
   if (cases.some((item) => protectedIds.has(item.id))) throw new Error("Ein Originalfall mit derselben ID ist geschützt.");
   // Inspect original Runtime values before derived depot values can mask damage.
+  if (cases.some((item) => !validDepotClassifications(item.depot)))
+    throw new Error(CLASSIFICATION_ERROR);
   if (cases.some((item) => !validCaseFinancialInputs(item)))
     throw new Error("Ungültige Finanzbeträge, Bedarfslaufzeiten, Ratenzahlen oder Depotverkäufe über dem Marktwert können nicht gespeichert werden. Der Bestand bleibt erhalten.");
   const normalized = cases.map(enforceCaseDepotValue);
