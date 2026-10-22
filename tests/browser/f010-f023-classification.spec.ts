@@ -47,7 +47,7 @@ for(const asset of assetClasses)test(`F010 explicit ${asset} – Situation, Depo
   await select.selectOption(asset);const amounts=assetClasses.map(a=>a===asset?10000:0) as Amounts;
   await save(page);const saved=(await data(page)).find(x=>x.id===c.id)!;expect(saved.depot[0]).toEqual(classifiedHolding(c,{assetClass:asset}));neighborUnchanged((await data(page)).find(x=>x.id===neighbor.id),neighbor);
   const depot=await house(page.locator(".house-view"),amounts,0,10000);
-  await nav(page,"Strukturplanung");const structure=page.locator(".house-view");const modes=[];
+  await nav(page,"Strukturplanung");await page.getByRole("button",{name:"Vermögensstruktur",exact:true}).click();const structure=page.locator(".house-view");const modes=[];
   for(const mode of ["IST","PLAN","ZIELPLAN"]){await structure.getByRole("tab",{name:mode,exact:true}).click();modes.push(await house(structure,amounts,0,10000));}
   await situation(page);await page.locator(".wizard-steps").getByRole("button").last().click();const result=await house(page.locator(".result-page .house-view"),amounts,0,10000);
   const output=await outputs(page,info,amounts,0,10000,asset==="Substanzwerte");
@@ -78,7 +78,7 @@ test("F010 multiple depots, same name and WKN; catalogue mixed holding protected
   c.plans.push({...structuredClone(c.plans[0]),id:"classification-preferred",name:"Klassifikation Ziel",preferred:true,total:3000,depotHoldingIds:[c.depot[1].id,c.depot[2].id]});
   const errors=monitor(page);await seed(page,[c]);await open(page,c);const selects=page.getByRole("combobox",{name:"Anlageklasse",exact:true});await expect(selects.nth(2)).toBeDisabled();await expect(selects.nth(2)).toHaveValue("catalog");
   await selects.nth(0).selectOption("Substanzwerte");await save(page);const stored=(await data(page))[0];expect(stored.depot[1]).toEqual(c.depot[1]);expect(stored.depot[2]).toEqual(c.depot[2]);expect(stored.depot[0].wkn).toBe(c.depot[1].wkn);
-  await nav(page,"Strukturplanung");const h=page.locator(".house-view");await h.getByRole("tab",{name:"IST",exact:true}).click();const ist=await house(h,[2000,5500,14500,0,0],6000,28000);
+  await nav(page,"Strukturplanung");await page.getByRole("button",{name:"Vermögensstruktur",exact:true}).click();const h=page.locator(".house-view");await h.getByRole("tab",{name:"IST",exact:true}).click();const ist=await house(h,[2000,5500,14500,0,0],6000,28000);
   await h.getByRole("tab",{name:"PLAN",exact:true}).click();const plan=await house(h,[5000,0,10000,0,0],6000,21000);
   await h.getByRole("tab",{name:"ZIELPLAN",exact:true}).click();const target=await house(h,[3000,5500,4500,0,0],6000,19000);await screenshot(page,info,"f010-f023-mixed-target",".house-view");
   await situation(page);await page.locator(".wizard-steps").getByRole("button").last().click();await house(page.locator(".result-page .house-view"),[3000,5500,4500,0,0],6000,19000);
@@ -96,7 +96,7 @@ for(const schema of [10,11])for(const value of ["Krypto","",42])test(`F023 schem
 });
 
 test("F010/F023 absent preferred: IST/PLAN available, no target/export/print fallback",async({page},info)=>{
-  const c=classificationCase();c.depot[0]=classifiedHolding(c);c.plans[0].preferred=false;await seed(page,[c]);await open(page,c);await nav(page,"Strukturplanung");const h=page.locator(".house-view");
+  const c=classificationCase();c.depot[0]=classifiedHolding(c);c.plans[0].preferred=false;await seed(page,[c]);await open(page,c);await nav(page,"Strukturplanung");await page.getByRole("button",{name:"Vermögensstruktur",exact:true}).click();const h=page.locator(".house-view");
   for(const name of ["IST","PLAN"]){await h.getByRole("tab",{name,exact:true}).click();await house(h,[0,0,10000,0,0],0,10000);}
   await h.getByRole("tab",{name:"ZIELPLAN",exact:true}).click();await expect(h.locator(".wealth-house")).toHaveCount(0);await expect(h).toContainText("Keine bevorzugte Zielvariante");
   await nav(page,"Ergebnis & Export");for(const name of [/Excel-Arbeitsmappe/,/Kundenübersicht/,/Interne Arbeitsunterlage/])await expect(page.getByRole("button",{name})).toBeDisabled();await expect(page.locator(".print-document")).toHaveCount(0);await emit(page,info,"f010-no-preferred",{input:c,actual:await current(page,info,"f010-no-preferred")});
