@@ -11,6 +11,7 @@ type Amounts = [number, number, number, number, number];
 const euros = (v:number) => new Intl.NumberFormat("de-DE",{style:"currency",currency:"EUR",maximumFractionDigits:0}).format(v);
 const shares = (v:number,total:number) => new Intl.NumberFormat("de-DE",{minimumFractionDigits:1,maximumFractionDigits:1}).format(total?v/total*100:0)+" %";
 async function situation(p:Page){await nav(p,"Strukturplanung");await p.getByRole("button",{name:"← Zurück zur Beratung",exact:true}).click();await p.locator(".wizard-steps").getByRole("button").nth(1).click();}
+async function depotHouse(p:Page){await p.getByRole("tab",{name:"Vermögenshaus",exact:true}).click();return p.locator(".house-view");}
 async function house(h:Locator,amounts:Amounts,unknown:number,total:number){
   await expect(h.locator(".house-pillars button footer")).toHaveText(amounts.map(euros));
   await expect(h.locator(".house-pillars button header strong")).toHaveText(amounts.map(v=>shares(v,total)));
@@ -46,7 +47,7 @@ for(const asset of assetClasses)test(`F010 explicit ${asset} – Situation, Depo
   const select=page.getByRole("combobox",{name:"Anlageklasse",exact:true});await expect(select).toHaveValue("");
   await select.selectOption(asset);const amounts=assetClasses.map(a=>a===asset?10000:0) as Amounts;
   await save(page);const saved=(await data(page)).find(x=>x.id===c.id)!;expect(saved.depot[0]).toEqual(classifiedHolding(c,{assetClass:asset}));neighborUnchanged((await data(page)).find(x=>x.id===neighbor.id),neighbor);
-  const depot=await house(page.locator(".house-view"),amounts,0,10000);
+  const depot=await house(await depotHouse(page),amounts,0,10000);
   await nav(page,"Strukturplanung");await page.getByRole("button",{name:"Vermögensstruktur",exact:true}).click();const structure=page.locator(".house-view");const modes=[];
   for(const mode of ["IST","PLAN","ZIELPLAN"]){await structure.getByRole("tab",{name:mode,exact:true}).click();modes.push(await house(structure,amounts,0,10000));}
   await situation(page);await page.locator(".wizard-steps").getByRole("button").last().click();const result=await house(page.locator(".result-page .house-view"),amounts,0,10000);
@@ -66,7 +67,7 @@ for(const asset of assetClasses)test(`F010 explicit ${asset} – Situation, Depo
 test("F010 no decision stays unresolved in both selectors and all output paths",async({page},info)=>{
   const errors=monitor(page),c=classificationCase();await seed(page,[c]);await open(page,c);await expect(page.getByRole("combobox",{name:"Anlageklasse",exact:true})).toHaveValue("");await save(page);
   await expect(page.getByRole("combobox",{name:"Anlageklasse",exact:true})).toHaveValue("");const state=await current(page,info,"f010-no-decision");expect(state.depot[0].classificationStatus).toBe("unresolved");
-  await nav(page,"Depotcheck");const actual=await house(page.locator(".house-view"),[0,0,0,0,0],10000,10000);const output=await outputs(page,info,[0,0,0,0,0],10000,10000);
+  await nav(page,"Depotcheck");const actual=await house(await depotHouse(page),[0,0,0,0,0],10000,10000);const output=await outputs(page,info,[0,0,0,0,0],10000,10000);
   await page.reload();await open(page,c);expect((await current(page,info,"f010-no-decision-reload")).depot[0].classificationStatus).toBe("unresolved");expect(errors).toEqual([]);await emit(page,info,"f010-no-decision",{state,actual,output,errors});
 });
 
@@ -105,7 +106,7 @@ test("F010/F023 absent preferred: IST/PLAN available, no target/export/print fal
 test("F010 Depotcheck manual choice is explicit and changes only the selected depot identity",async({page},info)=>{
   const c=classificationCase();c.depotAccounts.push({...c.depotAccounts[0],id:"classification-depot-B",name:"Synthetisches Depot B"});c.depot.push({...c.depot[0],id:"classification-holding-B",depotId:c.depotAccounts[1].id,value:6000});
   const errors=monitor(page);await seed(page,[c]);await open(page,c);await nav(page,"Depotcheck");const selects=page.getByRole("combobox",{name:"Anlageklasse",exact:true});await expect(selects.nth(0)).toHaveValue("");await expect(selects.nth(1)).toHaveValue("");
-  await selects.nth(0).selectOption("Geldwerte");await save(page);let stored=(await data(page))[0];expect(stored.depot[0]).toEqual(classifiedHolding(c,{assetClass:"Geldwerte"}));expect(stored.depot[1]).toEqual(c.depot[1]);await house(page.locator(".house-view"),[0,10000,0,0,0],6000,16000);
-  await selects.nth(1).selectOption("Substanzwerte");await save(page);stored=(await data(page))[0];expect(stored.depot[0]).toEqual(classifiedHolding(c,{assetClass:"Geldwerte"}));expect(stored.depot[1]).toEqual({...c.depot[1],classificationStatus:"mapped",assetClass:"Substanzwerte"});await house(page.locator(".house-view"),[0,10000,6000,0,0],0,16000);
+  await selects.nth(0).selectOption("Geldwerte");await save(page);let stored=(await data(page))[0];expect(stored.depot[0]).toEqual(classifiedHolding(c,{assetClass:"Geldwerte"}));expect(stored.depot[1]).toEqual(c.depot[1]);await house(await depotHouse(page),[0,10000,0,0,0],6000,16000);
+  await page.getByRole("tab",{name:"Bestand & Transaktionen",exact:true}).click();await selects.nth(1).selectOption("Substanzwerte");await save(page);stored=(await data(page))[0];expect(stored.depot[0]).toEqual(classifiedHolding(c,{assetClass:"Geldwerte"}));expect(stored.depot[1]).toEqual({...c.depot[1],classificationStatus:"mapped",assetClass:"Substanzwerte"});await house(await depotHouse(page),[0,10000,6000,0,0],0,16000);
   expect(errors).toEqual([]);await emit(page,info,"f010-depot-selector",{input:c,stored,errors});
 });
