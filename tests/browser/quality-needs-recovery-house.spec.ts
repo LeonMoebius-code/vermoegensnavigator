@@ -37,11 +37,13 @@ test.describe("Kapitalbedarfe: reale Termine, Ausgaben und Reload", () => {
     const exactYears = rows.nth(2).getByRole("spinbutton", { name: "Alternativ in Jahren" });
     await expect(exactYears).toHaveValue("");
     await expect(rows.nth(2).locator(".derived-bucket")).toContainText("01.04.2028");
-    // Relative edit clears the explicit mode, and a new date immediately leads again.
+    // F-012: completed explicit apply clears the mode; drafts do not mutate the case.
     await exactYears.fill("1.5");
+    await rows.nth(2).getByRole("button", { name: "Termin übernehmen", exact: true }).click();
     await expect(rows.nth(2).locator('input[type="date"]')).toHaveValue("");
     await expect(rows.nth(2).locator(".derived-bucket")).toContainText("15.04.2028");
     await rows.nth(2).getByLabel("Konkreter Termin").fill("2028-04-01");
+    await rows.nth(2).getByRole("button", { name: "Termin übernehmen", exact: true }).click();
     await expect(exactYears).toHaveValue("");
     await page.locator(".wizard-head").getByRole("button", { name: "Fall speichern", exact: true }).click();
     const saved = (await stored(page))[0];
