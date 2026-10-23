@@ -1,11 +1,11 @@
 # Projektstatus und nächste Schritte
 
 **Datierte Momentaufnahme, keine Live-GitHub-Wahrheit. Live-GitHub erneut prüfen.**
-Zuletzt geprüft: **23.10.2026, 10:16 Uhr Europe/Berlin**.
+Zuletzt geprüft: **23.10.2026, 11:40 Uhr Europe/Berlin**.
 Quelle: GitHub Repository-, Ref-, Git-Commit-, PR- und Actions-APIs; lokale
-Quellidentität bestätigt. [main](https://github.com/LeonMoebius-code/vermoegensnavigator/commit/3f15854b89bf81b8ac62d00446e86859b9d426ab):
-`3f15854b89bf81b8ac62d00446e86859b9d426ab`, Tree
-`4d3fc899dac77b3d3ea53b1f1ae052b699d84963`.
+Quellidentität bestätigt. [main](https://github.com/LeonMoebius-code/vermoegensnavigator/commit/422af328033adf0dba6360feca277d83a764f338):
+`422af328033adf0dba6360feca277d83a764f338`, Tree
+`3ff61790c38d238b5a18d0822dae1a910649ced5`.
 Entwicklung **V0.18.3 / Schema 11**; öffentlich dokumentiert **V0.18.2** gemäß
 [Releasevorbereitung](../V0183_Releasevorbereitung.md). Live-Pages-Provenienz hier
 nicht neu geprüft. Integriert ≠ abgenommen ≠ releasebereit ≠ veröffentlicht.
@@ -15,13 +15,14 @@ nicht neu geprüft. Integriert ≠ abgenommen ≠ releasebereit ≠ veröffentli
 | Paket / Quelle | Verifizierter Zustand am Checkpoint |
 | --- | --- |
 | [F-021 #44](https://github.com/LeonMoebius-code/vermoegensnavigator/pull/44), [F-020 #45](https://github.com/LeonMoebius-code/vermoegensnavigator/pull/45), [F-017 #46](https://github.com/LeonMoebius-code/vermoegensnavigator/pull/46), [F-010/F-023 #47](https://github.com/LeonMoebius-code/vermoegensnavigator/pull/47) | **integriert**; keine neuen Implementierungsaufträge. Bestehende Detailverträge gelten. |
-| [F-012 #50](https://github.com/LeonMoebius-code/vermoegensnavigator/pull/50) | **offen / Draft / zur unabhängigen Prüfung**. Head `0f7965f18b87105135bf1489249b68a04cd90fc4`, Base oben, synthetischer Merge `36d8f2b5aea5b2b406eafcd515ee38949194d3db`. [Push 39829244030](https://github.com/LeonMoebius-code/vermoegensnavigator/actions/runs/39829244030) und [PR 39829253359](https://github.com/LeonMoebius-code/vermoegensnavigator/actions/runs/39829253359) success. Kein eigenes fachliches GO daraus. |
+| [F-012 #50](https://github.com/LeonMoebius-code/vermoegensnavigator/pull/50) | **integriert**, gemergt am 23.10.2026 um 10:59 Uhr Europe/Berlin; tatsächlicher Merge ist main oben. Feature-Head `0f7965f18b87105135bf1489249b68a04cd90fc4`; damalige Basis `3f15854b89bf81b8ac62d00446e86859b9d426ab`. [Push 39829244030](https://github.com/LeonMoebius-code/vermoegensnavigator/actions/runs/39829244030) und [PR 39829253359](https://github.com/LeonMoebius-code/vermoegensnavigator/actions/runs/39829253359) success auf dem damaligen Feature bzw. synthetischen Merge. Kein neuer F-012-Implementierungsauftrag; keine Releasefreigabe daraus. |
 | [F-012 #48](https://github.com/LeonMoebius-code/vermoegensnavigator/pull/48), [#49](https://github.com/LeonMoebius-code/vermoegensnavigator/pull/49) | **ersetzt / geschlossen, nicht gemergt**; lokale Originale und Branches bleiben geschützt. Historische rote #48-CI ist nicht der finale #50-Stand. |
 | [Diagnose #43](https://github.com/LeonMoebius-code/vermoegensnavigator/pull/43) | offen / Draft; [normative Ausnahme](OPERATING_MODEL.md#diagnose-pr-43). |
 
-main-SHA-Abfrage lieferte keine eigenen Actions-Runs; keine neue Main-Gesamtprüfung
-behauptet. Grüne Feature-/PR-Läufe ersetzen unabhängige Urteile nicht; deren finaler Stand
-wurde hier nicht neu verifiziert.
+Abfrage für den neuen main-SHA lieferte keine eigenen Actions-Runs; keine neue
+Main-Gesamtprüfung behauptet. Der tatsächliche F-012-Merge ist über die PR-/Git-APIs
+belegt; die vorangegangenen Abnahmen wurden hier nicht erneut fachlich durchgeführt.
+Grüne CI und Integration sind keine Release-/Deploymentfreigabe.
 
 ## Restrisiken und Evidenzgrenzen
 
@@ -41,8 +42,8 @@ begrenzt. Vor Entscheidung Originalbelege heranziehen und aktuellen Code abgleic
 
 ## Beschlossene Reihenfolge und offene Optionen
 
-Beschlossen: **F-012 sicher fertigstellen** (bestehende Arbeit, CI und zwei
-unabhängige Abnahmen) → tatsächliche P2-Folgen bewerten/gegebenenfalls explizit
+Beschlossene Reihenfolge: **F-012 ist inzwischen integriert**; als Nächstes
+tatsächliche P2-Folgen bewerten/gegebenenfalls explizit
 akzeptieren oder eng beheben → **einmalige V0.18.3-Readiness** → **gesonderte
 Releaseentscheidung**. Keine automatische weitere Hardening-/Auditserie.
 
