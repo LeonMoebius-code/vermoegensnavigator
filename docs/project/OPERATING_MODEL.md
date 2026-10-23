@@ -200,9 +200,24 @@ nicht automatisch unter die bedingte Feature-Merge-Erlaubnis.
 
 ## Kaltstartproben
 
-Vor Einführung drei **tatsächlich neue Chats** ohne alte Übergaben: Projektleiter,
-Work, Review. Vor Docs-Merge nur Rolle, Repositorylink, Docs-PR/Branch-Ref und
-Prüfauftrag geben; Lesen genau dieses Refs belegen. Szenarien: P erkennt stale
+Ursprünglich verlangte der Auftrag vom 22.10.2026 drei neue Chats (Projektleiter,
+Work, Review). **Für die Erstintegration ersetzt Leons ausdrücklicher Beschluss
+vom 23.10.2026 diese Pflicht:** Der erfolgreich durchgeführte reale Projektleiter-
+Kaltstart genügt als Einführungsnachweis; keine weiteren Pflichtproben für diese
+Erstintegration. [D-09/D-10](DECISIONS.md) hält Ursprung und Ersetzung fest.
+
+Leon bestätigt am 23.10.2026 den realen Projektleiter-Test als erfolgreich und
+seine positive Bewertung durch beide Review-Chats. Work hat diesen Test nicht
+selbst erneut durchgeführt. **Work- und Review-Kaltstarts sind nicht durchgeführt;
+ein eigenständiger Kaltstartnachweis für diese Rollen fehlt.** Sie werden bei
+zukünftigen tatsächlichen Chatwechseln im regulären Betrieb erprobt, ohne
+zusätzliche künstliche Erstintegrationsproben.
+
+Bei zukünftigen tatsächlichen Rollenwechseln gelten die folgenden Prüfregeln;
+sie begründen keine zusätzlichen Pflichtproben für die Erstintegration:
+Vor Docs-Merge nur Rolle, Repositorylink, Docs-PR/Branch-Ref und Prüfauftrag geben;
+Lesen genau dieses Refs belegen. Nach Integration bei tatsächlichem Chatwechsel
+main mit Rolle und Repositorylink verwenden. Szenarien: P erkennt stale
 F-012/PR #43 und priorisiert ohne neuen Vollauftrag; W prüft hypothetischen
 API-Transport, Originalschutz/fremden Worktree und ein rotes Gate; R entscheidet
 bei grünem Push und rotem synthetischem Merge **NO-GO**, selbstständig READ-ONLY.
@@ -211,5 +226,6 @@ Externer Testbogen enthält Aussagen, GitHub-Beleg, bestanden/nicht bestanden un
 fehlende Regel. Ein kritischer Verstoß (Live-Ref, Befugnisse, PR #43, Tree/Parent/CI,
 Unabhängigkeit, Releasegrenze, Geheimnisse, Schreibaktion) bedeutet Kaltstart-NO-GO.
 Lücke gezielt korrigieren, betroffene Probe real wiederholen. Work-Simulationen
-zählen nicht als bestanden. Nach gesonderter Integration kleine Wiederholungsprobe
-auf main nur mit Rolle und Repositorylink. Keine fünfte Repo-Testbogendatei.
+zählen nicht als bestanden. Die zwei unabhängigen Abnahmen des finalen Stands
+und die gesonderte Governance-Mergeentscheidung bleiben erforderlich.
+Keine fünfte Repo-Testbogendatei.

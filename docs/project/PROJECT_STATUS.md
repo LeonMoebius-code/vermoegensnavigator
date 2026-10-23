@@ -24,6 +24,18 @@ Main-Gesamtprüfung behauptet. Der tatsächliche F-012-Merge ist über die PR-/G
 belegt; die vorangegangenen Abnahmen wurden hier nicht erneut fachlich durchgeführt.
 Grüne CI und Integration sind keine Release-/Deploymentfreigabe.
 
+## Einführungsnachweis Projektgedächtnis – Beschluss 23.10.2026
+
+Für die Erstintegration von [PR #51](https://github.com/LeonMoebius-code/vermoegensnavigator/pull/51)
+akzeptiert Leon den erfolgreich absolvierten realen Projektleiter-Kaltstart;
+laut seiner Bestätigung haben beide Review-Chats diesen Test positiv bewertet.
+**Work-/Review-Kaltstarts: nicht durchgeführt, kein eigenständiger Nachweis.**
+Erprobung bei künftigen tatsächlichen Chatwechseln; keine zusätzlichen künstlichen
+Erstintegrationsproben. Historische Drei-Test-Pflicht und gezielte Ersetzung:
+[D-09/D-10](DECISIONS.md). Zwei GO für den bisherigen PR-Stand sind von Leon
+bestätigt; diese letzte Änderung und ihre finalen Git-/CI-Nachweise sind noch
+gezielt abzunehmen. Governance-Merge weiterhin gesondert entscheiden.
+
 ## Restrisiken und Evidenzgrenzen
 
 Grundlage: READ-ONLY-Auditregister/Triage vom 22.10.2026 auf `478d17d…`, danach

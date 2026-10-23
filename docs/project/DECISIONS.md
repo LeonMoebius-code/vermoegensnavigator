@@ -1,7 +1,7 @@
 # Wirksame Entscheidungen
 
-Knappe Beschlussakte; keine zweite Master-Spezifikation. Quelle der hier am
-22.10.2026 bestätigten Prozessentscheidungen ist der von Leon beauftragte
+Knappe Beschlussakte; keine zweite Master-Spezifikation. Quelle der am
+22.10.2026 bestätigten ursprünglichen Prozessentscheidungen ist der von Leon beauftragte
 „Work-Auftrag: GitHub-Projektgedächtnis und belastbare Chatübergaben“ vom
 22.10.2026 (Abschnitte 2, 5, 7–9). Nur der öffentlich vertretbare Beschlusskern
 wird dokumentiert; private Chat-/Auftragstexte und Nachweise werden nicht kopiert.
@@ -19,7 +19,8 @@ Owner und Änderungsanlässe: [Pflegevertrag](OPERATING_MODEL.md#pflegevertrag).
 | D-06 · 22.10.2026 · **beschlossen** | F-012 Variante A: lokale Terminentwürfe; tatsächliche plangenaue Auswirkungen vor Verlust, ausdrückliche Bestätigung nur des geprüften Zustands, bei Zustandsänderung neu prüfen; Abbruch vollständig unverändert; kein automatisches Umbuchen. | Auftrag §5 D, §7; [F-012 #50](https://github.com/LeonMoebius-code/vermoegensnavigator/pull/50). Implementierung/Abnahme live prüfen; keine andere Variante beschlossen. |
 | D-07 · 22.10.2026 · **beschlossen** | F-012 → reale P2-Wirkung bewerten → einmalige V0.18.3-Readiness → eigene Releaseentscheidung; keine pauschale Audit-/Hardening-Fortsetzung. Danach V0.19 als nächstes größeres Feature; V0.20/Vertiefungen später. | Auftrag §6/7; [Status und Detailkonzepte](PROJECT_STATUS.md#beschlossene-reihenfolge-und-offene-optionen). Überholte Schema-10-Ziele nicht übernehmen. |
 | D-08 · 22.10.2026 · **vorgeschlagen** | Frühes schlankes Rechnerframework fachlich prüfen; Umfang und Platz in der Reihenfolge noch zu entscheiden. Keine Implementierungsautorisierung. | Auftrag §6/7; [Roadmapoption](PROJECT_STATUS.md#beschlossene-reihenfolge-und-offene-optionen). Nicht als beschlossene neue Reihenfolge ausgeben. |
-| D-09 · 22.10.2026 · **beschlossen** | Genau vier neue Markdown-Dateien, Originalverträge verlinken, öffentliche Vertraulichkeit wahren; Projektleiter verantwortet Pflege mit konkreten Triggern. Einführung erst nach unabhängiger Prüfung und realen Kaltstartproben in drei neuen Chats. Governance-Merge separat entscheiden. | Auftrag §1/2/8/9/11; [Kaltstart](OPERATING_MODEL.md#kaltstartproben), [Pflege](OPERATING_MODEL.md#pflegevertrag). Reale Testergebnisse bleiben bis Durchführung offen. |
+| D-09 · 22.10.2026 · **beschlossen; Kaltstartteil durch D-10 ersetzt** | Genau vier neue Markdown-Dateien, Originalverträge verlinken, öffentliche Vertraulichkeit wahren; Projektleiter verantwortet Pflege mit konkreten Triggern. Einführung erst nach unabhängiger Prüfung und realen Kaltstartproben in drei neuen Chats. Governance-Merge separat entscheiden. | Auftrag §1/2/8/9/11; [Kaltstart](OPERATING_MODEL.md#kaltstartproben), [Pflege](OPERATING_MODEL.md#pflegevertrag). Damals blieben reale Testergebnisse bis Durchführung offen. Nur der Kaltstartteil ist seit 23.10.2026 durch D-10 ersetzt; übrige Vorgaben bleiben wirksam. |
+| D-10 · 23.10.2026 · **beschlossen** | Für die Erstintegration genügt der erfolgreich absolvierte reale Projektleiter-Kaltstart. Leon bestätigt dessen Erfolg und die positive Bewertung durch beide Review-Chats. Work-/Review-Kaltstarts sind nicht durchgeführt, nicht als bestanden belegt und werden bei zukünftigen tatsächlichen Chatwechseln regulär erprobt. Keine zusätzlichen künstlichen Erstintegrationsproben. Zwei unabhängige Abnahmen des finalen Stands und gesonderte Governance-Mergeentscheidung bleiben unverändert. | Quelle: Leons ausdrücklicher Nachführungsauftrag „PR #51: Abschließende Anpassung der Kaltstartanforderung“ vom 23.10.2026; ersetzt ausschließlich die Drei-Test-Einführungsanforderung aus D-09/ursprünglichem Auftrag. Kein eigenständiger Work-/Review-Kaltstartnachweis behauptet. |
 
 Neue Einträge nur für tatsächlich bestätigte Grundsatz-/Fachentscheidungen:
 Datum, beschlossen/vorgeschlagen/ersetzt, Inhalt, Gültigkeit, Quelle und explizite

@@ -76,4 +76,8 @@ Bei echter neuer Fachentscheidung, ungedeckter Handlung, Quellenwiderspruch,
 gefährdeter bestehender Arbeit oder nicht lösbarem Pflichtgate gezielt stoppen.
 Rollenbeschreibung und grüne CI lösen keine weiteren Arbeiten automatisch aus.
 Releases, Deployments, Rollbacks und Settings verlangen eigene Autorisierung.
-Reale Kaltstartproben erfolgen in drei neuen Chats; eigene Simulationen zählen nicht.
+Für die Erstintegration genügt gemäß Leons Beschluss vom 23.10.2026 der
+bereits erfolgreich durchgeführte reale Projektleiter-Kaltstart. Work- und
+Review-Kaltstarts sind nicht durchgeführt und nicht als bestanden belegt;
+sie werden bei tatsächlichen Chatwechseln erprobt. Eigene Simulationen zählen
+nicht als reale Probe. Historische Vorgabe und Ersetzung: [D-09/D-10](docs/project/DECISIONS.md).
