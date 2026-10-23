@@ -168,6 +168,7 @@ import {
   createModelPortfolioVariant,
 } from "./case-model";
 import { DepotCsvResult, parseDepotCsv } from "./depot-csv";
+import { assertCsvReplacementReferences } from "./domain/depot/csv-replacement";
 import { depotCountryName } from "./depot-country-codes";
 import { AmountInput } from "./presentation/amount-input";
 import { ModelPortfolioAmount } from "./presentation/model-portfolio-amount";
@@ -1108,6 +1109,7 @@ function WizardView({
               update={updateData}
               depot={item.depot}
               depotAccounts={item.depotAccounts}
+              plans={item.plans}
               setDepot={(depot) =>
                 setItem((current) => setCaseDepot(current, depot))
               }
@@ -1243,6 +1245,7 @@ function ScopeStep({
 
 function useDepotCsvImport(
   depotAccounts: DepotAccount[],
+  currentCase: Pick<AdvisoryCase, "depot" | "plans">,
   applyImport: (
     mode: "newDepot" | "replaceDepot",
     rows: DepotCsvResult["rows"],
@@ -1283,9 +1286,10 @@ function useDepotCsvImport(
   const applyCsv = (mode: "newDepot" | "replaceDepot") => {
     if (!csvPreview) return;
     try {
+      if (mode === "replaceDepot") assertCsvReplacementReferences(currentCase, targetDepotId, csvPreview.result.rows);
       applyImport(mode, csvPreview.result.rows, mode === "newDepot" ? depotName : targetDepotId);
-    } catch {
-      setCsvError("Import abgebrochen. Der bisherige Bestand bleibt unverändert.");
+    } catch (error) {
+      setCsvError(error instanceof Error ? error.message : "Import abgebrochen. Der bisherige Bestand bleibt unverändert.");
       return;
     }
     setCsvPreview(null);
@@ -1387,6 +1391,7 @@ export function SituationStep({
   update,
   depot,
   depotAccounts,
+  plans = [],
   setDepot,
   applyDepotImport,
   setView,
@@ -1398,6 +1403,7 @@ export function SituationStep({
   ) => void;
   depot: DepotHolding[];
   depotAccounts: DepotAccount[];
+  plans?: StructurePlan[];
   setDepot: (depot: DepotHolding[]) => void;
   applyDepotImport: (
     mode: "newDepot" | "replaceDepot",
@@ -1407,7 +1413,7 @@ export function SituationStep({
   setView: (view: View) => void;
 }) {
   const business = data.scope === "business" || data.scope === "combined";
-  const csvImport = useDepotCsvImport(depotAccounts, applyDepotImport);
+  const csvImport = useDepotCsvImport(depotAccounts, { depot, plans }, applyDepotImport);
   const addHolding = (depotId = depotAccounts[0]?.id) => {
     if (!depotId) {
       applyDepotImport("newDepot", [{
@@ -2342,9 +2348,7 @@ function ResultStep({
     plan.total,
     item.createdAt,
   ) : [];
-  const totalFixed =
-    data.reserve + data.needs.reduce((sum, need) => sum + need.amount, 0);
-  const warning = totalFixed > data.liquidAssets;
+  const shortfall = plan ? planningShortfall(data, plan.total) : 0;
   const advisor = advisorFor(item.advisorId);
   return (
     <div className="result-page">
@@ -2377,12 +2381,12 @@ function ResultStep({
           <small>{item.depotAccounts.length} {item.depotAccounts.length === 1 ? "Depot" : "Depots"}</small>
         </article>
       </div>
-      {warning && (
+      {shortfall > 0 && (
         <div className="warning-panel">
           <strong>Fehler</strong>
           <p>
-            Reserve und Bedarfe übersteigen die erfasste Liquidität um{" "}
-            {euro.format(totalFixed - data.liquidAssets)}.
+            Reserve und konkrete Kapitalbedarfe übersteigen den Planungsbetrag der bevorzugten Planung um{" "}
+            {euro.format(shortfall)}.
           </p>
         </div>
       )}
@@ -4312,6 +4316,7 @@ function PlannerView({
                           ))}
                         </select>
                       </label>
+                      {!entry.startDate && <p role="status">Unvollständiger Entwurf – Startdatum fehlt.</p>}
                       <label>
                         <span>Start</span>
                         <input
@@ -5577,7 +5582,7 @@ function PlanComparison({
                   <dd>{euro.format(breakdown.total)}</dd>
                 </div>
                 <div>
-                  <dt>Modellbezug</dt>
+                  <dt>Zuletzt angewendetes Modell</dt>
                   <dd>
                     {modelPortfolios.find((entry) => entry.id === plan.modelId)
                       ?.name || "individuell"}
@@ -5971,7 +5976,7 @@ function DepotOptimizer({
       ? addDepotAccount(current, rows, value)
       : replaceDepotAccount(current, value, rows)),
   }));
-  const csvImport = useDepotCsvImport(item.depotAccounts, applyDepotImport);
+  const csvImport = useDepotCsvImport(item.depotAccounts, item, applyDepotImport);
   const addHolding = (depotId = item.depotAccounts[0]?.id) => {
     if (!depotId) {
       applyDepotImport("newDepot", [{
@@ -6511,6 +6516,7 @@ export function ExportCenter({
                 Sparrate: entry.contributionAmount,
                 Rhythmus: rhythm,
                 Start: entry.startDate,
+                ...(!entry.startDate ? { Planungsstatus: "Unvollständiger Entwurf – Startdatum fehlt" } : {}),
                 Zielbezug: exportTargetLabel(entry),
                 Hinweis: entry.note,
               }];
@@ -7058,7 +7064,7 @@ export function ExportCenter({
                       <span>
                         {entry.name ? `${entry.name} · ` : ""}{entry.productName || "Noch nicht festgelegt"}
                       </span>
-                      <span>{rhythm}{entry.startDate ? ` ab ${germanDate(entry.startDate)}` : ""}</span>
+                      <span>{rhythm}{entry.startDate ? ` ab ${germanDate(entry.startDate)}` : " · Unvollständiger Entwurf – Startdatum fehlt"}</span>
                       <b>{euro.format(entry.contributionAmount)} · fortlaufend</b>
                     </div>
                   )];
