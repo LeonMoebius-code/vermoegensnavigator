@@ -1,0 +1,27 @@
+# Wirksame Entscheidungen
+
+Knappe Beschlussakte; keine zweite Master-Spezifikation. Quelle der hier am
+22.10.2026 bestätigten Prozessentscheidungen ist der von Leon beauftragte
+„Work-Auftrag: GitHub-Projektgedächtnis und belastbare Chatübergaben“ vom
+22.10.2026 (Abschnitte 2, 5, 7–9). Nur der öffentlich vertretbare Beschlusskern
+wird dokumentiert; private Chat-/Auftragstexte und Nachweise werden nicht kopiert.
+Öffentliche Dokumentation authentifiziert niemanden; Befugnisse beim neuen
+Rollen-Kickoff einmal bestätigen, dann im vereinbarten Rahmen anwenden.
+Owner und Änderungsanlässe: [Pflegevertrag](OPERATING_MODEL.md#pflegevertrag).
+
+| ID / Datum / Status | Beschluss und Gültigkeitsbereich | Quelle / Ersetzung |
+| --- | --- | --- |
+| D-01 · 22.10.2026 · **beschlossen** | Projektleiter, Work und separater Review bleiben getrennt. Zwei parallel unabhängig zustande kommende positive Code-/Fach-/Architekturabnahmen desselben finalen Stands; identisches Paket gleichzeitig übergeben. | Auftrag §5 A/B; [Ablauf](OPERATING_MODEL.md#paketablauf-und-feature-merge). Ersetzt keine technische CI. |
+| D-02 · 22.10.2026 · **beschlossen** | Projektleiter dauerhaft bedingt zum Merge regulär beauftragter Feature-PRs nach zwei GO und unmittelbarer vollständiger Git-/Tree-/CI-Integritätskontrolle autorisiert; erwartete Head-SHA binden, main nachprüfen. Keine Governance-, Release-, Deployment-, Rollback- oder Settings-Freigabe. | Auftrag §5 A/B/G und §7; [Grenzen](OPERATING_MODEL.md#paketablauf-und-feature-merge). Frühere allgemeine Einzelfreigabeformulierung für jeden Feature-Merge insoweit ersetzt. |
+| D-03 · 22.10.2026 · **beschlossen** | Projektleiter gibt zuerst kurze Prioritäts-/Alternativenempfehlung einschließlich Risiko/Aufwand, Leon bestätigt, erst danach vollständiger neuer Work-Auftrag. Ausnahme: Leon verlangt ihn direkt. Nach Merge keine automatische Folgebeauftragung. | Auftrag §5 A/B, §7; [Rollen](OPERATING_MODEL.md#rollen-und-befugnisse). |
+| D-04 · 22.10.2026 · **beschlossen** | Work-Prozess vollständig: Preflight/Originalschutz, isolierte Umsetzung, erlaubter Transport, Draft-PR, vollständige finale Push-/PR-CI, Korrekturen und kompaktes Nachweispaket. Work weder unabhängiger Abnehmer noch Merger. | Auftrag §5 A–C, §11/12; [Evidenz](OPERATING_MODEL.md#ci-und-evidenz). |
+| D-05 · 22.10.2026 · **beschlossen** | Für reguläre von Leon beauftragte Features dauerhaft authentifizierten API-Transport erlauben, auch bei abweichender Commit-ID, ausschließlich mit exaktem Tree/Modi, gleichem frisch bestätigtem Parent, vollständigem lokalem Originalerhalt, transparenter Identität und finaler Doppel-CI. | Auftrag §5 C, §7; [Identitätsvertrag](OPERATING_MODEL.md#authentifizierter-github-transport). Frühere einmalige F-010/F-023-/F-012-Freigaben sind historische Vorläufer; deren fallbezogene Beschränkung ist keine heutige Regel für neue regulär beauftragte Features. Governance-Auftrag §2 erlaubt seinen eigenen Transport einmalig. |
+| D-06 · 22.10.2026 · **beschlossen** | F-012 Variante A: lokale Terminentwürfe; tatsächliche plangenaue Auswirkungen vor Verlust, ausdrückliche Bestätigung nur des geprüften Zustands, bei Zustandsänderung neu prüfen; Abbruch vollständig unverändert; kein automatisches Umbuchen. | Auftrag §5 D, §7; [F-012 #50](https://github.com/LeonMoebius-code/vermoegensnavigator/pull/50). Implementierung/Abnahme live prüfen; keine andere Variante beschlossen. |
+| D-07 · 22.10.2026 · **beschlossen** | F-012 → reale P2-Wirkung bewerten → einmalige V0.18.3-Readiness → eigene Releaseentscheidung; keine pauschale Audit-/Hardening-Fortsetzung. Danach V0.19 als nächstes größeres Feature; V0.20/Vertiefungen später. | Auftrag §6/7; [Status und Detailkonzepte](PROJECT_STATUS.md#beschlossene-reihenfolge-und-offene-optionen). Überholte Schema-10-Ziele nicht übernehmen. |
+| D-08 · 22.10.2026 · **vorgeschlagen** | Frühes schlankes Rechnerframework fachlich prüfen; Umfang und Platz in der Reihenfolge noch zu entscheiden. Keine Implementierungsautorisierung. | Auftrag §6/7; [Roadmapoption](PROJECT_STATUS.md#beschlossene-reihenfolge-und-offene-optionen). Nicht als beschlossene neue Reihenfolge ausgeben. |
+| D-09 · 22.10.2026 · **beschlossen** | Genau vier neue Markdown-Dateien, Originalverträge verlinken, öffentliche Vertraulichkeit wahren; Projektleiter verantwortet Pflege mit konkreten Triggern. Einführung erst nach unabhängiger Prüfung und realen Kaltstartproben in drei neuen Chats. Governance-Merge separat entscheiden. | Auftrag §1/2/8/9/11; [Kaltstart](OPERATING_MODEL.md#kaltstartproben), [Pflege](OPERATING_MODEL.md#pflegevertrag). Reale Testergebnisse bleiben bis Durchführung offen. |
+
+Neue Einträge nur für tatsächlich bestätigte Grundsatz-/Fachentscheidungen:
+Datum, beschlossen/vorgeschlagen/ersetzt, Inhalt, Gültigkeit, Quelle und explizite
+Ersetzung vermerken. Eine technische Zwischenkorrektur ist kein neuer Grundsatz.
+Bei Ersetzung alten Eintrag sichtbar erhalten und auf Nachfolger verweisen.
