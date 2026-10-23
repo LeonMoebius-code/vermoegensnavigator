@@ -51,7 +51,9 @@ export function diagnoseCapitalRecovery(raw: unknown, zone?: HistoricalZone): Re
     Number.isFinite(n.amount) && n.amount >= 0 && (n.dueDate === undefined || typeof n.dueDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(n.dueDate) && !!localDateParts(n.dueDate)));
   if (!needsValid) { fail("Bedarfe","Ungültige Laufzeit, Beträge oder explizite Termine; keine Ersatzwerte."); return d; }
   const historicalYear=zone ? Number(new Intl.DateTimeFormat("en",{timeZone:zone,year:"numeric"}).format(new Date(reference))) : undefined;
-  const historicalReference=zone ? new Intl.DateTimeFormat("en-CA",{timeZone:zone,year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(reference)) : reference;
+  const zonedParts=zone ? new Intl.DateTimeFormat("en-CA",{timeZone:zone,year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date(reference)) : null;
+  const historicalReference=zonedParts ? ["year","month","day"].map(part=>
+    zonedParts.find(p=>p.type===part)!.value.padStart(part==="year"?4:2,"0")).join("-") : reference;
   try {
     d.needs=c.advisory.needs.map(n=>({ ...n,historicalYear:historicalYear === undefined ? undefined : n.dueDate && Number(n.dueDate.slice(0,4))>1900 ? Number(n.dueDate.slice(0,4)) : historicalYear+Math.max(0,Math.round(n.years)),
       currentDate:targetDateForNeed(n,reference),currentYear:Number(targetDateForNeed(n,reference).slice(0,4)) }));
