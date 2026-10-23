@@ -10,6 +10,17 @@ Entwicklung **V0.18.3 / Schema 11**; öffentlich dokumentiert **V0.18.2** gemä�
 [Releasevorbereitung](../V0183_Releasevorbereitung.md). Live-Pages-Provenienz hier
 nicht neu geprüft. Integriert ≠ abgenommen ≠ releasebereit ≠ veröffentlicht.
 
+## Seit dem Checkpoint geändert – live nachprüfen
+
+PR #51 ist inzwischen integriert: Live-main am 23.10.2026 zu Beginn des
+beauftragten P2-Pakets `a87be76dcd5e303f626de6bcebb7239939b02cb1`, Tree
+`0e6d43e490461430e00805ca5192eae8da48858e`. Die frühere offene Governance-
+Mergeentscheidung unten ist damit historisch. Work bearbeitet ausschließlich den
+[Excel-Fix und die lesende F-026-Bewertung](../P2_F007_XLSX_F026_Bewertung.md)
+im Branch `work/p2-f007-xlsx-sheet-integrity`; Integration/Abnahmen live prüfen.
+F-026 bleibt ohne produktive Korrektur und ohne neu beschlossene Laufzeitgrenze.
+Keine Release-/Deploymentfreigabe.
+
 ## Relevante Pakete
 
 | Paket / Quelle | Verifizierter Zustand am Checkpoint |
