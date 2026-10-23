@@ -4,6 +4,13 @@ Der VermögensNavigator ist ein browserbasierter Prototyp für eine strukturiert
 Vermögensberatung. GitHub ist die einzige gepflegte Codebasis. Die öffentliche
 Version wird über GitHub Pages bereitgestellt.
 
+## Projektführung und Übergabe
+
+Neue Projektleiter-, Work- und Review-Chats beginnen bei [AGENTS.md](AGENTS.md).
+Dauerhafte Regeln, datierter Status und Beschlüsse stehen unter
+[docs/project](docs/project/OPERATING_MODEL.md). Live-GitHub bleibt für aktuelle
+Refs, PRs und CI erneut zu prüfen; ein Statuscheckpoint ist keine Freigabe.
+
 ## Öffentliche Version
 
 https://leonmoebius-code.github.io/vermoegensnavigator/
@@ -27,15 +34,13 @@ dieser lokale Build veröffentlicht nichts.
 
 ### Aktuelles Verify-Gate (V0.18.3-Releasevorbereitung)
 
-Die ausführbare Liste in `package.json` enthält aktuell **20 direkte
-Fachtest-Einstiege**: die unten dokumentierten 16 einschließlich P1–P4 und D1,
-anschließend `test:h1-amount-inputs`, `test:h2-financial-data`,
-`test:h3-history-restore` und `test:h4-installment-safety`.
-Danach folgen Typecheck, **genau ein Produktionsbuild** und CP0B mit **3/3**
-Browser-Lebenszyklen; ein Worker, keine Retries. CP0A2 umfasst **23 A / 0 B / 0 C / 0 D**.
-H1 prüft 9 Gruppen; H2 16 Gruppen / 476 Ablehnungen; H3 11 Gruppen /
-33 Render- und 34 Restorefälle; H4 13 Gruppen / 38 aktuelle und 170 historische
-Ablehnungen. Diese Härtungen erweitern die historische Gatebeschreibung.
+Die ausführbare Liste wird ausschließlich im `verify`-Skript in
+[package.json](package.json) gepflegt; feste historische Testzahlen sind kein
+aktuelles Suiteinventar. Danach folgen Typecheck, **genau ein Produktionsbuild**
+und die vollständige aktuelle Playwright-Chromium-Suite. CP0B bezeichnet deren
+ursprüngliche drei Browser-Lebenszyklen; spätere H-/F-Verträge ergänzen weitere
+Fach- und Browserprüfungen. Verbindliche Gateausführung und R1-Nachprüfung stehen
+in der [Feature-CI](.github/workflows/ci.yml).
 
 **Separat nach Verify** prüft R1 mit `node scripts/verify-release-artifact.mjs "$(git rev-parse HEAD)"`
 das seit Build/CP0B unveränderte Artefakt gegen den tatsächlich ausgecheckten Commit.

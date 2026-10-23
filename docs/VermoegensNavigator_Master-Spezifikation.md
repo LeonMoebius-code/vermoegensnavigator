@@ -1,21 +1,27 @@
 # VermögensNavigator – Master-Spezifikation
 
-> **Kanonischer Produkt- und Entscheidungsstand**
+> **Fachliche Referenz mit datiertem Statuskopf**
 >
 > Letzte fachliche Aktualisierung: **01.10.2026 (D1)**
 > Letzte Versions- und Statusaktualisierung: **14.10.2026 (V0.18.3-Releasevorbereitung)**
 > Aktuell veröffentlichte Version: **V0.18.2**
-> Vorbereiteter technischer Entwicklungsstand: **V0.18.3 / Schema 11 einschließlich A1–A11, P1–P4, D1 und H1–H4**
+> Entwicklungscheckpoint vom 14.10.2026: **V0.18.3 / Schema 11 einschließlich A1–A11, P1–P4, D1 und H1–H4**
 > Veröffentlichte Codebasis: **Release-Artefakt aus Commit `50a8a06d73ddc59472a2d66ef46ac624597e2c0f`**
-> Releasezustand V0.18.3: **Noch nicht veröffentlicht; unabhängige PR-Abnahme und fachliche Gesamtumfangsfreigabe ausstehend**
+> Releasecheckpoint V0.18.3 vom 14.10.2026: **Noch nicht veröffentlicht; unabhängige PR-Abnahme und fachliche Gesamtumfangsfreigabe ausstehend**
 > Zielumgebung: **Desktop-Prototyp**
 > Öffentliche Testversion: GitHub Pages
+
+Der Kopf ist ein historischer Checkpoint. Spätere H5-/F-Verträge und PRs sind
+hier nicht vollständig nachgeführt. Aktuelle Rollen, Lesereihenfolge und
+Berechtigungsgrenzen: [AGENTS.md](../AGENTS.md); datierter Integrationsstand:
+[PROJECT_STATUS](project/PROJECT_STATUS.md); spätere bestätigte Beschlüsse:
+[DECISIONS](project/DECISIONS.md). Live-GitHub vor Entscheidungen erneut prüfen.
 
 ---
 
 ## 0. Zweck dieses Dokuments
 
-Dieses Dokument ist die zentrale **Source of Truth** für Produktkonzept, fachliche Entscheidungen, bekannte Fehler, offene Fachthemen, Work-Pakete und Roadmap des VermögensNavigators.
+Dieses Dokument ist die zentrale fachliche Referenz für Produktkonzept und ursprünglichen Sollstand. Spätere konkrete Fachverträge und bestätigte Nutzerbeschlüsse ergänzen diesen datierten Stand; Widersprüche sind ausdrücklich zu klären.
 
 Es ersetzt **nicht** den Quellcode und **nicht** einzelne Work-Prompts. Es dokumentiert den aktuellen fachlichen Sollstand der Anwendung und trennt klar zwischen:
 
@@ -30,14 +36,14 @@ Work-Prompts werden künftig aus diesem Dokument, dem aktuellen GitHub-`main` un
 
 ### Source-of-Truth-Hierarchie
 
-Bei Widersprüchen gilt künftig:
+Für den jeweils betroffenen, datierten Stand gilt diese Einordnung; spätere bestätigte Beschlüsse und Detailverträge sind zusätzlich zu prüfen:
 
 1. **Aktueller GitHub-`main`** für die tatsächlich implementierte Software
 2. **Diese Master-Spezifikation** für den fachlich beschlossenen Sollstand
 3. aktueller Brainstorming-Chat für noch nicht in diese Datei übernommene neue Entscheidungen
 4. ältere Chats und alte Work-Prompts nur als historische Referenz
 
-Nach einem abgeschlossenen Brainstorming-Block oder Work-Paket wird diese Datei aktualisiert. Nicht jede Zwischenidee wird sofort eingetragen.
+Status-/Beschlusspflege und ihre Fristen folgen dem [Pflegevertrag](project/OPERATING_MODEL.md#pflegevertrag). Fachliche Detailänderungen werden im zuständigen Originalvertrag gepflegt; nicht jede Zwischenidee wird sofort eingetragen.
 
 Für V0.18.2 gilt der [verbindliche Zero-Touch-Nachtrag](V0182_ZeroTouch_CSV_Only_Verbindlicher_Nachtrag.md) vor den kompatiblen Preflight-/Bond-V2-/Arbeitspaket-Regeln. Der unten dokumentierte Feature-Stand ersetzt historische V1-Rechenannahmen, behauptet aber weder eine Veröffentlichung noch einen bestätigten realen CSV-Quellvertrag.
 
