@@ -13,6 +13,7 @@ for (const [volume, liquid, shortfall] of [[40000,100000,10000],[50000,100000,0]
     if(shortfall)await expect(page.locator(".capital-shortfall")).toContainText(shortfall.toLocaleString("de-DE"));
     await page.getByRole("button",{name:"← Zurück zur Beratung",exact:true}).click();
     await page.locator(".wizard-steps").getByRole("button",{name:/Ergebnis/}).click();
+    await expect(page.locator(".result-page")).toBeVisible();
     await expect(page.locator(".warning-panel")).toHaveCount(shortfall>0?1:0);
     if(shortfall)await expect(page.locator(".warning-panel")).toContainText(`${shortfall.toLocaleString("de-DE")}`);
     expect((await current(page,info,"f013-case")).plans[0].total).toBe(volume);expect(errors).toEqual([]);
@@ -22,6 +23,7 @@ test("F013 result uses preferred, planner uses active, no fallback without prefe
   const c=p2ReleaseCase();c.plans.push({...structuredClone(c.plans[0]),id:"other",name:"Andere Variante",total:100000,preferred:true});c.plans[0].preferred=false;
   await seed(page,[c]);await open(page,c);await nav(page,"Strukturplanung");await expect(page.locator(".capital-shortfall")).toHaveCount(1);
   await page.getByRole("button",{name:"← Zurück zur Beratung",exact:true}).click();await page.locator(".wizard-steps").getByRole("button",{name:/Ergebnis/}).click();
+  await expect(page.locator(".result-page")).toBeVisible();
   await expect(page.locator(".warning-panel")).toHaveCount(0);
   c.plans.forEach(p=>p.preferred=false);await seed(page,[c]);await open(page,c);
   await page.locator(".wizard-steps").getByRole("button",{name:/Ergebnis/}).click();await expect(page.locator(".warning-panel")).toHaveCount(0);
