@@ -218,6 +218,27 @@ const safeFileName = (value: string) =>
     .trim()
     .replace(/[^a-zA-Z0-9äöüÄÖÜß_-]+/g, "-")
     .replace(/-+/g, "-");
+
+// Reserve even later/conditional export sheets before assigning plan names.
+const fixedExcelSheetNames = [
+  "Fall", "Kapitalbedarfe", "Kapitaltöpfe", "Investitionspläne",
+  "Vermögensstruktur", "Depotübersicht", "Depot", "Zins & Laufzeiten",
+  "Technische Nachweise", "VV-Auswahl", "Datenstände", "Fachmodule",
+  "Kunden-Checkliste", "Produktrisikoprüfung",
+];
+const createPlanSheetName = () => {
+  const used = new Set(fixedExcelSheetNames.map((name) => name.toLowerCase()));
+  return (planName: string) => {
+    const base = safeFileName(planName).slice(0, 31) || "Plan";
+    let name = base;
+    for (let index = 2; used.has(name.toLowerCase()); index += 1) {
+      const suffix = `_${index}`;
+      name = `${base.slice(0, 31 - suffix.length)}${suffix}`;
+    }
+    used.add(name.toLowerCase());
+    return name;
+  };
+};
 const uid = (prefix: string) =>
   `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 const blankModuleState = (): ModuleState => ({
@@ -6371,6 +6392,7 @@ export function ExportCenter({
   const exportExcel = () => {
     if (saleBlocked || !preferredPlan || !breakdown || !exportBondData) return;
     const workbook = XLSX.utils.book_new();
+    const planSheetName = createPlanSheetName();
     const depotExport = buildMultiDepotExportData(
       item.depotAccounts,
       item.depot,
@@ -6468,7 +6490,7 @@ export function ExportCenter({
             Modell: entry.modelId || "",
           })),
         ),
-        safeFileName(plan.name).slice(0, 31) || "Plan",
+        planSheetName(plan.name),
       );
     }
     XLSX.utils.book_append_sheet(
