@@ -1,5 +1,5 @@
 import { updateCaseAdvisory, type AdvisoryCase } from "./case-model";
-import { localDateParts } from "./domain/planning/calendar";
+import { localDateParts, needCalendarDate, NEED_CALENDAR_ERROR } from "./domain/planning/calendar";
 import { targetDateForNeed, targetYearForNeed } from "./domain/planning/capital-pots";
 import { needTermLosses } from "./domain/planning/need-term-impact";
 
@@ -18,6 +18,7 @@ export function previewNeedTermChange(current: AdvisoryCase, request: NeedTermRe
     throw new Error("Bitte einen vollständigen gültigen Termin oder eine endliche, nicht negative Laufzeit eingeben.");
   const changed = request.mode === "date" ? { ...need, dueDate: request.value }
     : { ...need, years: request.value, dueDate: "" };
+  if (!needCalendarDate(changed, current.createdAt)) throw new Error(NEED_CALENDAR_ERROR);
   const beforeDate = targetDateForNeed(need, current.createdAt);
   const afterDate = targetDateForNeed(changed, current.createdAt);
   if (!localDateParts(afterDate)) throw new Error("Der rechnerische Termin ist ungültig.");

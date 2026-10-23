@@ -1721,7 +1721,7 @@ export function NeedsStep({
                   <b>€</b>
                 </div>
               </label>
-              <NeedTermEditor key={`${need.id}-${termReset}`} need={need} busy={termBusy} onApply={(input) => applyTerm(need.id, input)} />
+              <NeedTermEditor key={`${need.id}-${termReset}`} need={need} referenceDate={referenceDate} busy={termBusy} onApply={(input) => applyTerm(need.id, input)} />
               <span className="derived-bucket">
                 {`${need.dueDate ? "Termin" : "Rechnerischer Termin"}: ${germanDate(targetDateForNeed(need, referenceDate))} · ${monthsUntilNeed(need, referenceDate)} Monate · Zieljahr ${targetYearForNeed(need, referenceDate)}`}
               </span>

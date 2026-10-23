@@ -33,6 +33,13 @@ Exakte vollständige Zeilenvergleiche mit unterschiedlichen Positionen je Plan
 sichern die Inhalte; JSON- und Rohstorevergleiche sichern den unveränderten Fall.
 Finale Laufidentitäten und Originalprotokolle liegen im separaten Abnahmepaket.
 
+## Nachführung 23.10.2026
+
+PR #52 ist auf main `0ec08f7a6f3132af3ff51d8eed0a921fc35aa1a9` integriert,
+kein Release/Deployment. Die folgende Analyse bleibt der historische READ-ONLY-
+Stand. Der spätere Beschluss [D-11](project/DECISIONS.md) entscheidet die technische
+Domäne; [das separate F-026-Paket](F026_KALENDERDOMAENE.md) setzt sie um.
+
 ## F-026: ausschließlich lesende Folgenabschätzung
 
 Unveränderte Quellen: `calendar.ts`, `capital-pots.ts`, `financial-validation.ts`,

@@ -45,6 +45,7 @@
     "scripts/verify-h3-history-restore.tsx",
     "scripts/verify-h5a-legacy-loss.tsx",
     "scripts/verify-f010-f023.tsx",
-    "scripts/verify-f012-need-term.ts"
+    "scripts/verify-f012-need-term.ts",
+    "scripts/verify-f026-calendar.ts"
   ]
 }

@@ -1,5 +1,5 @@
 import { validDepotSale } from "../depot/sale-validation";
-import { localDateParts } from "../planning/calendar";
+import { localDateParts, needCalendarDate, needCalendarParts } from "../planning/calendar";
 import { validPhasedInstallments, legacyPhasedInstallments } from "../planning/installment-validation";
 
 /** Financial and phased-count trust boundary. Optional depot/Bond metadata and historical
@@ -77,5 +77,9 @@ export function validCaseFinancialInputs(value: unknown, sourceSchemaVersion = 1
       }
     }
   }
-  return true;
+  // All existing raw financial checks must reject before calendar/graph/clone
+  // access. Share this result boundary across import, P1 and H3 restore.
+  return typeof value.createdAt === "string" && !!needCalendarParts(value.createdAt) &&
+    advisory.needs.every((need) => !!needCalendarDate(
+      need as { years?: unknown; dueDate?: unknown }, value.createdAt));
 }

@@ -12,14 +12,16 @@ nicht neu geprüft. Integriert ≠ abgenommen ≠ releasebereit ≠ veröffentli
 
 ## Seit dem Checkpoint geändert – live nachprüfen
 
-PR #51 ist inzwischen integriert: Live-main am 23.10.2026 zu Beginn des
-beauftragten P2-Pakets `a87be76dcd5e303f626de6bcebb7239939b02cb1`, Tree
-`0e6d43e490461430e00805ca5192eae8da48858e`. Die frühere offene Governance-
-Mergeentscheidung unten ist damit historisch. Work bearbeitet ausschließlich den
-[Excel-Fix und die lesende F-026-Bewertung](../P2_F007_XLSX_F026_Bewertung.md)
-im Branch `work/p2-f007-xlsx-sheet-integrity`; Integration/Abnahmen live prüfen.
-F-026 bleibt ohne produktive Korrektur und ohne neu beschlossene Laufzeitgrenze.
-Keine Release-/Deploymentfreigabe.
+PR #51 und [PR #52](https://github.com/LeonMoebius-code/vermoegensnavigator/pull/52)
+sind integriert. Live-main zu Beginn des F-026-Auftrags am 23.10.2026:
+`0ec08f7a6f3132af3ff51d8eed0a921fc35aa1a9`, Tree
+`030dfa9eded4a4358cb72f7d0b522ca2cae56c43`. Die älteren offenen Governance-/
+P2-Implementierungsaussagen unten sind historische Checkpoints.
+F-007 ist durch #52 behoben; dessen F-026-Anteil war ausschließlich READ-ONLY.
+Work setzt jetzt nur [F-026](../F026_KALENDERDOMAENE.md) im isolierten Branch
+`work/f026-calendar-domain-integrity` um. [D-11](DECISIONS.md) beschließt die
+technische Domäne 0100–9999, keine fachliche Höchstlaufzeit. Abnahmen und
+Integration des neuen Featurestands live prüfen. Kein Release oder Deployment.
 
 ## Relevante Pakete
 
@@ -57,8 +59,8 @@ begrenzt. Vor Entscheidung Originalbelege heranziehen und aktuellen Code abgleic
 
 | Thema | Evidenzstatus / nächste Bewertung |
 | --- | --- |
-| Deep-Audit-08/F-007 XLSX-Namenskonflikt | Im Register **reproduziert**: normaler Planname `Fall` kollidiert mit festem Blatt. P2, Exportwirkung zeitnah bewerten. Nicht das durch H4 geschlossene Astra/F-007. |
-| F-026 Extremjahre | Im Register **reproduziert**: falsche Zieljahre/Darstellungsfehler bei extremen Laufzeiten. P2; technische Kalenderdomäne fachlich entscheiden. F-021 dadurch nicht wieder öffnen. Redaktionell waren 19 statt 20 Stimuli enthalten; kein Anlass für neues Gesamtaudit. |
+| Deep-Audit-08/F-007 XLSX-Namenskonflikt | Durch PR #52 auf obigem Live-main **behoben und integriert**; beide unabhängigen Abnahmen laut beauftragtem Folgepaket positiv. Nicht das durch H4 geschlossene Astra/F-007. Kein Release daraus. |
+| F-026 Extremjahre | Im Register **reproduziert**: falsche Zieljahre/Darstellungsfehler bei extremen Laufzeiten. P2; technische Kalenderdomäne durch D-11 entschieden, gezielte Umsetzung im aktuellen F-026-Paket; Abnahme/Integration noch separat. F-021 dadurch nicht wieder öffnen. Redaktionell waren 19 statt 20 Stimuli enthalten; kein Anlass für neues Gesamtaudit. |
 | F-024 Modellmetadaten | **statischer Mechanismus** mehrfacher Modellergänzung; niedriger priorisiert, keine unbelegte Finanzbeschädigung behaupten. |
 | F-025 Sparplanstart | Register belegt Annahme/XLSX ohne Start; fachlicher Sollvertrag und heutige Reproduzierbarkeit **ungeklärt**, niedriger priorisiert. Kein belegtes vollständiges Browser-E2E. |
 | Weitere F-008–F-025 | Register gezielt heranziehen: u. a. Encoding, Darstellungs-/Zuordnungssemantik, Berichtswährung, Bondwährung. Fehlende Originaldetails **ungeklärt**; nicht pauschal behoben, akzeptiert oder Releaseblocker. |

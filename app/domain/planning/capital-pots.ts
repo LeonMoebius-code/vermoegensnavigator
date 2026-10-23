@@ -1,4 +1,4 @@
-import { addLocalMonthsClamped, localDateParts } from "./calendar";
+import { needCalendarDate, needCalendarParts, NEED_CALENDAR_ERROR } from "./calendar";
 import type { AdvisoryData } from "../advisory/contracts";
 import type { BucketId, CapitalPot } from "./contracts";
 
@@ -67,9 +67,8 @@ export function targetDateForNeed(
   need: AdvisoryData["needs"][number],
   referenceDate: Date | string = new Date(),
 ): string {
-  if (need.dueDate && localDateParts(need.dueDate)) return need.dueDate.slice(0, 10);
-  const target = addLocalMonthsClamped(referenceDate, relativeNeedMonths(need.years));
-  if (!target) throw new Error("Kapitalbedarf kann ohne gültige Laufzeit und festes Referenzdatum nicht berechnet werden.");
+  const target = needCalendarDate(need, referenceDate);
+  if (!target) throw new Error(NEED_CALENDAR_ERROR);
   return target;
 }
 
@@ -77,9 +76,10 @@ export function monthsUntilNeed(
   need: AdvisoryData["needs"][number],
   referenceDate: Date | string = new Date(),
 ): number {
-  if (need.dueDate && localDateParts(need.dueDate)) {
-    const due = localDateParts(need.dueDate)!;
-    const reference = localDateParts(referenceDate);
+  targetDateForNeed(need, referenceDate);
+  const due = typeof need.dueDate === "string" ? needCalendarParts(need.dueDate) : null;
+  if (due) {
+    const reference = needCalendarParts(referenceDate);
     if (!reference) throw new Error("Ungültiges festes Fallreferenzdatum.");
     // Existing month-based horizon: days within a calendar month do not add a month.
     return Math.max(0, (due.year - reference.year) * 12 + due.month - reference.month);
@@ -91,7 +91,7 @@ export function targetYearForNeed(
   need: AdvisoryData["needs"][number],
   referenceDate: Date | string = new Date(),
 ) {
-  return Number(targetDateForNeed(need, referenceDate).slice(0, 4));
+  return needCalendarParts(targetDateForNeed(need, referenceDate))!.year;
 }
 
 export function capitalPots(

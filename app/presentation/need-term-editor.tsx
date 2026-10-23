@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { AdvisoryCase } from "../case-model";
 import type { AdvisoryData } from "../domain/advisory/contracts";
-import { localDateParts } from "../domain/planning/calendar";
+import { needCalendarDate, NEED_CALENDAR_ERROR } from "../domain/planning/calendar";
 import { commitNeedTermChange, previewNeedTermChange, type NeedTermRequest } from "../need-term-change";
 
 type Preview = ReturnType<typeof previewNeedTermChange>;
@@ -88,8 +88,8 @@ function NeedTermReview({ preview, refreshed, cancel, confirm }: {
 
 /** Only an explicit button or Enter commits. Blur and date selection merely edit
  * the draft, so keyboard fragments and modal focus changes cannot reconcile. */
-export function NeedTermEditor({ need, busy, onApply }: {
-  need: AdvisoryData["needs"][number]; busy: boolean; onApply: (input: NeedTermInput) => void;
+export function NeedTermEditor({ need, referenceDate, busy, onApply }: {
+  need: AdvisoryData["needs"][number]; referenceDate: string; busy: boolean; onApply: (input: NeedTermInput) => void;
 }) {
   const [date, setDate] = useState(need.dueDate || "");
   const [years, setYears] = useState(need.dueDate ? "" : String(need.years));
@@ -97,22 +97,25 @@ export function NeedTermEditor({ need, busy, onApply }: {
   useEffect(() => {
     setDate(need.dueDate || ""); setYears(need.dueDate ? "" : String(need.years)); setMode(need.dueDate ? "date" : "years");
   }, [need.id, need.dueDate, need.years]);
-  const valid = mode === "date" ? /^\d{4}-\d{2}-\d{2}$/.test(date) && Boolean(localDateParts(date))
-    : /^(?:\d+(?:\.\d+)?|\.\d+)$/.test(years) && Number.isFinite(Number(years)) && Number(years) >= 0 && Number(years) <= 50;
+  const complete = mode === "date" ? /^\d{4,}-\d{2}-\d{2}$/.test(date)
+    : /^(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(years) && Number.isFinite(Number(years)) && Number(years) >= 0;
+  const valid = complete && Boolean(needCalendarDate(mode === "date" ? { dueDate: date }
+    : { years: Number(years) }, referenceDate));
   const dirty = date !== (need.dueDate || "") || years !== (need.dueDate ? "" : String(need.years));
   const apply = () => { if (valid && dirty && !busy) onApply(mode === "date" ? { mode, value: date } : { mode, value: Number(years) }); };
   return <div className="need-term-editor" onKeyDown={(event) => {
     if (event.key === "Enter" && event.target instanceof HTMLInputElement) { event.preventDefault(); apply(); }
   }}>
-    <label><span>Konkreter Termin</span><input type="date" value={date} onChange={(event) => {
+    <label><span>Konkreter Termin</span><input type="date" min="0100-01-01" max="9999-12-31" value={date} onChange={(event) => {
       setDate(event.target.value); setMode("date"); setYears("");
     }} /></label>
-    <label><span>Alternativ in Jahren</span><input type="number" min="0" max="50" step="any" value={years}
+    <label><span>Alternativ in Jahren</span><input type="number" min="0" step="any" value={years}
       placeholder={date ? "Konkreter Termin ist führend" : undefined} onChange={(event) => {
         setYears(event.target.value); setDate(""); setMode("years");
       }} /></label>
     <div className="need-term-actions"><button className="secondary" disabled={!dirty || !valid || busy} onClick={apply}>Termin übernehmen</button>
       {dirty && <small role="status">Entwurf – noch nicht übernommen{!valid ? ". Bitte Eingabe vervollständigen." : "."}</small>}
+      {dirty && complete && !valid && <small role="alert">{NEED_CALENDAR_ERROR}</small>}
     </div>
   </div>;
 }
