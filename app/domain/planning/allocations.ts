@@ -16,7 +16,7 @@ export function allocationBucketAmounts(
 ): Partial<Record<BucketId, number>> {
   if (
     allocation.bucketAmounts &&
-    Object.values(allocation.bucketAmounts).some((value) => Number(value) > 0)
+    Object.keys(allocation.bucketAmounts).length > 0
   )
     return allocation.bucketAmounts;
   return { [allocation.bucketId]: allocation.amount };
@@ -41,9 +41,7 @@ export function allocationCapitalPotAmounts(
 ): Partial<Record<CapitalPotId, number>> {
   if (
     allocation.capitalPotAmounts &&
-    Object.values(allocation.capitalPotAmounts).some(
-      (value) => Number(value) > 0,
-    )
+    Object.keys(allocation.capitalPotAmounts).length > 0
   )
     return allocation.capitalPotAmounts;
   return allocation.capitalPotId
@@ -152,8 +150,9 @@ export function reconcilePlanCapitalPots(
           allocation.capitalPotId && validIds.has(allocation.capitalPotId)
             ? allocation.capitalPotId
             : undefined,
-        capitalPotAmounts: {},
-        bucketAmounts: {},
+        capitalPotAmounts: Object.fromEntries(Object.entries(allocation.capitalPotAmounts ?? {})
+          .filter(([id]) => validIds.has(id as CapitalPotId))),
+        bucketAmounts: { ...allocation.bucketAmounts },
       }];
 
     const previousCoverage = Object.values(previousAmounts).reduce<number>(
@@ -163,7 +162,7 @@ export function reconcilePlanCapitalPots(
     const validAmounts = Object.fromEntries(
       Object.entries(previousAmounts).filter(
         ([id, amount]) =>
-          validIds.has(id as CapitalPotId) && Number(amount) > 0,
+          validIds.has(id as CapitalPotId) && Number(amount) >= 0,
       ),
     ) as Partial<Record<CapitalPotId, number>>;
     const validCoverage = Object.values(validAmounts).reduce<number>(
@@ -176,7 +175,7 @@ export function reconcilePlanCapitalPots(
     const amount = validCoverage + unassignedBefore;
     const validPotIds = Object.keys(validAmounts) as CapitalPotId[];
     const capitalPotId =
-      allocation.capitalPotId && validAmounts[allocation.capitalPotId]
+      allocation.capitalPotId && Object.hasOwn(validAmounts, allocation.capitalPotId)
         ? allocation.capitalPotId
         : validPotIds[0];
     return [{

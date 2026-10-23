@@ -75,16 +75,22 @@ function parseCsv(text: string): string[][] {
   return rows;
 }
 
-function headerScore(text: string) {
-  return ["Bezeichnung", "Währung", "Stück", "Anlageklasse", "Notiz"].filter(
-    (word) => text.includes(word),
-  ).length;
-}
-
+/** Preserve the existing UTF-8 preference, but never decode invalid bytes as U+FFFD.
+ * Windows-1252 is the existing fallback, not an additional import format. */
 function decode(buffer: ArrayBuffer) {
-  const utf8 = new TextDecoder("utf-8").decode(buffer);
-  const win = new TextDecoder("windows-1252").decode(buffer);
-  return headerScore(win) > headerScore(utf8) ? win : utf8;
+  const bytes = new Uint8Array(buffer);
+  if ((bytes[0] === 0xff && bytes[1] === 0xfe) || (bytes[0] === 0xfe && bytes[1] === 0xff))
+    throw new Error("CSV-Zeichencodierung nicht unterstützt. Bitte UTF-8 oder Windows-1252 verwenden.");
+  let text: string;
+  try { text = new TextDecoder("utf-8", { fatal: true }).decode(bytes); }
+  catch {
+    if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf)
+      throw new Error("Die als UTF-8 gekennzeichnete CSV enthält ungültige Zeichen. Import abgebrochen.");
+    text = new TextDecoder("windows-1252", { fatal: true }).decode(bytes);
+  }
+  if (/[\uFFFD\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/.test(text))
+    throw new Error("Die CSV enthält nicht sicher lesbare Zeichen. Import abgebrochen, bisheriger Bestand unverändert.");
+  return text;
 }
 
 function column(headers: string[], ...names: string[]) {
