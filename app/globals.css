@@ -5903,22 +5903,17 @@ body[data-print-mode="customer"] .internal-only {
   min-width: 0;
 }
 .house-layout > div { min-width: 0; }
-.house-scroll-hint {
-  margin: 0 0 8px;
-  color: #506075;
-  font-size: 12px;
-}
-.house-scroll {
+.house-frame {
+  container-type: inline-size;
   max-width: 100%;
-  overflow-x: auto;
-  padding: 4px; /* Keep focus outlines and raised pillar buttons visible. */
+  min-width: 0;
+  padding: 4px;
   border: 1px solid #d9e1e8;
   border-radius: 10px;
 }
-.house-scroll:focus-visible { outline: 2px solid var(--navy-2); }
 .wealth-house {
   width: 100%;
-  min-width: 920px;
+  min-width: 0;
   background: #fff;
 }
 .wealth-house .house-roof {
@@ -5947,7 +5942,7 @@ body[data-print-mode="customer"] .internal-only {
   grid-template-columns: repeat(5, minmax(0, 1fr));
   align-items: stretch;
   gap: 8px;
-  padding: 10px 12px 12px;
+  padding: 10px clamp(4px, 1cqi, 12px) 12px;
 }
 .wealth-house > .house-foundation {
   display: flex;
@@ -6043,7 +6038,7 @@ body[data-print-mode="customer"] .internal-only {
   border: 1px solid #d9dee4;
   border-top: 7px solid var(--pillar-color);
   background: #f2f3f4;
-  padding: 16px 14px 14px;
+  padding: 16px clamp(5px, 1cqi, 14px) 14px;
   color: inherit;
   text-align: left;
   transition: transform 160ms ease, box-shadow 160ms ease;
@@ -6066,7 +6061,7 @@ body[data-print-mode="customer"] .internal-only {
   display: block;
   min-height: 38px;
   color: var(--navy);
-  font-size: 15px;
+  font-size: clamp(13px, 1.8cqi, 15px);
   font-weight: 800;
   line-height: 1.25;
 }
@@ -6074,7 +6069,7 @@ body[data-print-mode="customer"] .internal-only {
   display: block;
   margin-top: 8px;
   color: var(--pillar-color);
-  font-size: 24px;
+  font-size: clamp(18px, 2.8cqi, 24px);
 }
 .wealth-house .house-pillars button p {
   margin: 18px 0;
@@ -6085,7 +6080,7 @@ body[data-print-mode="customer"] .internal-only {
 .wealth-house .house-pillars button footer {
   margin-top: auto;
   color: var(--navy);
-  font-size: 16px;
+  font-size: clamp(13px, 1.8cqi, 16px);
   font-weight: 800;
 }
 .pillar-delta {
@@ -7201,3 +7196,50 @@ body[data-print-mode="customer"] .internal-only {
 .need-term-dialog footer button { white-space: normal; }
 .need-term-error { color: #8c2924; }
 @media (max-width: 900px) { .need-row-v2 { grid-template-columns: 30px 1fr; } .need-row-v2 .need-term-editor { grid-column: 2 / -1; } }
+
+/* Compact house follows its container, including embedded narrow desktop views. */
+@container (max-width: 519px) {
+  .wealth-house > .house-pillars { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .wealth-house > .house-pillars > button { min-height: 0; padding: 14px; }
+  .wealth-house .house-pillars button header span { min-height: 0; font-size: 15px; }
+  .wealth-house .house-pillars button header strong { font-size: 22px; }
+  .wealth-house .house-pillars button p { margin: 10px 0; }
+  .wealth-house .house-pillars button footer { font-size: 16px; }
+  .wealth-house > .house-foundation { flex-wrap: wrap; }
+}
+.settings-button { width: 100%; padding: 12px 8px; border: 1px solid #cbd7e2; border-radius: 6px; color: var(--navy); background: #fff; text-align: left; }
+.settings-button.active { background: #e8f0f8; font-weight: 700; }
+.settings-button:focus-visible { outline: 3px solid var(--navy); outline-offset: 2px; }
+.settings-actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 18px 0; }
+@media (max-width: 780px) {
+  .sidebar-foot { display: block; padding-top: 4px; margin-top: 4px; }
+  .sidebar-foot p { display: none; }
+  .sidebar .settings-button { width: auto; padding: 7px 14px; }
+}
+.settings-view > .panel { padding: 24px; }
+.settings-view h2 { margin: 0 0 12px; font-size: 20px; }
+.settings-view > .panel > p { font-size: 14px; line-height: 1.5; }
+.settings-actions button,
+.settings-view details button {
+  min-width: 0;
+  max-width: 100%;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid #cbd7e2;
+  border-radius: 8px;
+  background: #eef4f9;
+  color: var(--navy);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.5;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.settings-actions button:disabled { opacity: 0.5; cursor: default; }
+.settings-view .csv-privacy-note { padding: 12px 16px; font-size: 13px; line-height: 1.5; }
+.settings-view summary { cursor: pointer; font-weight: 700; }
+.settings-view details button { display: block; margin-top: 12px; }
+.settings-view button:focus-visible,
+.settings-view summary:focus-visible { outline: 3px solid var(--navy); outline-offset: 3px; }
