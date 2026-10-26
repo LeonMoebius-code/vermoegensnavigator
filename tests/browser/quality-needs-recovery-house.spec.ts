@@ -15,7 +15,8 @@ async function open(page: Page, name: string) {
 }
 async function download(page: Page, info: TestInfo, label: RegExp, tag: string) {
   const event = page.waitForEvent("download");
-  await page.getByRole("button", { name: label }).click();
+  const settings = page.locator(".settings-view");
+  await (await settings.count() ? settings : page).getByRole("button", { name: label }).click();
   const file = await event;
   expect(await file.failure()).toBeNull();
   const path = info.outputPath(`${tag}-${file.suggestedFilename()}`);
@@ -80,17 +81,24 @@ for (const kind of ["optional", "protected", "mixed", "malformed"] as const) {
     test("Meldung, Originaldownload und unveränderte Schutzverträge", async ({ page }, info) => {
       await page.goto("./");
       const notice = page.locator(".case-store-notice");
-      await expect(notice).toBeVisible();
-      await expect(notice).toHaveAttribute("role", kind === "optional" ? "status" : "alert");
-      await expect(notice).not.toContainText("0 beschädigte");
-      await expect(notice).not.toContainText("VERTRAULICHER-TESTWERT");
-      if (kind === "optional" || kind === "mixed") {
+      if (kind === "optional") await expect(notice).toHaveCount(0);
+      else {
+        await expect(notice).toBeVisible();
+        await expect(notice).toHaveAttribute("role", "alert");
+      }
+      if (kind !== "optional") {
+        await expect(notice).not.toContainText("0 beschädigte");
+        await expect(notice).not.toContainText("VERTRAULICHER-TESTWERT");
+      }
+      if (kind === "mixed") {
         await expect(notice).toContainText("2 Positionen");
         await expect(notice).toContainText("Datumsangaben");
         await expect(notice).toContainText("Die betroffenen Fälle bleiben lesbar");
       }
       if (kind === "protected" || kind === "mixed") await expect(notice).toContainText("1 beschädigter oder inkonsistenter Fall ist geschützt");
       if (kind === "malformed") await expect(notice).toContainText("Speichern ist zum Schutz des Bestands gesperrt");
+      await page.getByRole("button", { name: "Mehr & Einstellungen", exact: true }).click();
+      if (kind === "optional") await expect(page.locator(".settings-view")).toContainText("2 Positionen");
       expect((await download(page, info, /Originalbestand zur Wiederherstellung herunterladen/, `original-${kind}`)).toString()).toBe(raw);
       expect(await page.evaluate(key => localStorage.getItem(key), CASE_STORAGE_KEY)).toBe(raw);
       if (kind === "malformed") {
@@ -112,6 +120,8 @@ for (const kind of ["optional", "protected", "mixed", "malformed"] as const) {
         expect(saved.find(c => c.id === healthy.id)!.versions).toEqual(healthy.versions);
         if (kind !== "optional") expect(saved.find(c => c.id === "quality-protected")).toEqual(entries[0]);
         await page.reload();
+        await expect(page.getByText(/Originalsicherungen zur Wiederherstellung/)).toHaveCount(0);
+        await page.getByRole("button", { name: "Mehr & Einstellungen", exact: true }).click();
         await expect(page.getByText(/Originalsicherungen zur Wiederherstellung \(1\)/)).toBeVisible();
       }
       console.log(`PASS recovery browser ${kind}: severity, categories, private-value exclusion, exact original bytes and storage protection`);
@@ -119,8 +129,8 @@ for (const kind of ["optional", "protected", "mixed", "malformed"] as const) {
   });
 }
 
-for (const width of [1440, 1180, 1024, 768, 390]) {
-  test.describe(`Vermögenshaus ${width}px`, () => {
+for (const { width, container } of [1440, 1180, 1024, 768, 390].map(width => ({ width, container: 0 })).concat([{ width: 1440, container: 680 }])) {
+  test.describe(`Vermögenshaus ${width}px / Container ${container || "frei"}`, () => {
     const fixture = modelPortfolioCase();
     fixture.plans[0].preferred = true;
     test.use({ viewport: { width, height: 1000 }, storageState: state(JSON.stringify([fixture])) });
@@ -129,11 +139,12 @@ for (const width of [1440, 1180, 1024, 768, 390]) {
       await page.goto("./"); await open(page, fixture.advisory.caseName);
       await nav(page, "Strukturplanung");
       await page.getByRole("button", { name: "Vermögensstruktur", exact: true }).click();
-      const house = page.locator(".house-view"), scroll = house.locator(".house-scroll");
+      const house = page.locator(".house-view"), scroll = house.locator(".house-frame");
       // Also cover a narrow embedded container on a wide viewport (not a media-query trigger).
-      if (width === 1440) await house.locator(".house-layout").evaluate(e => { e.style.width = "680px"; e.style.maxWidth = "100%"; });
+      if (container) await house.locator(".house-layout").evaluate(e => { e.style.width = "680px"; e.style.maxWidth = "100%"; });
       for (const mode of ["IST", "PLAN", "ZIELPLAN", "VERGLEICH"]) {
         await house.getByRole("tab", { name: mode, exact: true }).click();
+        await expect.poll(() => house.locator(".house-pillars > button").evaluateAll(es => es.every(e => getComputedStyle(e).transform === "none"))).toBe(true);
         for (const control of await house.locator(".house-mode-tabs button, .house-mode-tabs select").all()) {
           const box = await control.boundingBox();
           expect(box).not.toBeNull();
@@ -141,7 +152,7 @@ for (const width of [1440, 1180, 1024, 768, 390]) {
           expect(box!.x + box!.width).toBeLessThanOrEqual(width + 1);
         }
         const measurement = await scroll.evaluate(el => {
-          const rect = (e: Element) => { const r = e.getBoundingClientRect(); return { x: r.x, right: r.right, width: r.width }; };
+          const rect = (e: Element) => { const r = e.getBoundingClientRect(); return { x: r.x, right: r.right, width: r.width, y: r.y, bottom: r.bottom }; };
           const whole = el.querySelector(".wealth-house")!;
           const pillars = [...el.querySelectorAll(".house-pillars > button")];
           const clippedText = pillars.flatMap(p => [...p.querySelectorAll("header span, header strong, footer, .pillar-delta > *")])
@@ -160,22 +171,35 @@ for (const width of [1440, 1180, 1024, 768, 390]) {
         expect(measurement.pillars[4].right).toBeLessThanOrEqual(measurement.house.right);
         expect(measurement.region.width).toBeLessThanOrEqual(width);
         expect(measurement.clippedText).toEqual([]);
-        if (width <= 1024 || width === 1440) expect(measurement.scroll).toBeGreaterThan(measurement.client);
-        console.log(`HOUSE_GEOMETRY ${JSON.stringify({ viewport: width, mode, ...measurement })}`);
+        expect(measurement.roof.bottom).toBeLessThanOrEqual(measurement.pillars[0].y);
+        expect(Math.max(...measurement.pillars.map(p => p.bottom))).toBeLessThanOrEqual(measurement.foundation.y);
+        if (measurement.client >= 528) expect(new Set(measurement.pillars.map(p => p.y)).size).toBe(1);
+        else for (let i = 1; i < 5; i++) expect(measurement.pillars[i].y).toBeGreaterThan(measurement.pillars[i - 1].bottom);
+        expect(measurement.scroll).toBeLessThanOrEqual(measurement.client + 1);
+        expect(measurement.house.x).toBeGreaterThanOrEqual(measurement.region.x);
+        expect(measurement.house.right).toBeLessThanOrEqual(measurement.region.right);
+        for (const pillar of measurement.pillars) {
+          expect(pillar.x).toBeGreaterThanOrEqual(measurement.region.x);
+          expect(pillar.right).toBeLessThanOrEqual(measurement.region.right);
+        }
+        console.log(`HOUSE_GEOMETRY ${JSON.stringify({ viewport: width, container, mode, ...measurement })}`);
         for (const name of ["Liquidität", "Geldwerte", "Substanzwerte", "Alternative Anlagen", "Sachwerte"]) {
           const button = house.getByRole("button", { name: `${name} öffnen`, exact: true });
           await button.click();
           await expect(button).toHaveClass("active");
           await expect(house.locator(".house-detail")).toBeVisible();
-          // Native click must reach the actual visible button after scrolling the shared region.
+          // Native click must reach each fully contained button without horizontal scrolling.
           const visible = await button.evaluate(el => {
-            const r = el.getBoundingClientRect(), s = el.closest(".house-scroll")!.getBoundingClientRect();
+            const r = el.getBoundingClientRect(), s = el.closest(".house-frame")!.getBoundingClientRect();
             return r.left >= s.left - 1 && r.right <= s.right + 1;
           });
           expect(visible).toBe(true);
         }
         await expect(house.locator(".house-roof strong")).toHaveText(new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(160000));
       }
+      const keyboardPillar = house.getByRole("button", { name: "Liquidität öffnen", exact: true });
+      await keyboardPillar.focus(); await page.keyboard.press("Enter");
+      await expect(keyboardPillar).toHaveClass("active");
       expect(errors).toEqual([]);
       console.log(`PASS house browser ${width}: five columns, centered roof/third pillar, aligned foundation, no clipped labels or values, all 20 mode/column interactions`);
     });

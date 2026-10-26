@@ -81,7 +81,7 @@ for (const group of ["A", "B"] as const) for (const variant of variants) {
   test(`F021 ${group} ${variant.tag} – separate H5b raw diagnosis`, async ({ page }, info) => {
     const errors = monitor(page), c = needVariant(group, variant), neighbor = controlCase("h5b-neighbor");
     await seed(page, [c, neighbor]); const before = await raw(page);
-    await nav(page, "Historische Fälle prüfen"); await page.getByLabel("Quellfall", { exact: true }).selectOption(c.id);
+    await page.getByRole("button", { name: "Mehr & Einstellungen", exact: true }).click(); await page.getByRole("button", { name: "Historische Fälle prüfen", exact: true }).click(); await page.getByLabel("Quellfall", { exact: true }).selectOption(c.id);
     await page.getByLabel("Belegte historische Zeitzone", { exact: true }).selectOption("UTC");
     await page.getByRole("button", { name: "Quelle prüfen", exact: true }).click();
     const text = await page.locator(".h5b-view").innerText();
