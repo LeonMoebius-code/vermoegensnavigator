@@ -109,6 +109,18 @@ Import-/Persistenzarchitektur ersetzt. **F-019 ist damit untersucht, nicht
 pauschal behoben oder für beliebige CSV-Quellen freigegeben.** Der Projektleiter
 muss diese konkrete Grenze vor Veröffentlichung einordnen. Keine FX-Umrechnung.
 
+
+### Fortschreibung durch Beschluss vom 26.10.2026
+
+Die vorstehende offene Quellenentscheidung ist historischer Erkenntnisstand.
+[D-12](project/DECISIONS.md) klärt F-019 für den vorgesehenen regulären Import:
+vollständiges unterstütztes agree21-Profil mit 29 Spalten; EUR-Berichtswährung
+bereits am 21.09.2026 fachlich bestätigt und technisch berücksichtigt. Keine
+zusätzliche Benutzerbestätigung oder erneute Implementierung. Die oben
+beschriebenen Grenzen generischer Profile gelten unverändert und werden nicht
+aufgehoben; keine pauschale Freigabe beliebiger CSV-Quellen. Dieser Beschluss
+ist keine Release- oder Bankeinsatzfreigabe.
+
 ## Nachweisvertrag
 
 Zusätzliche Domain-/Komponentenprüfungen laufen im regulären Verify vor dem
