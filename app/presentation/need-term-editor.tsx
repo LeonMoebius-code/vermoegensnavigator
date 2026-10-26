@@ -73,7 +73,10 @@ function NeedTermReview({ preview, refreshed, cancel, confirm }: {
       <h3>{preview.losses.find((loss) => loss.planId === id)!.planName}</h3>
       <ul>{preview.losses.filter((loss) => loss.planId === id).map((loss, index) => <li key={`${loss.kind}-${loss.allocationId}-${index}`}>
         <strong>{loss.productName}</strong> · {loss.pot} · Zuordnung {loss.allocationId}
-        {loss.kind === "phased" ? <>
+        {loss.kind === "binding" ? <>
+          <br />Wegfallende Zuordnungsinformation: {money.format(loss.lost)}; kein finanzieller Verlust.
+          <br />Verbleibende Produktzuordnung: {money.format(loss.remaining)}.
+        </> : loss.kind === "phased" ? <>
           <br />Gestaffelter Einstiegsplan {loss.entryId}: {loss.installments} Raten, {frequencies[loss.frequency!] || loss.frequency}, Start {loss.startDate}.
           <br />Entfallender Einstiegsbetrag: {money.format(loss.lost)}; verbleibend: {money.format(loss.remaining)}.
           {loss.note && <><br />{loss.note}</>}

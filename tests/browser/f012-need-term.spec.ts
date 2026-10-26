@@ -2,7 +2,7 @@ import { test, expect, type Page, type TestInfo } from "@playwright/test";
 import { build } from "esbuild";
 import { readFile, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { f012Case } from "../../scripts/f012-fixtures";
+import { f012Case, f012ZeroBindingCase } from "../../scripts/f012-fixtures";
 import { previewNeedTermChange } from "../../app/need-term-change";
 import { seed, open, nav, raw, data, current, monitor } from "./f021-driver";
 import type { AdvisoryCase } from "../../app/case-model";
@@ -29,6 +29,71 @@ async function screenshot(page: Page, info: TestInfo, tag: string) {
   // synthetic success evidence, with digest, in its complete original job log.
   console.log(`F012_IMAGE ${JSON.stringify({ tag, sha256: createHash("sha256").update(bytes).digest("hex"), base64: bytes.toString("base64") })}`);
 }
+
+for (const action of ["cancel", "confirm"] as const) test(`F012 secondary zero binding: actual ${action} preserves explicit strategic zero and neighbors`, async ({ page }, info) => {
+  const c = f012ZeroBindingCase(), neighbor = f012Case(); neighbor.id = "zero-browser-neighbor";
+  const errors = monitor(page); await seed(page, [c, neighbor]); await open(page, c);
+  const before = await current(page, info, `zero-${action}-before`), storageBefore = await raw(page);
+  await back(page); await propose(page, "2030-04-15"); await expect(dialog(page)).toBeVisible();
+  for (const text of ["Plan Alpha", "SYNTHETISCH Produkt Nullbindung", "Zieljahr 2029", "Wegfallende Zuordnungsinformation", "0,00", "kein finanzieller Verlust"])
+    await expect(dialog(page)).toContainText(text);
+  const previewText = await dialog(page).innerText(); expect(await raw(page)).toBe(storageBefore);
+  await expect(row(page).locator(".derived-bucket")).toContainText("15.04.2029");
+  if (action === "cancel") {
+    await dialog(page).getByRole("button", { name: "Abbrechen", exact: true }).click();
+    await expect(dialog(page)).toHaveCount(0);
+    const after = await current(page, info, "zero-cancel-after");
+    expect(after).toEqual(before); expect(after.plans[0].allocations[0].capitalPotAmounts).toEqual({ "year-2029": 0, strategic: 0 });
+    expect(await raw(page)).toBe(storageBefore); await evidence(info, "zero-cancel", { before, after, previewText, storageUnchanged: true });
+  } else {
+    await accept(page); await expect(dialog(page)).toHaveCount(0);
+    await expect(row(page).locator(".derived-bucket")).toContainText("15.04.2030");
+    const after = await current(page, info, "zero-confirm-after");
+    const expected = previewNeedTermChange(before, { caseId: before.id, needId: 701, mode: "date", value: "2030-04-15" }).next;
+    expect(after).toEqual(expected); expect(after.plans[0].allocations[0].capitalPotAmounts).toEqual({ strategic: 0 });
+    expect(after.plans[0].allocations[0].capitalPotId).toBe("strategic"); expect(after.plans[0].allocations[0].amount).toBe(1000);
+    expect(after.plans[1]).toEqual(before.plans[1]); expect(after.versions).toEqual(before.versions); expect(await raw(page)).toBe(storageBefore);
+    await back(page); await page.locator(".wizard-head").getByRole("button", { name: "Fall speichern", exact: true }).click();
+    const stored = await data(page), saved = stored.find(x => x.id === before.id)!, other = stored.find(x => x.id === neighbor.id)!;
+    expect(saved.plans).toEqual(after.plans); expect(saved.versions).toEqual(before.versions);
+    // P1 refreshes the technical load timestamp; all neighbor content must survive.
+    expect(other).toEqual({ ...neighbor, updatedAt: other.updatedAt });
+    const savedRaw = await raw(page); await page.reload(); await open(page, saved);
+    const reopened = await current(page, info, "zero-reopened"); expect(reopened.plans).toEqual(after.plans); expect(reopened.versions).toEqual(before.versions);
+    expect(await raw(page)).toBe(savedRaw);
+    await evidence(info, "zero-confirm-save-reopen", { before, after, saved, reopened, neighbor: other, previewText });
+  }
+  expect(errors).toEqual([]);
+});
+
+test("F012 secondary zero binding: concurrent added information refreshes actual approval", async ({ page }, info) => {
+  const errors = monitor(page);
+  const result = await build({ stdin: { contents: `
+    import React, { useState } from 'react'; import { createRoot } from 'react-dom/client';
+    import { useNeedTermChange } from './app/presentation/need-term-editor';
+    import { f012ZeroBindingCase } from './scripts/f012-fixtures';
+    function Harness() { const [c,setC]=useState(f012ZeroBindingCase); const t=useNeedTermChange(c,setC);
+      return <><button id="propose" onClick={()=>t.request(701,{mode:'date',value:'2030-04-15'})}>Propose</button>
+      <button id="concurrent" onClick={()=>setC(old=>{const n=structuredClone(old);n.plans[0].allocations.push({...structuredClone(n.plans[0].allocations[0]),id:'late-zero',productName:'SYNTHETISCH Neue Nullbindung'});return n;})}>Concurrent update</button>
+      <output>{JSON.stringify(c)}</output>{t.feedback}</>; }
+    createRoot(document.getElementById('root')).render(<React.StrictMode><Harness/></React.StrictMode>);`, resolveDir: process.cwd(), loader: "tsx" }, bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic" });
+  await page.route("**/f012-zero-concurrency", route => route.fulfill({ contentType: "text/html", body: `<div id="root"></div><script>${result.outputFiles[0].text.replaceAll("</script", "<\\/script")}</script>` }));
+  await page.goto("http://127.0.0.1:4173/f012-zero-concurrency"); await page.locator("#propose").click();
+  await expect(dialog(page)).toContainText("kein finanzieller Verlust");
+  await page.evaluate(() => (document.querySelector("#concurrent") as HTMLButtonElement).click());
+  await expect(dialog(page)).toContainText("zwischenzeitlich geändert"); await expect(dialog(page)).toContainText("SYNTHETISCH Neue Nullbindung");
+  const pending = JSON.parse(await page.locator("output").innerText()) as AdvisoryCase;
+  expect(pending.advisory.needs[0].dueDate).toBe("2029-04-15");
+  expect(pending.plans[0].allocations.every(a => Object.hasOwn(a.capitalPotAmounts!, "year-2029"))).toBe(true);
+  await accept(page); await expect(dialog(page)).toHaveCount(0);
+  // Dialog closure starts the commit phase; wait for the production effect's actual result.
+  await expect.poll(async () => JSON.parse(await page.locator("output").innerText()).advisory.needs[0].dueDate).toBe("2030-04-15");
+  const after = JSON.parse(await page.locator("output").innerText()) as AdvisoryCase;
+  expect(after.advisory.needs[0].dueDate).toBe("2030-04-15");
+  expect(after.plans[0].allocations.map(a => a.capitalPotAmounts)).toEqual([{ strategic: 0 }, { strategic: 0 }]);
+  expect(after.plans[1]).toEqual(pending.plans[1]); expect(after.versions).toEqual(pending.versions);
+  await evidence(info, "zero-concurrency", { pending, after }); expect(errors).toEqual([]);
+});
 
 test("F012 typing fragments and invalid inputs never commit or open a dialog; blur leaves a draft", async ({ page }, info) => {
   const { before, errors } = await ready(page, info), originalRaw = await raw(page);

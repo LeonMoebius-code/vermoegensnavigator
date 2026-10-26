@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { normalizeImportedCase, updateCaseAdvisory, caseSnapshot } from "../app/case-model";
 import { previewNeedTermChange as preview, commitNeedTermChange as commit, type NeedTermRequest } from "../app/need-term-change";
 import { readCaseStore, saveCaseToStore, CASE_STORAGE_KEY } from "../app/case-storage";
-import { f012Case } from "./f012-fixtures";
+import { f012Case, f012ZeroBindingCase } from "./f012-fixtures";
 import { h5bCase } from "./h5b-fixtures";
 import { qualityProtectedCase } from "./quality-fixtures";
 import { diagnoseCapitalRecovery } from "../app/domain/case/capital-recovery-diagnosis";
@@ -115,5 +115,98 @@ test("H3/H5 protected original cannot become editable through term proposal", ()
   assert.ok(diagnoseCapitalRecovery(historical, "UTC").findings.length > 0);
   assert.throws(() => preview(historical, { caseId: historical.id, needId: historical.advisory.needs[0].id, mode: "date", value: "2029-04-15" }), /Kapitaltopf/);
   assert.deepEqual(historical, historicalBefore);
+});
+test("secondary explicit zero binding requires review even while primary strategic zero survives", () => {
+  const c = f012ZeroBindingCase(), original = structuredClone(c), r = request(c, "2030-04-15"), p = preview(c, r);
+  const actual = updateCaseAdvisory(c, "needs", c.advisory.needs.map(n => n.id === 701 ? { ...n, dueDate: r.value as string } : n));
+  assert.deepEqual(p.next, actual);
+  assert.deepEqual(p.next.plans[0].allocations[0].capitalPotAmounts, { strategic: 0 });
+  assert.equal(p.next.plans[0].allocations[0].amount, 1000);
+  assert.equal(p.next.plans[0].allocations[0].capitalPotId, "strategic");
+  console.log("F012_ZERO_REPRO " + JSON.stringify({ before: c.plans[0].allocations[0].capitalPotAmounts,
+    reconciled: p.next.plans[0].allocations[0].capitalPotAmounts, losses: p.losses,
+    committed: commit(c, r, p.key).plans[0].allocations[0].capitalPotAmounts }));
+  assert.equal(p.losses.length, 1, "secondary explicit zero binding must trigger the existing review phase");
+  assert.equal(p.losses[0].kind, "binding");
+  assert.deepEqual([p.losses[0].planName, p.losses[0].productName, p.losses[0].pot, p.losses[0].lost, p.losses[0].remaining],
+    ["Plan Alpha", "SYNTHETISCH Produkt Nullbindung", "Zieljahr 2029", 0, 1000]);
+  assert.deepEqual(c, original);
+});
+
+test("primary explicit zero remains protected exactly once alongside secondary keys", () => {
+  for (const secondary of [true, false]) {
+    const c = f012ZeroBindingCase(), a = c.plans[0].allocations[0]; a.capitalPotId = "year-2029";
+    a.capitalPotAmounts = secondary ? { "year-2029": 0, strategic: 0 } : { "year-2029": 0 };
+    const p = preview(c, request(c, "2030-04-15"));
+    assert.equal(p.losses.length, 1); assert.equal(p.losses[0].kind, "binding"); assert.equal(p.losses[0].lost, 0);
+    assert.deepEqual(p.next.plans[0].allocations[0].capitalPotAmounts, secondary ? { strategic: 0 } : {});
+  }
+  // Preserve the earlier primary-zero rule even without an explicit map.
+  const c = f012ZeroBindingCase(), a = c.plans[0].allocations[0]; a.capitalPotId = "year-2029"; a.amount = 0; delete a.capitalPotAmounts;
+  assert.equal(preview(c, request(c, "2030-04-15")).losses.length, 1);
+});
+test("missing and empty maps do not invent a secondary zero-binding loss", () => {
+  for (const amount of [0, 1000]) for (const absent of [true, false]) {
+    const c = f012ZeroBindingCase(), a = c.plans[0].allocations[0]; a.amount = amount;
+    if (absent) delete a.capitalPotAmounts; else a.capitalPotAmounts = {};
+    assert.deepEqual(preview(c, request(c, "2030-04-15")).losses, []);
+  }
+});
+test("retained old-year pot and same-year date change keep both zero keys without warning", () => {
+  for (const retainYear of [true, false]) {
+    const c = f012ZeroBindingCase();
+    if (retainYear) c.advisory.needs.push({ ...c.advisory.needs[0], id: 703 });
+    const p = preview(c, request(c, retainYear ? "2030-04-15" : "2029-05-20"));
+    assert.deepEqual(p.losses, []); assert.deepEqual(p.next.plans, c.plans);
+  }
+});
+test("zero-information and positive allocation/phased losses stay separate and exact", () => {
+  const c = f012ZeroBindingCase(); c.plans[0].allocations[0].capitalPotAmounts = { "year-2029": 0, strategic: 1000 };
+  c.plans[0].allocations.push({ ...c.plans[0].allocations[0], id: "positive-year", productName: "SYNTHETISCH Positiv",
+    amount: 2000, capitalPotId: "year-2029", capitalPotAmounts: { "year-2029": 2000 }, bucketAmounts: { year3: 2000 } });
+  c.plans[0].investmentPlans.push({ id: "positive-entry", type: "phased", allocationId: "positive-year", capitalPotId: "year-2029",
+    stagedMode: "percent", stagedValue: 50, installments: 4, frequency: "monthly", startDate: "2026-11-01", note: "SYNTHETISCH" });
+  assert.ok(normalizeImportedCase(c, false)); const p = preview(c, request(c, "2030-04-15"));
+  assert.deepEqual(p.losses.map(x => [x.kind, x.lost]), [["binding", 0], ["allocation", 2000], ["phased", 1000]]);
+  assert.deepEqual(p.next.plans[0].allocations[0].capitalPotAmounts, { strategic: 1000 });
+  assert.deepEqual(p.next.plans[1], c.plans[1]);
+});
+test("each affected plan names its own product and removed zero key", () => {
+  const c = f012ZeroBindingCase(); c.plans[1].allocations.push({ ...structuredClone(c.plans[0].allocations[0]),
+    id: "zero-beta", productName: "SYNTHETISCH Beta Null" });
+  const p = preview(c, request(c, "2030-04-15"));
+  assert.deepEqual(p.losses.map(x => [x.planName, x.productName, x.pot, x.kind, x.lost]), [
+    ["Plan Alpha", "SYNTHETISCH Produkt Nullbindung", "Zieljahr 2029", "binding", 0],
+    ["Plan Beta", "SYNTHETISCH Beta Null", "Zieljahr 2029", "binding", 0],
+  ]);
+});
+test("cancel and approval preserve original/history/store; only reviewed zero key is removed", () => {
+  const c = f012ZeroBindingCase(), before = structuredClone(c), r = request(c, "2030-04-15");
+  const neighbor = f012Case(); neighbor.id = "zero-other-case";
+  class Store { values = new Map<string,string>(); get length() { return this.values.size; } key(i:number) { return [...this.values.keys()][i] ?? null; }
+    getItem(k:string) { return this.values.get(k) ?? null; } setItem(k:string,v:string) { this.values.set(k,v); } }
+  const store = new Store(), raw = JSON.stringify([c, neighbor], null, 2); store.setItem(CASE_STORAGE_KEY, raw);
+  const p = preview(c, r); assert.equal(commit(c, r, "not-reviewed"), c);
+  assert.equal(store.getItem(CASE_STORAGE_KEY), raw); assert.deepEqual(c, before);
+  const next = commit(c, r, p.key); assert.deepEqual(next, p.next);
+  assert.deepEqual(next.plans[0].allocations[0].capitalPotAmounts, { strategic: 0 });
+  assert.equal(next.plans[0].allocations[0].amount, before.plans[0].allocations[0].amount);
+  assert.deepEqual(next.plans[1], before.plans[1]); assert.deepEqual(next.versions, before.versions);
+  assert.equal(store.getItem(CASE_STORAGE_KEY), raw); saveCaseToStore(store, next);
+  const storedNeighbor = JSON.parse(store.getItem(CASE_STORAGE_KEY)!).find((x: typeof c) => x.id === neighbor.id);
+  // Existing P1 normalization refreshes technical load timestamps for every read.
+  assert.deepEqual(storedNeighbor, { ...neighbor, updatedAt: storedNeighbor.updatedAt });
+  assert.deepEqual(readCaseStore(store.getItem(CASE_STORAGE_KEY)).cases.find(x => x.id === c.id)!.plans, next.plans);
+  assert.deepEqual(c, before);
+});
+test("changed zero bindings and labels invalidate the review key; unrelated latest state survives", () => {
+  const c = f012ZeroBindingCase(), r = request(c, "2030-04-15"), p = preview(c, r);
+  for (const mutate of [
+    (n: typeof c) => { n.plans[0].allocations.push({ ...structuredClone(n.plans[0].allocations[0]), id: "late-zero" }); },
+    (n: typeof c) => { delete n.plans[0].allocations[0].capitalPotAmounts!["year-2029"]; },
+    (n: typeof c) => { n.plans[0].allocations[0].capitalPotAmounts!["year-2029"] = 1; },
+    (n: typeof c) => { n.plans[0].allocations[0].productName = "Geändert"; },
+  ]) { const n = structuredClone(c); mutate(n); assert.notEqual(preview(n, r).key, p.key); assert.equal(commit(n, r, p.key), n); }
+  const n = { ...c, status: "In Prüfung" as const }; assert.equal(commit(n, r, p.key).status, "In Prüfung");
 });
 console.log(`F012 ${groups} test groups passed`);

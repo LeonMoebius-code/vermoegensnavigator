@@ -31,3 +31,24 @@ export function f012Case(): AdvisoryCase {
   if (!normalizeImportedCase(c, false)) throw new Error("F012 fixture violates current case contracts");
   return c;
 }
+
+/** Synthetic review regression: the primary zero survives, a secondary zero does not. */
+export function f012ZeroBindingCase(): AdvisoryCase {
+  const c = f012Case();
+  c.id = "f012-zero-case"; c.advisory.caseName = "SYNTHETISCH F012 Nullbindung";
+  c.advisory.needs[0].dueDate = "2029-04-15";
+  c.plans[0].allocations = [{ id: "zero-secondary", productId: "unifavorit-renten",
+    productName: "SYNTHETISCH Produkt Nullbindung", amount: 1000, source: "product", solutionId: "mixed",
+    bucketId: "year10plus", capitalPotId: "strategic", capitalPotAmounts: { "year-2029": 0, strategic: 0 },
+    bucketAmounts: { year3: 0, year10plus: 0 } }];
+  c.plans[0].investmentPlans = [];
+  c.plans[1].allocations = [{ ...c.plans[0].allocations[0], id: "zero-neighbor-allocation",
+    productName: "SYNTHETISCH Unverändertes Produkt", amount: 3000,
+    capitalPotAmounts: { strategic: 3000 }, bucketAmounts: { year10plus: 3000 } }];
+  c.plans[1].investmentPlans = [{ id: "zero-neighbor-entry", type: "phased", allocationId: "zero-neighbor-allocation",
+    capitalPotId: "strategic", stagedMode: "percent", stagedValue: 50, installments: 4,
+    frequency: "monthly", startDate: "2026-11-01", note: "SYNTHETISCH unverändert" }];
+  c.versions = [{ id: "zero-history", label: "SYNTHETISCH beide Nullbindungen", createdAt: c.createdAt, snapshot: caseSnapshot(c) }];
+  if (!normalizeImportedCase(c, false)) throw new Error("F012 zero fixture violates current case contracts");
+  return c;
+}
