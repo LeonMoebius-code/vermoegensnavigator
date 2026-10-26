@@ -7,7 +7,7 @@ const state=(raw:string)=>({cookies:[],origins:[{origin:"http://127.0.0.1:4173",
 const nav=(p:Page,name:string)=>p.getByRole("navigation").getByRole("button",{name}).click();
 const stored=(p:Page)=>p.evaluate(k=>localStorage.getItem(k)!,KEY);
 async function select(p:Page,c:AdvisoryCase,snapshotId="") {
-  await nav(p,"Historische Fälle prüfen");
+  await p.getByRole("button", { name: "Mehr & Einstellungen", exact: true }).click(); await p.getByRole("button", { name: "Historische Fälle prüfen", exact: true }).click();
   await p.getByLabel("Quellfall",{exact:true}).selectOption(c.id);
   await p.getByLabel("Ausgewählter Quellenstand",{exact:true}).selectOption(snapshotId);
   await p.getByLabel("Belegte historische Zeitzone",{exact:true}).selectOption("Europe/Berlin");
@@ -120,7 +120,7 @@ test.describe("H5b veränderte Quelle",()=>{
 test.describe("H5b separate Quelldatei",()=>{
   const c=h5bCase(),raw=JSON.stringify([h5bNeighbor()]);test.use({storageState:state(raw)});
   test("ausdrücklich ausgewählte importierte Datei wird vollständig gesichert und kopiert",async({page},info)=>{
-    const es=errors(page);await page.goto("./");await nav(page,"Historische Fälle prüfen");
+    const es=errors(page);await page.goto("./");await page.getByRole("button", { name: "Mehr & Einstellungen", exact: true }).click(); await page.getByRole("button", { name: "Historische Fälle prüfen", exact: true }).click();
     const fileBytes=JSON.stringify({exportedAt:"synthetisch",case:c},null,4)+"\n";
     await page.getByLabel("Separate Originaldatei auswählen",{exact:false}).setInputFiles({name:"synthetic-source.json",mimeType:"application/json",buffer:Buffer.from(fileBytes)});
     await page.getByLabel("Quellfall",{exact:true}).selectOption(c.id);await page.getByLabel("Belegte historische Zeitzone",{exact:true}).selectOption("Europe/Berlin");await page.getByRole("button",{name:"Quelle prüfen",exact:true}).click();

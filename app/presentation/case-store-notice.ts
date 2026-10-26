@@ -11,9 +11,10 @@ export function historicalCapitalProtectionMessage(value: unknown): string | nul
 }
 
 /** Presentation only; recoveryNeeded and all write/backup guards remain authoritative. */
-export function caseStoreNotice(loaded: CaseStoreRead): { severity: "info" | "error"; text: string } | null {
+export function caseStoreNotice(loaded: CaseStoreRead, includeOptional = false): { severity: "info" | "error"; text: string } | null {
   if (!loaded.recoveryNeeded) return null;
   if (loaded.malformed) return { severity: "error", text: "Der lokale Fallbestand konnte nicht gelesen werden. Die Originaldaten bleiben unverändert. Speichern ist zum Schutz des Bestands gesperrt. Laden Sie den Originalbestand zur Wiederherstellung herunter." };
+  if (!includeOptional && !loaded.protectedEntries.length && loaded.optionalData.positions > 0) return null;
   const messages: string[] = [];
   const protectedCount = loaded.protectedEntries.length;
   const legacyCount = loaded.protectedEntries.filter(entry => {

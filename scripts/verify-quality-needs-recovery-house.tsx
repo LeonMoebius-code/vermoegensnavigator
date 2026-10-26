@@ -76,7 +76,9 @@ for (const fixture of [c, qualityOptionalCase()]) {
   if (fixture.id === c.id) assert.equal(caseStoreNotice(loaded), null);
   else {
     assert.equal(loaded.optionalData.positions, 2);
-    const notice = caseStoreNotice(loaded)!;
+    assert.equal(caseStoreNotice(loaded), null);
+    assert.equal(loaded.recoveryNeeded, true);
+    const notice = caseStoreNotice(loaded, true)!;
     assert.equal(notice.severity, "info");
     assert.ok(notice.text.includes("2 Positionen")); assert.ok(notice.text.includes("Datumsangaben"));
     assert.ok(!notice.text.includes("0 beschädigte")); assert.ok(!notice.text.includes("VERTRAULICHER-TESTWERT"));

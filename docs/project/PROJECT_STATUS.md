@@ -5,6 +5,22 @@ Quelle: GitHub Commit-/PR-/Actions-/Artefakt-APIs, öffentliche Build-Provenienz
 und erneuter Vergleich mit Originalreleaseartefakten. Dieser Pflegeauftrag
 aktualisiert die frühere Momentaufnahme; sie bleibt unten historisch erhalten.
 
+## Seit diesem Checkpoint geändert – UX-Auftrag 26.10.2026
+
+Live-main am Beginn dieses Auftrags: `ae798dfff80b6f805b013e0a1aa871120bdde1d1`,
+Tree `c7aab3392c7f5d705b30f0aeef4462c891417973`; PR #55 integriert,
+V0.18.4 / Schema 11. Der ausdrücklich benannte
+[Release 40334944352](https://github.com/LeonMoebius-code/vermoegensnavigator/actions/runs/40334944352)
+ist auf dieser Source-SHA erfolgreich abgeschlossen (Attempt 1).
+Die untenstehenden Aussagen „Versionsvorbereitung noch nicht integriert“ und
+„öffentlich V0.18.3“ sind damit überholt; kein neuer Live-Bytevergleich in diesem UX-Auftrag.
+
+Aktives Paket: [vier beschlossene UX-Korrekturen](../UX_Navigation_Recovery_Vermoegenshaus.md)
+auf isoliertem `work/ux-navigation-recovery-house`; keine Versionsanhebung.
+Finale Identitäten, Gates und Abnahmeunterlagen im Draft-PR live prüfen.
+Zwei unabhängige Abnahmen stehen aus; kein Merge, Release oder Deployment in diesem Auftrag.
+PR #43 bleibt unverändert **AUDIT ONLY – NEVER MERGE**.
+
 ## Aktueller Integrations- und Veröffentlichungsstand
 
 | Ebene | Verifizierter Stand / Grenze |
