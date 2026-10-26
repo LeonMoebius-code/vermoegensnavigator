@@ -24,6 +24,14 @@ Owner und Änderungsanlässe: [Pflegevertrag](OPERATING_MODEL.md#pflegevertrag).
 
 | D-11 · 23.10.2026 · **beschlossen** | F-026: gültige vierstellige Kalenderjahre 0100–9999 für festes Fallreferenzdatum und tatsächlichen Bedarfstermin; bisherige Monatsrundung, Schaltjahrbehandlung und Priorität gültiger expliziter Termine erhalten. Numerische Überläufe und ungültige Ergebnisse kontrolliert ablehnen, Originale schützen. Keine zusätzliche fachliche Höchstlaufzeit (insbesondere keine 100-/120-Jahre-Grenze); zulässige relative Dauer folgt aus Referenzdatum und technischem Kalenderende. | Leons konkreter F-026-Workauftrag vom 23.10.2026, Abschnitt 2; entscheidet die zuvor offene technische Domäne aus der [READ-ONLY-Bewertung](../P2_F007_XLSX_F026_Bewertung.md). [Umsetzung/Prüfumfang](../F026_KALENDERDOMAENE.md); kein Releasebeschluss. |
 
+
+## Fortschreibung 26.10.2026
+
+| ID / Datum / Status | Beschluss und Gültigkeitsbereich | Quelle / Ersetzung |
+| --- | --- | --- |
+| D-12 · 26.10.2026 · **beschlossen** | F-019 ist für den vorgesehenen regulären CSV-Import über das vollständige unterstützte agree21-Profil mit 29 Spalten fachlich geklärt. Die bereits am 21.09.2026 bestätigte EUR-Berichtswährung und bestehende technische Umsetzung gelten fort. Generische/andere Profile erhalten dadurch keine EUR-Herkunftsbestätigung; ihre Sicherheitsgrenzen bleiben bestehen. Keine zusätzliche Benutzerbestätigung, Währungsarchitektur oder erneute F-019-Implementierung. | Leons Auftrag „V0.18.4: Versionsvorbereitung und Projektstatus“ vom 26.10.2026, §1; bestätigt den [Quellvertrag vom 21.09.2026](../V0182_ZeroTouch_CSV_Only_Verbindlicher_Nachtrag.md#präzisierung-21092026-bestätigtes-agree21-exportprofil). Ersetzt die offene Quellenentscheidung aus der früheren [P2-Bewertung](../P2_RELEASE_INTEGRITAET.md#f-019--festgestellte-quellen--und-entscheidungsgrenze) ausschließlich für diesen Anwendungsbereich; historische Erkenntnisstände bleiben erhalten. |
+| D-13 · 26.10.2026 · **beschlossen, keine Releasefreigabe** | Nächste Veröffentlichung als V0.18.4 vorbereiten; Schema 11 unverändert. Versions-/Dokumentations-Draft, zwei unabhängige Abnahmen, dann gesonderte Integrationsentscheidung durch Leon. Keine bedingte Feature-Merge-Erlaubnis für diesen Versions-PR; Release und Deployment benötigen weitere ausdrückliche Autorisierung. | Derselbe konkrete Auftrag, §3–8 und anschließender Ablauf; [V0.18.4-Vorbereitung](../V0184_Releasevorbereitung.md). Frühere V0.18.3-Nachweise werden nicht umgeschrieben. |
+
 Neue Einträge nur für tatsächlich bestätigte Grundsatz-/Fachentscheidungen:
 Datum, beschlossen/vorgeschlagen/ersetzt, Inhalt, Gültigkeit, Quelle und explizite
 Ersetzung vermerken. Eine technische Zwischenkorrektur ist kein neuer Grundsatz.

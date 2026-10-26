@@ -15,6 +15,21 @@ Refs, PRs und CI erneut zu prüfen; ein Statuscheckpoint ist keine Freigabe.
 
 https://leonmoebius-code.github.io/vermoegensnavigator/
 
+Am 26.10.2026 erneut geprüft: **V0.18.3**, ursprünglicher Release vom
+14.10.2026, Source `80c3317162f79f9a01d2d6f0428d02d14e4e806c`,
+[Original-R1-Run 38542251552](https://github.com/LeonMoebius-code/vermoegensnavigator/actions/runs/38542251552).
+Öffentliche `build-info.json`, `index.html` und `app.js` stimmen mit den
+Originalartefakten überein. Die frühere Angabe „öffentlich V0.18.2“ war ein
+überholter Checkpoint; historische Nachweise bleiben erhalten.
+
+Der integrierte Entwicklungsstand enthält weitere Änderungen bis PR #54.
+Diese Vorbereitung kennzeichnet ihn als **V0.18.4 / unverändert Schema 11**;
+sie ist noch nicht integriert oder veröffentlicht. Umfang, noch offene
+Releasevoraussetzungen und Rollbackweg:
+[V0.18.4-Releasevorbereitung](docs/V0184_Releasevorbereitung.md).
+Integration, Releasebereitschaft, ausdrückliche Releasefreigabe und tatsächliche
+Veröffentlichung sind getrennte Schritte. Keine Releasefreigabe aus grüner CI.
+
 ## Entwicklung
 
 Voraussetzungen sind Node.js ab Version 20 sowie Bash mit den vom bestehenden
@@ -32,7 +47,7 @@ npm run verify
 auf dasselbe Gate. Der Produktionsbuild liegt anschließend in `.pages-dist`;
 dieser lokale Build veröffentlicht nichts.
 
-### Aktuelles Verify-Gate (V0.18.3-Releasevorbereitung)
+### Aktuelles Verify-Gate (V0.18.4-Versionsvorbereitung)
 
 Die ausführbare Liste wird ausschließlich im `verify`-Skript in
 [package.json](package.json) gepflegt; feste historische Testzahlen sind kein
@@ -48,8 +63,9 @@ das seit Build/CP0B unveränderte Artefakt gegen den tatsächlich ausgecheckten 
 aus. Beides gehört zur Feature-CI, ist aber kein zusätzlicher Fachtesteinstieg in
 `npm run verify` und erzeugt keinen weiteren Produktionsbuild.
 Zielversion, gesamter integrierter Umfang und offene Releasevoraussetzungen:
-[V0.18.3-Releasevorbereitung](docs/V0183_Releasevorbereitung.md).
-V0.18.3 ist noch nicht veröffentlicht; öffentlich bleibt V0.18.2.
+[V0.18.4-Releasevorbereitung](docs/V0184_Releasevorbereitung.md).
+Die [V0.18.3-Vorbereitung](docs/V0183_Releasevorbereitung.md) bleibt als
+historischer Stand vom 14.10.2026 unverändert erhalten.
 
 ### Historische CP0A1-Gatebeschreibung und Fortschreibung bis D1
 
