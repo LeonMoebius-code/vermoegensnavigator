@@ -86,6 +86,8 @@ test("F012 secondary zero binding: concurrent added information refreshes actual
   expect(pending.advisory.needs[0].dueDate).toBe("2029-04-15");
   expect(pending.plans[0].allocations.every(a => Object.hasOwn(a.capitalPotAmounts!, "year-2029"))).toBe(true);
   await accept(page); await expect(dialog(page)).toHaveCount(0);
+  // Dialog closure starts the commit phase; wait for the production effect's actual result.
+  await expect.poll(async () => JSON.parse(await page.locator("output").innerText()).advisory.needs[0].dueDate).toBe("2030-04-15");
   const after = JSON.parse(await page.locator("output").innerText()) as AdvisoryCase;
   expect(after.advisory.needs[0].dueDate).toBe("2030-04-15");
   expect(after.plans[0].allocations.map(a => a.capitalPotAmounts)).toEqual([{ strategic: 0 }, { strategic: 0 }]);
