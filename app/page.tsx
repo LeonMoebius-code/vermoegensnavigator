@@ -6,6 +6,7 @@ import { ProductRiskNotice, ProductRiskWarnings } from "./presentation/product-r
 import { depotSaleConflicts } from "./domain/depot/sale-validation";
 import { validCaseFinancialInputs } from "./domain/case/financial-validation";
 import { DepotSaleConflicts } from "./presentation/depot-sale-conflicts";
+import { recoverySourceEntries } from "./capital-recovery";
 import { CapitalRecoveryView } from "./presentation/capital-recovery-view";
 import { recoveryConfirmationStatus } from "./domain/case/recovery-contract";
 import { caseStoreNotice, historicalCapitalProtectionMessage } from "./presentation/case-store-notice";
@@ -185,7 +186,7 @@ import {
   hasMixedValuationDates,
 } from "./depot-analysis";
 
-type View = "recovery" | "home" | "cases" | "wizard" | "planner" | "depot" | "export";
+type View = "settings" | "recovery" | "home" | "cases" | "wizard" | "planner" | "depot" | "export";
 
 const riskText = riskProfiles;
 
@@ -473,7 +474,18 @@ export default function Home() {
   const [storageNoticeSeverity, setStorageNoticeSeverity] = useState<"info" | "error">("error");
   const recoveryOriginal = useRef<string | null>(null);
   const [backups, setBackups] = useState<ReturnType<typeof recoveryBackups>>([]);
+  const [settingsOriginal, setSettingsOriginal] = useState<string | null>(null);
   const storageLoaded = useRef(false);
+  const openSettings = () => {
+    try {
+      setSettingsOriginal(window.localStorage.getItem(CASE_STORAGE_KEY));
+      setBackups(recoveryBackups(window.localStorage));
+      setView("settings");
+    } catch {
+      setStorageNoticeSeverity("error");
+      setStorageNotice("Lokale Wiederherstellungsdaten konnten nicht gelesen werden. Der Arbeitsstand bleibt erhalten.");
+    }
+  };
   const [newCaseAdvisorId, setNewCaseAdvisorId] =
     useState<AdvisorId>(defaultAdvisorId);
   const [savedCases, setSavedCases] = useState<AdvisoryCase[]>([]);
@@ -502,9 +514,11 @@ export default function Home() {
           setSavedCases(loaded.cases);
           if (loaded.recoveryNeeded) {
             recoveryOriginal.current = stored;
-            const notice = caseStoreNotice(loaded)!;
-            setStorageNoticeSeverity(notice.severity);
-            setStorageNotice(notice.text);
+            const notice = caseStoreNotice(loaded);
+            if (notice) {
+              setStorageNoticeSeverity(notice.severity);
+              setStorageNotice(notice.text);
+            }
           }
         } else {
           const old = window.localStorage.getItem("vermoegensnavigator-draft");
@@ -649,6 +663,12 @@ export default function Home() {
     }
   };
 
+  const settingsRead = view === "settings" ? readCaseStore(settingsOriginal) : null;
+  const settingsNotice = settingsRead ? caseStoreNotice(settingsRead, true) : null;
+  let hasHistoricalSources = false;
+  if (settingsRead && !settingsRead.malformed && settingsOriginal !== null) {
+    try { hasHistoricalSources = recoverySourceEntries(settingsOriginal).length > 0; } catch { /* No selectable local source. */ }
+  }
   const activePlan = getActiveStructurePlan(activeCase);
   const preferredPlan = getPreferredStructurePlan(activeCase.plans);
   const activeAdvisor = advisorFor(activeCase.advisorId);
@@ -719,10 +739,6 @@ export default function Home() {
             <span>▤</span>Beratungsfälle{" "}
             <em className="nav-count">{savedCases.length}</em>
           </button>
-          <button className={view === "recovery" ? "active" : ""} onClick={() => setView("recovery")}>Historische Fälle prüfen</button>
-          <button onClick={() => start()}>
-            <span>＋</span>Neue Beratung
-          </button>
           <button
             className={view === "planner" ? "active" : ""}
             onClick={() => setView("planner")}
@@ -748,6 +764,7 @@ export default function Home() {
             <br />
             Browser-lokal, keine revisionssichere Speicherung.
           </p>
+          <button className={`settings-button ${view === "settings" || view === "recovery" ? "active" : ""}`} onClick={openSettings}>Mehr & Einstellungen</button>
         </div>
       </aside>
       <section className="workspace">
@@ -757,12 +774,30 @@ export default function Home() {
             new Blob([recoveryOriginal.current!], { type: "application/json" }), "fallbestand-original-wiederherstellung.json",
           )}>Originalbestand zur Wiederherstellung herunterladen</button>}
         </div>}
-        {backups.length > 0 && <details className="csv-privacy-note">
-          <summary>Originalsicherungen zur Wiederherstellung ({backups.length})</summary>
-          {backups.map((backup, index) => <button key={backup.key} onClick={() => download(
-            new Blob([backup.original], { type: "application/json" }), `fallbestand-original-${index + 1}.json`,
-          )}>Originalsicherung {index + 1} herunterladen</button>)}
-        </details>}
+        {view === "settings" && <div className="tool-view settings-view">
+          <h1>Mehr & Einstellungen</h1>
+          <section className="panel">
+            <h2>Daten & Wiederherstellung</h2>
+            <p>Gespeicherte Originaldaten prüfen oder zur Wiederherstellung sichern.</p>
+            <div className="settings-actions">
+              <button disabled={!hasHistoricalSources} onClick={() => setView("recovery")}>Historische Fälle prüfen</button>
+              <button disabled={settingsOriginal === null} onClick={() => download(
+                new Blob([settingsOriginal!], { type: "application/json" }), "fallbestand-original-wiederherstellung.json",
+              )}>Originalbestand zur Wiederherstellung herunterladen</button>
+              <button onClick={() => setView("recovery")}>Separate Originaldatei prüfen</button>
+            </div>
+            {settingsOriginal === null && <p>Kein lokaler Fallbestand vorhanden.</p>}
+            {settingsNotice && <p className="csv-privacy-note">{settingsNotice.text}</p>}
+            <details className="csv-privacy-note">
+              <summary>Originalsicherungen zur Wiederherstellung ({backups.length})</summary>
+              {backups.length === 0 && <p>Keine Originalsicherungen vorhanden.</p>}
+              {backups.map((backup, index) => <button key={backup.key} onClick={() => download(
+                new Blob([backup.original], { type: "application/json" }), `fallbestand-original-${index + 1}.json`,
+              )}>Originalsicherung {index + 1} herunterladen</button>)}
+            </details>
+          </section>
+        </div>}
+        {view === "recovery" && <button onClick={openSettings}>Zurück zu Mehr & Einstellungen</button>}
         {view === "recovery" && <CapitalRecoveryView advisorId={newCaseAdvisorId} onCommitted={(item, cases) => {
           setSavedCases(cases);
           setActiveCase(item);
@@ -4968,8 +5003,7 @@ export function WealthHouse({
       {shown && comparison && <>
       <div className="house-layout">
         <div>
-        <p className="house-scroll-hint">Fünf Säulen · Bei wenig Platz das gesamte Haus horizontal verschieben.</p>
-        <div className="house-scroll" role="region" aria-label="Vermögenshaus mit fünf Säulen, horizontal verschiebbar" tabIndex={0}>
+        <div className="house-frame" role="region" aria-label="Vermögenshaus mit fünf Anlageklassen">
         <div className="wealth-house">
           <div className="house-roof">
             <span>

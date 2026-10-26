@@ -49,6 +49,7 @@ for (const partial of [false, true]) {
       expect(Object.entries(saved).filter(([k]) => k.startsWith(RECOVERY_PREFIX)).map(([, v]) => v)).toEqual([raw]);
       await page.reload(); await expect(page.locator(".case-store-notice")).toContainText("historischer Fall ist geschützt");
       expect((await bytes(page))[KEY]).toBe(saved[KEY]);
+      await page.getByRole("button", { name: "Mehr & Einstellungen", exact: true }).click();
       await expect(page.getByText(/Originalsicherungen zur Wiederherstellung \(1\)/)).toBeVisible();
       await openNeighbor(page); await nav(page, "Depotcheck"); await page.getByRole("button", { name: "Fall speichern", exact: true }).click();
       expect(Object.keys(await bytes(page)).filter(k => k.startsWith(RECOVERY_PREFIX))).toHaveLength(1);

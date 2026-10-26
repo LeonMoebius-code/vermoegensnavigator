@@ -57,7 +57,7 @@ for (const v of f026Variants.filter(v => v.date === null)) test(`F026 ${v.tag}: 
   expect(backups).toHaveLength(1); expect(backups[0][1]).toBe(original);
   await save(page); expect(await page.evaluate(prefix => Object.entries(localStorage).filter(([k]) => k.startsWith(prefix)), RECOVERY_PREFIX)).toEqual(backups);
   const stored = await raw(page); await page.reload(); expect(await raw(page)).toBe(stored);
-  await nav(page, "Historische Fälle prüfen"); await page.getByLabel("Quellfall", { exact: true }).selectOption(c.id);
+  await page.getByRole("button", { name: "Mehr & Einstellungen", exact: true }).click(); await page.getByRole("button", { name: "Historische Fälle prüfen", exact: true }).click(); await page.getByLabel("Quellfall", { exact: true }).selectOption(c.id);
   await page.getByLabel("Belegte historische Zeitzone", { exact: true }).selectOption("UTC");
   await page.getByRole("button", { name: "Quelle prüfen", exact: true }).click();
   await expect(page.getByRole("button", { name: "Original sichern und Entwurf öffnen", exact: true })).toBeDisabled();
