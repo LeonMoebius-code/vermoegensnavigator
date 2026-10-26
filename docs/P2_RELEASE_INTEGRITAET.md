@@ -64,6 +64,18 @@ phased-Bezug auf einen Betrag null ist nach dem bestehenden Graphvertrag nicht
 positiv gedeckt und wird nicht durch einen Fallback künstlich gültig gemacht.
 F-012-Bestätigung, Abbruch und P1-Originalbackups bleiben verbindlich.
 
+### Nachkorrektur F-016 × F-012 vom 26.10.2026
+
+Entfällt bei einer Terminänderung ein ausdrücklich gespeicherter Nullschlüssel,
+meldet die bestehende F-012-Vorschau auch eine sekundäre Bindung als eigene
+Zuordnungsinformation mit **0 €; kein finanzieller Verlust**. Plan, Produkt und
+wegfallender Kapitaltopf werden genannt. Erst die ausdrückliche Bestätigung
+entfernt diese Information. Eine weiterhin gültige primäre Bindung wie
+`Strategisch: 0 €` bleibt ausdrücklich erhalten; keine Umbuchung findet statt.
+Die bisherige primäre Nullbindungswarnung wird ohne Doppelmeldung erhalten.
+Fehlende/leere Maps erfinden keine sekundäre Nullbindung. Die atomare erneute
+Prüfung, Abbruch, positive Verluste und H5-Originalschutz bleiben unverändert.
+
 ## Begrenzte Klarstellungen
 
 - **F-024:** Planvarianten nennen den „Zuletzt angewendeten Modell“-Bezug.

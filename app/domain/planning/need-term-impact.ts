@@ -5,7 +5,7 @@ import { capitalPots } from "./capital-pots";
 import { phasedEntryAmounts } from "./investment-plans";
 
 export type NeedTermLoss = {
-  kind: "allocation" | "phased";
+  kind: "allocation" | "phased" | "binding";
   planId: string;
   planName: string;
   allocationId: string;
@@ -43,20 +43,29 @@ export function needTermLosses(
       const previous = allocationCapitalPotAmounts(allocation);
       const remaining = kept ? allocationCapitalPotAmounts(kept) : {};
       let coveredLoss = 0;
-      const push = (pot: string, lost: number) => {
-        losses.push({ kind: "allocation", planId: plan.id, planName: plan.name,
+      const removedZeroBindings = new Set<string>();
+      const push = (pot: string, lost: number, kind: "allocation" | "binding" = "allocation") => {
+        losses.push({ kind, planId: plan.id, planName: plan.name,
           allocationId: allocation.id, productName: allocation.productName, pot, lost,
           remaining: kept?.amount ?? 0 });
       };
       for (const [potId, amount] of Object.entries(previous)) {
         const lost = (amount ?? 0) - (remaining[potId as keyof typeof remaining] ?? 0);
         if (lost > 0) { coveredLoss += lost; push(potLabel(potId), lost); }
+        // Presence, not the numeric difference, carries explicit zero-binding information.
+        // Inspect stored maps so missing/empty-map fallbacks do not invent new losses.
+        if (amount === 0 && Object.hasOwn(allocation.capitalPotAmounts ?? {}, potId) &&
+          !Object.hasOwn(kept?.capitalPotAmounts ?? {}, potId)) {
+          removedZeroBindings.add(potId);
+          push(potLabel(potId), 0, "binding");
+        }
       }
       const unassignedLoss = allocation.amount - (kept?.amount ?? 0) - coveredLoss;
       if (unassignedLoss > 0) push("Nicht zugeordneter Anteil derselben Produktzuordnung", unassignedLoss);
       // Even a zero-valued explicit binding must not disappear unannounced.
-      if (allocation.capitalPotId && !kept?.capitalPotId && coveredLoss === 0 && unassignedLoss <= 0)
-        push(potLabel(allocation.capitalPotId), 0);
+      if (allocation.capitalPotId && !kept?.capitalPotId && coveredLoss === 0 && unassignedLoss <= 0 &&
+        !removedZeroBindings.has(allocation.capitalPotId))
+        push(potLabel(allocation.capitalPotId), 0, "binding");
     }
     for (const entry of plan.investmentPlans || []) {
       if (entry.type !== "phased") continue;
