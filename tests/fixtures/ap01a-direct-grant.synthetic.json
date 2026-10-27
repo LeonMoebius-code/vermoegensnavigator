@@ -1,0 +1,1731 @@
+{
+  "synthetic": true,
+  "description": "AP-01a artificial person/year vectors; no customer or internal manufacturer data. Values exclude one-off bonus.",
+  "vectors": [
+    {
+      "id": "D-01",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 0,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "calculated",
+        "baseGrantCents": 0,
+        "childrenGrantCents": 0,
+        "totalGrantCents": 0
+      }
+    },
+    {
+      "id": "D-02",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 6000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [
+          {
+            "id": "SYNTHETIC-CHILD-1",
+            "contributionYear": 2027,
+            "status": "eligible_assigned_confirmed"
+          }
+        ]
+      },
+      "expected": {
+        "status": "calculated",
+        "baseGrantCents": 0,
+        "childrenGrantCents": 0,
+        "totalGrantCents": 0
+      }
+    },
+    {
+      "id": "D-03",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 11999,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "calculated",
+        "baseGrantCents": 0,
+        "childrenGrantCents": 0,
+        "totalGrantCents": 0
+      }
+    },
+    {
+      "id": "D-04",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [
+          {
+            "id": "SYNTHETIC-CHILD-1",
+            "contributionYear": 2027,
+            "status": "eligible_assigned_confirmed"
+          }
+        ]
+      },
+      "expected": {
+        "status": "calculated",
+        "baseGrantCents": 6000,
+        "childrenGrantCents": 12000,
+        "totalGrantCents": 18000
+      }
+    },
+    {
+      "id": "D-05",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 30000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [
+          {
+            "id": "SYNTHETIC-CHILD-1",
+            "contributionYear": 2027,
+            "status": "eligible_assigned_confirmed"
+          }
+        ]
+      },
+      "expected": {
+        "status": "calculated",
+        "baseGrantCents": 15000,
+        "childrenGrantCents": 30000,
+        "totalGrantCents": 45000
+      }
+    },
+    {
+      "id": "D-06",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 35000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [
+          {
+            "id": "SYNTHETIC-CHILD-1",
+            "contributionYear": 2027,
+            "status": "eligible_assigned_confirmed"
+          }
+        ]
+      },
+      "expected": {
+        "status": "calculated",
+        "baseGrantCents": 17500,
+        "childrenGrantCents": 30000,
+        "totalGrantCents": 47500
+      }
+    },
+    {
+      "id": "D-07",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 36000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [
+          {
+            "id": "SYNTHETIC-CHILD-1",
+            "contributionYear": 2027,
+            "status": "eligible_assigned_confirmed"
+          },
+          {
+            "id": "SYNTHETIC-CHILD-2",
+            "contributionYear": 2027,
+            "status": "eligible_assigned_confirmed"
+          }
+        ]
+      },
+      "expected": {
+        "status": "calculated",
+        "baseGrantCents": 18000,
+        "childrenGrantCents": 60000,
+        "totalGrantCents": 78000
+      }
+    },
+    {
+      "id": "D-08",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 60000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "calculated",
+        "baseGrantCents": 24000,
+        "childrenGrantCents": 0,
+        "totalGrantCents": 24000
+      }
+    },
+    {
+      "id": "D-09",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 180000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [
+          {
+            "id": "SYNTHETIC-CHILD-1",
+            "contributionYear": 2027,
+            "status": "eligible_assigned_confirmed"
+          }
+        ]
+      },
+      "expected": {
+        "status": "calculated",
+        "baseGrantCents": 54000,
+        "childrenGrantCents": 30000,
+        "totalGrantCents": 84000
+      }
+    },
+    {
+      "id": "D-10",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 684000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "calculated",
+        "baseGrantCents": 54000,
+        "childrenGrantCents": 0,
+        "totalGrantCents": 54000
+      }
+    },
+    {
+      "id": "D-11",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2028,
+        "ruleContext": "estg-2028-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [
+          {
+            "id": "SYNTHETIC-CHILD-1",
+            "contributionYear": 2028,
+            "status": "eligible_assigned_confirmed"
+          }
+        ]
+      },
+      "expected": {
+        "status": "calculated",
+        "baseGrantCents": 6000,
+        "childrenGrantCents": 12000,
+        "totalGrantCents": 18000
+      }
+    },
+    {
+      "id": "P-OCT-DEC",
+      "synthetic": true,
+      "note": "October–December: 3 actual payments of 10 EUR; no annualisation.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 3000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [
+          {
+            "id": "SYNTHETIC-CHILD-1",
+            "contributionYear": 2027,
+            "status": "eligible_assigned_confirmed"
+          }
+        ]
+      },
+      "expected": {
+        "status": "calculated",
+        "baseGrantCents": 0,
+        "childrenGrantCents": 0,
+        "totalGrantCents": 0
+      }
+    },
+    {
+      "id": "P-59.99",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 5999,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [
+          {
+            "id": "SYNTHETIC-CHILD-1",
+            "contributionYear": 2027,
+            "status": "eligible_assigned_confirmed"
+          }
+        ]
+      },
+      "expected": {
+        "status": "calculated",
+        "baseGrantCents": 0,
+        "childrenGrantCents": 0,
+        "totalGrantCents": 0
+      }
+    },
+    {
+      "id": "P-120.02",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12002,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [
+          {
+            "id": "SYNTHETIC-CHILD-1",
+            "contributionYear": 2027,
+            "status": "eligible_assigned_confirmed"
+          }
+        ]
+      },
+      "expected": {
+        "status": "calculated",
+        "baseGrantCents": 6001,
+        "childrenGrantCents": 12002,
+        "totalGrantCents": 18003
+      }
+    },
+    {
+      "id": "P-299.98",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 29998,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [
+          {
+            "id": "SYNTHETIC-CHILD-1",
+            "contributionYear": 2027,
+            "status": "eligible_assigned_confirmed"
+          }
+        ]
+      },
+      "expected": {
+        "status": "calculated",
+        "baseGrantCents": 14999,
+        "childrenGrantCents": 29998,
+        "totalGrantCents": 44997
+      }
+    },
+    {
+      "id": "P-300.02",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 30002,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [
+          {
+            "id": "SYNTHETIC-CHILD-1",
+            "contributionYear": 2027,
+            "status": "eligible_assigned_confirmed"
+          }
+        ]
+      },
+      "expected": {
+        "status": "calculated",
+        "baseGrantCents": 15001,
+        "childrenGrantCents": 30000,
+        "totalGrantCents": 45001
+      }
+    },
+    {
+      "id": "P-359.98",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 35998,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "calculated",
+        "baseGrantCents": 17999,
+        "childrenGrantCents": 0,
+        "totalGrantCents": 17999
+      }
+    },
+    {
+      "id": "P-360.04",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 36004,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "calculated",
+        "baseGrantCents": 18001,
+        "childrenGrantCents": 0,
+        "totalGrantCents": 18001
+      }
+    },
+    {
+      "id": "P-1799.96",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 179996,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "calculated",
+        "baseGrantCents": 53999,
+        "childrenGrantCents": 0,
+        "totalGrantCents": 53999
+      }
+    },
+    {
+      "id": "P-1800.01",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 180001,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [
+          {
+            "id": "SYNTHETIC-CHILD-1",
+            "contributionYear": 2027,
+            "status": "eligible_assigned_confirmed"
+          },
+          {
+            "id": "SYNTHETIC-CHILD-2",
+            "contributionYear": 2027,
+            "status": "eligible_assigned_confirmed"
+          }
+        ]
+      },
+      "expected": {
+        "status": "calculated",
+        "baseGrantCents": 54000,
+        "childrenGrantCents": 60000,
+        "totalGrantCents": 114000
+      }
+    },
+    {
+      "id": "P-MULTI-CHILD",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [
+          {
+            "id": "SYNTHETIC-CHILD-1",
+            "contributionYear": 2027,
+            "status": "eligible_assigned_confirmed"
+          },
+          {
+            "id": "SYNTHETIC-CHILD-2",
+            "contributionYear": 2027,
+            "status": "eligible_assigned_confirmed"
+          },
+          {
+            "id": "SYNTHETIC-CHILD-3",
+            "contributionYear": 2027,
+            "status": "eligible_assigned_confirmed"
+          }
+        ]
+      },
+      "expected": {
+        "status": "calculated",
+        "baseGrantCents": 6000,
+        "childrenGrantCents": 36000,
+        "totalGrantCents": 42000
+      }
+    },
+    {
+      "id": "N-NEGATIVE",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": -1,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "invalid_input",
+        "code": "invalid_contribution"
+      }
+    },
+    {
+      "id": "N-FRACTION",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000.5,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "invalid_input",
+        "code": "invalid_contribution"
+      }
+    },
+    {
+      "id": "N-UNSAFE",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 9007199254740992,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "invalid_input",
+        "code": "invalid_contribution"
+      }
+    },
+    {
+      "id": "N-STRING",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": "12000",
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "invalid_input",
+        "code": "invalid_contribution"
+      }
+    },
+    {
+      "id": "N-NULL",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": null,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "invalid_input",
+        "code": "invalid_contribution"
+      }
+    },
+    {
+      "id": "N-BOOLEAN",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": true,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "invalid_input",
+        "code": "invalid_contribution"
+      }
+    },
+    {
+      "id": "N-ID-EMPTY",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [
+          {
+            "id": "",
+            "contributionYear": 2027,
+            "status": "eligible_assigned_confirmed"
+          }
+        ]
+      },
+      "expected": {
+        "status": "invalid_input",
+        "code": "invalid_child"
+      }
+    },
+    {
+      "id": "N-ID-SPACE",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [
+          {
+            "id": " bad ",
+            "contributionYear": 2027,
+            "status": "eligible_assigned_confirmed"
+          }
+        ]
+      },
+      "expected": {
+        "status": "invalid_input",
+        "code": "invalid_child"
+      }
+    },
+    {
+      "id": "N-ID-CONTROL",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [
+          {
+            "id": "SYNTHETIC\n",
+            "contributionYear": 2027,
+            "status": "eligible_assigned_confirmed"
+          }
+        ]
+      },
+      "expected": {
+        "status": "invalid_input",
+        "code": "invalid_child"
+      }
+    },
+    {
+      "id": "N-ID-NUMBER",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [
+          {
+            "id": 4,
+            "contributionYear": 2027,
+            "status": "eligible_assigned_confirmed"
+          }
+        ]
+      },
+      "expected": {
+        "status": "invalid_input",
+        "code": "invalid_child"
+      }
+    },
+    {
+      "id": "N-DUPLICATE",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [
+          {
+            "id": "SYNTHETIC-CHILD-1",
+            "contributionYear": 2027,
+            "status": "eligible_assigned_confirmed"
+          },
+          {
+            "id": "SYNTHETIC-CHILD-1",
+            "contributionYear": 2027,
+            "status": "eligible_assigned_confirmed"
+          }
+        ]
+      },
+      "expected": {
+        "status": "invalid_input",
+        "code": "duplicate_child_id"
+      }
+    },
+    {
+      "id": "N-DUPLICATE-CONFLICT",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [
+          {
+            "id": "SYNTHETIC-CHILD-1",
+            "contributionYear": 2027,
+            "status": "eligible_assigned_confirmed"
+          },
+          {
+            "id": "SYNTHETIC-CHILD-1",
+            "contributionYear": 2027,
+            "status": "conflicting_assignment"
+          }
+        ]
+      },
+      "expected": {
+        "status": "invalid_input",
+        "code": "duplicate_child_id"
+      }
+    },
+    {
+      "id": "N-CHILD-UNKNOWN",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [
+          {
+            "id": "SYNTHETIC-CHILD-1",
+            "contributionYear": 2027,
+            "status": "eligibility_unconfirmed"
+          }
+        ]
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "child_confirmation_required"
+      }
+    },
+    {
+      "id": "N-ASSIGNMENT",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [
+          {
+            "id": "SYNTHETIC-CHILD-1",
+            "contributionYear": 2027,
+            "status": "assignment_unconfirmed"
+          }
+        ]
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "child_confirmation_required"
+      }
+    },
+    {
+      "id": "N-CONFLICT",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [
+          {
+            "id": "SYNTHETIC-CHILD-1",
+            "contributionYear": 2027,
+            "status": "conflicting_assignment"
+          }
+        ]
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "child_confirmation_required"
+      }
+    },
+    {
+      "id": "N-STALE-CHILD",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [
+          {
+            "id": "SYNTHETIC-CHILD-1",
+            "contributionYear": 2028,
+            "status": "eligible_assigned_confirmed"
+          }
+        ]
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "child_confirmation_required"
+      }
+    },
+    {
+      "id": "N-2028-UNCONFIRMED",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2028,
+        "ruleContext": "estg-2028-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [
+          {
+            "id": "SYNTHETIC-CHILD-1",
+            "contributionYear": 2028,
+            "status": "assignment_unconfirmed"
+          }
+        ]
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "child_confirmation_required"
+      }
+    },
+    {
+      "id": "N-YEAR-MISMATCH",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2028-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "rule_year_mismatch"
+      }
+    },
+    {
+      "id": "N-FUTURE",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2029,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "year_not_approved"
+      }
+    },
+    {
+      "id": "N-OLD-YEAR",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2026,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "unsupported",
+        "code": "year_before_new_regime"
+      }
+    },
+    {
+      "id": "N-YEAR-STRING",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": "2027",
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "invalid_input",
+        "code": "invalid_year"
+      }
+    },
+    {
+      "id": "N-YEAR-FRACTION",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027.5,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "invalid_input",
+        "code": "invalid_year"
+      }
+    },
+    {
+      "id": "N-YEAR-RANGE",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 10000,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "invalid_input",
+        "code": "invalid_year"
+      }
+    },
+    {
+      "id": "T-E02",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "unconfirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "entitlement_unconfirmed"
+      }
+    },
+    {
+      "id": "T-E03",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "unconfirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [],
+        "pendingEvidence": [
+          "entitlement"
+        ]
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "entitlement_unconfirmed"
+      }
+    },
+    {
+      "id": "N-INDIRECT",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "indirect",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "unsupported",
+        "code": "entitlement_out_of_scope"
+      }
+    },
+    {
+      "id": "N-INELIGIBLE",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "ineligible",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "unsupported",
+        "code": "entitlement_out_of_scope"
+      }
+    },
+    {
+      "id": "N-OLD-REGIME",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "old",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "unsupported",
+        "code": "old_regime"
+      }
+    },
+    {
+      "id": "N-REGIME-UNKNOWN",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "unconfirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "regime_unconfirmed"
+      }
+    },
+    {
+      "id": "T-W02-UNCONFIRMED",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "transition_unconfirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "contract_unconfirmed"
+      }
+    },
+    {
+      "id": "N-CONTRACT-UNKNOWN",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "unconfirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "contract_unconfirmed"
+      }
+    },
+    {
+      "id": "T-N04",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "multiple",
+        "children": []
+      },
+      "expected": {
+        "status": "unsupported",
+        "code": "multiple_contracts"
+      }
+    },
+    {
+      "id": "T-N05",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "multiple",
+        "children": [
+          {
+            "id": "SYNTHETIC-CHILD-1",
+            "contributionYear": 2027,
+            "status": "eligible_assigned_confirmed"
+          }
+        ]
+      },
+      "expected": {
+        "status": "unsupported",
+        "code": "multiple_contracts"
+      }
+    },
+    {
+      "id": "T-N06",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "multiple",
+        "children": []
+      },
+      "expected": {
+        "status": "unsupported",
+        "code": "multiple_contracts"
+      }
+    },
+    {
+      "id": "T-N07",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "indirect",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "unsupported",
+        "code": "entitlement_out_of_scope"
+      }
+    },
+    {
+      "id": "T-N08",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "indirect",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [
+          {
+            "id": "SYNTHETIC-CHILD-1",
+            "contributionYear": 2027,
+            "status": "eligible_assigned_confirmed"
+          }
+        ]
+      },
+      "expected": {
+        "status": "unsupported",
+        "code": "entitlement_out_of_scope"
+      }
+    },
+    {
+      "id": "T-N09",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "indirect",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 6000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "unsupported",
+        "code": "entitlement_out_of_scope"
+      }
+    },
+    {
+      "id": "N-HOUSEHOLD",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [],
+        "partner": {
+          "entitlement": "direct_confirmed"
+        }
+      },
+      "expected": {
+        "status": "invalid_input",
+        "code": "invalid_shape"
+      }
+    },
+    {
+      "id": "N-ONLY-OCCUPATION",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "self-employed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "invalid_input",
+        "code": "invalid_shape"
+      }
+    },
+    {
+      "id": "N-CHILDREN-UNKNOWN",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": null
+      },
+      "expected": {
+        "status": "invalid_input",
+        "code": "invalid_shape"
+      }
+    },
+    {
+      "id": "N-PENDING-CHILDREN",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [],
+        "pendingEvidence": [
+          "children"
+        ]
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "pending_evidence"
+      }
+    },
+    {
+      "id": "N-PENDING-CONTRACT",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [],
+        "pendingEvidence": [
+          "contract"
+        ]
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "pending_evidence"
+      }
+    },
+    {
+      "id": "N-PENDING-REGIME",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [],
+        "pendingEvidence": [
+          "regime"
+        ]
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "pending_evidence"
+      }
+    },
+    {
+      "id": "N-PENDING-ENTITLEMENT",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [],
+        "pendingEvidence": [
+          "entitlement"
+        ]
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "pending_evidence"
+      }
+    },
+    {
+      "id": "N-PENDING-MALFORMED",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [],
+        "pendingEvidence": [
+          "something"
+        ]
+      },
+      "expected": {
+        "status": "invalid_input",
+        "code": "invalid_shape"
+      }
+    },
+    {
+      "id": "N-CHILD-EXTRA",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [
+          {
+            "id": "SYNTHETIC-CHILD-1",
+            "contributionYear": 2027,
+            "status": "eligible_assigned_confirmed",
+            "name": "SYNTHETIC"
+          }
+        ]
+      },
+      "expected": {
+        "status": "invalid_input",
+        "code": "invalid_child"
+      }
+    },
+    {
+      "id": "N-RUNTIME-NaN",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "invalid_input",
+        "code": "invalid_contribution"
+      },
+      "runtimeContribution": "NaN"
+    },
+    {
+      "id": "N-RUNTIME-Infinity",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "invalid_input",
+        "code": "invalid_contribution"
+      },
+      "runtimeContribution": "Infinity"
+    },
+    {
+      "id": "N-RUNTIME--Infinity",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "invalid_input",
+        "code": "invalid_contribution"
+      },
+      "runtimeContribution": "-Infinity"
+    },
+    {
+      "id": "N-RUNTIME-negativeZero",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "invalid_input",
+        "code": "invalid_contribution"
+      },
+      "runtimeContribution": "negativeZero"
+    },
+    {
+      "id": "N-RUNTIME-undefined",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "invalid_input",
+        "code": "invalid_contribution"
+      },
+      "runtimeContribution": "undefined"
+    },
+    {
+      "id": "N-RUNTIME-bigint",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "invalid_input",
+        "code": "invalid_contribution"
+      },
+      "runtimeContribution": "bigint"
+    },
+    {
+      "id": "N-HALF-CENT",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12001,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [
+          {
+            "id": "SYNTHETIC-CHILD-1",
+            "contributionYear": 2027,
+            "status": "eligible_assigned_confirmed"
+          }
+        ]
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "rounding_convention_required",
+        "numerator": 24002
+      }
+    },
+    {
+      "id": "N-QUARTER-CENT",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 36001,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [
+          {
+            "id": "SYNTHETIC-CHILD-1",
+            "contributionYear": 2027,
+            "status": "eligible_assigned_confirmed"
+          }
+        ]
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "rounding_convention_required",
+        "numerator": 72001
+      }
+    },
+    {
+      "id": "N-THREE-QUARTERS",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 36003,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [
+          {
+            "id": "SYNTHETIC-CHILD-1",
+            "contributionYear": 2027,
+            "status": "eligible_assigned_confirmed"
+          }
+        ]
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "rounding_convention_required",
+        "numerator": 72003
+      }
+    },
+    {
+      "id": "N-UPPER-HALF",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 179998,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [
+          {
+            "id": "SYNTHETIC-CHILD-1",
+            "contributionYear": 2027,
+            "status": "eligible_assigned_confirmed"
+          }
+        ]
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "rounding_convention_required",
+        "numerator": 215998
+      }
+    },
+    {
+      "id": "P-BONUS-OPEN",
+      "synthetic": true,
+      "note": "",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": [],
+        "pendingEvidence": [
+          "bonus"
+        ]
+      },
+      "expected": {
+        "status": "calculated",
+        "baseGrantCents": 6000,
+        "childrenGrantCents": 0,
+        "totalGrantCents": 6000
+      }
+    },
+    {
+      "id": "P-EXISTING-SWITCH-CONFIRMED",
+      "synthetic": true,
+      "note": "Upstream confirmed effective new regime and exactly one eligible existing contract; no switch performed here.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "estg-2027-v1",
+        "entitlement": "direct_confirmed",
+        "regime": "new_confirmed",
+        "eligibleOwnContributionCents": 12000,
+        "eligibleContractContext": "single_eligible_confirmed",
+        "children": []
+      },
+      "expected": {
+        "status": "calculated",
+        "baseGrantCents": 6000,
+        "childrenGrantCents": 0,
+        "totalGrantCents": 6000
+      }
+    }
+  ]
+}
