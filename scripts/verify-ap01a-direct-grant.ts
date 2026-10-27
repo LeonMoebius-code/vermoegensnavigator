@@ -58,6 +58,65 @@ const standard: DirectGrantInput = {
   contributionYear: 2027, ruleContext: "estg-2027-v1", entitlement: "direct_confirmed", regime: "new_confirmed",
   eligibleOwnContributionCents: 12000, eligibleContractContext: "single_eligible_confirmed", children: [],
 };
+// Synthetic executable properties must be rejected without invoking them.
+let arrayStructureCases = 0;
+function invalidArrayStructure(input: unknown, label: string) {
+  const result = calculateDirectGrant(input);
+  assert.equal(result.status, "invalid_input", label);
+  assert.ok(result.issue.code === "invalid_shape" || result.issue.code === "invalid_child", label);
+  for (const key of ["baseGrantCents", "childGrants", "childrenGrantCents", "totalGrantCents"]) assert.ok(!(key in result), label);
+  arrayStructureCases++;
+  console.log(`PASS AP01a array structure ${label}`);
+}
+for (const field of ["children", "pendingEvidence"] as const) {
+  const validElement = field === "children"
+    ? { id: "SYNTHETIC-ARRAY-CHILD", contributionYear: 2027, status: "eligible_assigned_confirmed" } : "bonus";
+  for (const key of ["0", "extra", "some", "map", Symbol.iterator]) for (const throws of [true, false]) {
+    let calls = 0;
+    const array: unknown[] = [];
+    Object.defineProperty(array, key, { configurable: true, get() {
+      calls++;
+      if (throws) throw Error("SYNTHETIC_ARRAY_GETTER_MUST_NOT_RUN");
+      return validElement;
+    } });
+    const descriptors = Object.getOwnPropertyDescriptors(array);
+    const label = `${field} own getter ${String(key)} ${throws ? "throwing" : "nonthrowing"}`;
+    invalidArrayStructure({ ...standard, [field]: array }, label);
+    assert.equal(calls, 0, `${label}: getter not invoked`);
+    assert.deepEqual(Object.getOwnPropertyDescriptors(array), descriptors, `${label}: input unchanged`);
+  }
+  let inheritedCalls = 0;
+  const inherited: unknown[] = new Array(1);
+  Object.setPrototypeOf(inherited, Object.create(Array.prototype, { "0": { get() { inheritedCalls++; return validElement; } } }));
+  invalidArrayStructure({ ...standard, [field]: inherited }, `${field} inherited getter`);
+  assert.equal(inheritedCalls, 0);
+  const setterOnly: unknown[] = [];
+  Object.defineProperty(setterOnly, "0", { set() { throw Error("SYNTHETIC_SETTER_MUST_NOT_RUN"); } });
+  invalidArrayStructure({ ...standard, [field]: setterOnly }, `${field} setter-only element`);
+  // Structural inspection can itself throw, e.g. on revoked or trapping proxies.
+  for (const trap of ["getPrototypeOf", "ownKeys", "getOwnPropertyDescriptor"] as const) {
+    const proxy = new Proxy([], { [trap]() { throw Error("SYNTHETIC_ARRAY_STRUCTURE_TRAP"); } });
+    invalidArrayStructure({ ...standard, [field]: proxy }, `${field} throwing ${trap}`);
+  }
+  const revoked = Proxy.revocable([], {}); revoked.revoke();
+  invalidArrayStructure({ ...standard, [field]: revoked.proxy }, `${field} revoked proxy`);
+  // Data properties must not replace traversal methods or iterator execution.
+  for (const key of ["some", "map", Symbol.iterator]) {
+    let calls = 0;
+    const array: unknown[] = [];
+    Object.defineProperty(array, key, { value() { calls++; throw Error("SYNTHETIC_TRAVERSAL_MUST_NOT_RUN"); } });
+    invalidArrayStructure({ ...standard, [field]: array }, `${field} own ${String(key)} method`);
+    assert.equal(calls, 0);
+  }
+}
+for (const trap of ["getPrototypeOf", "ownKeys", "getOwnPropertyDescriptor", "get"] as const) {
+  invalidArrayStructure(new Proxy({ ...standard }, { [trap]() { throw Error("SYNTHETIC_ROOT_STRUCTURE_TRAP"); } }), `root throwing ${trap}`);
+}
+const revokedRoot = Proxy.revocable({}, {}); revokedRoot.revoke();
+invalidArrayStructure(revokedRoot.proxy, "root revoked proxy");
+const throwingChild = new Proxy({}, { ownKeys() { throw Error("SYNTHETIC_CHILD_STRUCTURE_TRAP"); } });
+invalidArrayStructure({ ...standard, children: [throwingChild] }, "child throwing structural inspection");
+console.log(`AP01a array validation: ${arrayStructureCases} synthetic regression cases passed; accessors and overridden traversal never executed.`);
 // A full cent sweep independently uses rational BigInt slopes. No rounded oracles.
 for (let cents = 0; cents <= 180004; cents++) {
   const q = cents < 12000 ? 0n : cents <= 36000 ? BigInt(cents) * 2n : 72000n + BigInt(Math.min(cents, 180000) - 36000);

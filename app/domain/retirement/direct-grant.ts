@@ -9,6 +9,18 @@ function keysAllowed(value: Record<string, unknown>, keys: readonly string[]): b
   return Reflect.ownKeys(value).every(key => typeof key === "string" && keys.includes(key))
     && Object.values(Object.getOwnPropertyDescriptors(value)).every(d => "value" in d);
 }
+/** Inspect all own properties before indexing, iterating or invoking array methods. */
+function dataArray(value: unknown): value is unknown[] {
+  if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype) return false;
+  const descriptors = Object.getOwnPropertyDescriptors(value as object);
+  const length = descriptors.length.value as number;
+  return Reflect.ownKeys(descriptors).every(key => {
+    if (typeof key !== "string" || !("value" in descriptors[key])) return false;
+    if (key === "length") return true;
+    const index = Number(key);
+    return Number.isInteger(index) && index >= 0 && index < length && String(index) === key;
+  });
+}
 function member(value: unknown, choices: readonly string[]): boolean {
   return typeof value === "string" && choices.includes(value);
 }
@@ -26,6 +38,14 @@ function stopped(status: "review_required" | "unsupported" | "invalid_input", co
 
 /** Runtime boundary accepts untrusted plain data; no coercion, inference or mutation. */
 export function calculateDirectGrant(input: unknown): DirectGrantResult {
+  try {
+    return checkedDirectGrant(input);
+  } catch {
+    return stopped("invalid_input", "invalid_shape", "Eingabestruktur konnte nicht sicher als einfache Daten geprüft werden.");
+  }
+}
+
+function checkedDirectGrant(input: unknown): DirectGrantResult {
   if (!record(input) || !keysAllowed(input, ["contributionYear", "ruleContext", "entitlement", "regime",
     "eligibleOwnContributionCents", "eligibleContractContext", "children", "pendingEvidence"])) {
     return stopped("invalid_input", "invalid_shape", "Einzelpersonen-Eingabe mit ausschließlich bekannten Datenfeldern erforderlich.");
@@ -37,8 +57,8 @@ export function calculateDirectGrant(input: unknown): DirectGrantResult {
     || !member(input.entitlement, ["direct_confirmed", "unconfirmed", "indirect", "ineligible"])
     || !member(input.regime, ["new_confirmed", "old", "unconfirmed"])
     || !member(input.eligibleContractContext, ["single_eligible_confirmed", "multiple", "transition_unconfirmed", "unconfirmed"])
-    || !Array.isArray(input.children)
-    || (input.pendingEvidence !== undefined && (!Array.isArray(input.pendingEvidence)
+    || !dataArray(input.children)
+    || (input.pendingEvidence !== undefined && (!dataArray(input.pendingEvidence)
       || !Array.from(input.pendingEvidence).every(x => member(x, ["entitlement", "regime", "contract", "children", "bonus"]))))) {
     return stopped("invalid_input", "invalid_shape", "Vollständige typisierte Statusangaben und Kinderliste erforderlich.");
   }

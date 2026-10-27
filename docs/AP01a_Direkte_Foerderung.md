@@ -25,6 +25,13 @@ Der Aufrufer bestätigt **für genau diese Person und das Beitragsjahr**:
 
 Der Kern akzeptiert einfache Datenobjekte und lehnt unbekannte Felder (auch
 Partner-/Haushaltsdaten), fehlende Pflichtwerte, Getter und falsche Typen ab.
+Bei `children` und `pendingEvidence` werden sämtliche eigenen Property-Deskriptoren
+vor Elementzugriff oder Traversierung geprüft. Accessor-Eigenschaften (auch
+nicht werfende Getter und reine Setter), eigene Traversierungsmethoden/-Iteratoren,
+Zusatzfelder und abweichende Arrayprototypen werden als `invalid_input` abgewiesen.
+Getter werden dabei nicht ausgeführt. Auch Ausnahmen bei der strukturellen
+Untersuchung ungewöhnlicher JavaScript-Eingaben (z. B. Proxy-Traps oder widerrufene
+Proxies) liefern kontrolliert `invalid_input / invalid_shape`; kein Ersatzbetrag.
 Er interpretiert keine Erwerbs-, Kindergeld-, Vertragsabschluss- oder Wechselhistorie.
 Die sicheren Zahlengrenzen sind eine **technische** Eingangsgrenze, keine Aussage
 über zulässige Vertragsbeiträge. Die rechtliche Förderfähigkeit des gelieferten
