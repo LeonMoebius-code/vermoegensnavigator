@@ -1,0 +1,1904 @@
+{
+  "synthetic": true,
+  "sourceCheckedOn": "2026-10-28",
+  "reconstructionIdentity": "V0.4 reconstruction only; original V0.1 not identified",
+  "cases": [
+    {
+      "id": "G01",
+      "source": "AP-00 §7",
+      "mappingNote": "Bestätigte Nullbemessung.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 0,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 6000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "calculated",
+        "minimumOwnContributionCents": 6000,
+        "baseGrantCents": 17500,
+        "childGrantCents": [],
+        "childrenGrantCents": 0,
+        "totalGrantCents": 17500
+      }
+    },
+    {
+      "id": "G02",
+      "source": "AP-00 §7",
+      "mappingNote": "Unmittelbarer Sockelteilbeitrag.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 0,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 3000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "calculated",
+        "minimumOwnContributionCents": 6000,
+        "baseGrantCents": 8750,
+        "childGrantCents": [],
+        "childrenGrantCents": 0,
+        "totalGrantCents": 8750
+      }
+    },
+    {
+      "id": "G03",
+      "source": "AP-00 §7",
+      "mappingNote": "Zwei bestätigte Kinder, Sockelfall.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 1800000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [
+          {
+            "id": "child-1",
+            "birthYear": 2010,
+            "contributionYear": 2027,
+            "ruleContext": "alt-bestand-2027-checked-20261028",
+            "assignment": "eligible_assigned_confirmed"
+          },
+          {
+            "id": "child-2",
+            "birthYear": 2014,
+            "contributionYear": 2027,
+            "ruleContext": "alt-bestand-2027-checked-20261028",
+            "assignment": "eligible_assigned_confirmed"
+          }
+        ],
+        "eligibleOwnContributionCents": 3000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "calculated",
+        "minimumOwnContributionCents": 6000,
+        "baseGrantCents": 8750,
+        "childGrantCents": [
+          15000,
+          15000
+        ],
+        "childrenGrantCents": 30000,
+        "totalGrantCents": 38750
+      }
+    },
+    {
+      "id": "G04",
+      "source": "AP-00 §7",
+      "mappingNote": "Zwei bestätigte Kinder, Sockelfall.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 1800000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [
+          {
+            "id": "child-1",
+            "birthYear": 2010,
+            "contributionYear": 2027,
+            "ruleContext": "alt-bestand-2027-checked-20261028",
+            "assignment": "eligible_assigned_confirmed"
+          },
+          {
+            "id": "child-2",
+            "birthYear": 2014,
+            "contributionYear": 2027,
+            "ruleContext": "alt-bestand-2027-checked-20261028",
+            "assignment": "eligible_assigned_confirmed"
+          }
+        ],
+        "eligibleOwnContributionCents": 0,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "calculated",
+        "minimumOwnContributionCents": 6000,
+        "baseGrantCents": 0,
+        "childGrantCents": [
+          0,
+          0
+        ],
+        "childrenGrantCents": 0,
+        "totalGrantCents": 0
+      }
+    },
+    {
+      "id": "G05",
+      "source": "AP-00 §7",
+      "mappingNote": "Zwei bestätigte Kinder, Sockelfall.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 1800000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [
+          {
+            "id": "child-1",
+            "birthYear": 2010,
+            "contributionYear": 2027,
+            "ruleContext": "alt-bestand-2027-checked-20261028",
+            "assignment": "eligible_assigned_confirmed"
+          },
+          {
+            "id": "child-2",
+            "birthYear": 2014,
+            "contributionYear": 2027,
+            "ruleContext": "alt-bestand-2027-checked-20261028",
+            "assignment": "eligible_assigned_confirmed"
+          }
+        ],
+        "eligibleOwnContributionCents": 5999,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "calculated",
+        "minimumOwnContributionCents": 6000,
+        "baseGrantCents": 17497,
+        "childGrantCents": [
+          29995,
+          29995
+        ],
+        "childrenGrantCents": 59990,
+        "totalGrantCents": 77487
+      }
+    },
+    {
+      "id": "G06",
+      "source": "AP-00 §7",
+      "mappingNote": "M-Grenze; G07 bleibt trotz voller gerundeter Zulage reduziert.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 122500,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "calculated",
+        "minimumOwnContributionCents": 122500,
+        "baseGrantCents": 17500,
+        "childGrantCents": [],
+        "childrenGrantCents": 0,
+        "totalGrantCents": 17500
+      }
+    },
+    {
+      "id": "G07",
+      "source": "AP-00 §7",
+      "mappingNote": "M-Grenze; G07 bleibt trotz voller gerundeter Zulage reduziert.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 122499,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "calculated",
+        "minimumOwnContributionCents": 122500,
+        "baseGrantCents": 17500,
+        "childGrantCents": [],
+        "childrenGrantCents": 0,
+        "totalGrantCents": 17500
+      }
+    },
+    {
+      "id": "G08",
+      "source": "AP-00 §7",
+      "mappingNote": "M-Grenze; G07 bleibt trotz voller gerundeter Zulage reduziert.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 122501,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "calculated",
+        "minimumOwnContributionCents": 122500,
+        "baseGrantCents": 17500,
+        "childGrantCents": [],
+        "childrenGrantCents": 0,
+        "totalGrantCents": 17500
+      }
+    },
+    {
+      "id": "G09",
+      "source": "AP-00 §7",
+      "mappingNote": "Deckel vor Zulagenabzug.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 8000000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 192500,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "calculated",
+        "minimumOwnContributionCents": 192500,
+        "baseGrantCents": 17500,
+        "childGrantCents": [],
+        "childrenGrantCents": 0,
+        "totalGrantCents": 17500
+      }
+    },
+    {
+      "id": "G10",
+      "source": "AP-00 §7",
+      "mappingNote": "Sockel über rechnerischen 25 Euro.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 500000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 6000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "calculated",
+        "minimumOwnContributionCents": 6000,
+        "baseGrantCents": 17500,
+        "childGrantCents": [],
+        "childrenGrantCents": 0,
+        "totalGrantCents": 17500
+      }
+    },
+    {
+      "id": "G11",
+      "source": "AP-00 §7",
+      "mappingNote": "Geburt 01.01.2008 wird auf benötigtes Geburtsjahr reduziert; Zuordnung bestätigt.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [
+          {
+            "id": "child-1",
+            "birthYear": 2008,
+            "contributionYear": 2027,
+            "ruleContext": "alt-bestand-2027-checked-20261028",
+            "assignment": "eligible_assigned_confirmed"
+          }
+        ],
+        "eligibleOwnContributionCents": 92500,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "calculated",
+        "minimumOwnContributionCents": 92500,
+        "baseGrantCents": 17500,
+        "childGrantCents": [
+          30000
+        ],
+        "childrenGrantCents": 30000,
+        "totalGrantCents": 47500
+      }
+    },
+    {
+      "id": "G12",
+      "source": "AP-00 §7",
+      "mappingNote": "Geburt 31.12.2007 auf Geburtsjahr reduziert; Kindergeld nach 18 bestätigt.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [
+          {
+            "id": "child-1",
+            "birthYear": 2007,
+            "contributionYear": 2027,
+            "ruleContext": "alt-bestand-2027-checked-20261028",
+            "assignment": "eligible_assigned_confirmed"
+          }
+        ],
+        "eligibleOwnContributionCents": 104000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "calculated",
+        "minimumOwnContributionCents": 104000,
+        "baseGrantCents": 17500,
+        "childGrantCents": [
+          18500
+        ],
+        "childrenGrantCents": 18500,
+        "totalGrantCents": 36000
+      }
+    },
+    {
+      "id": "G13",
+      "source": "AP-00 §7",
+      "mappingNote": "Einzelrundung ergibt drei Nullbeträge; Gesamtrundung wäre falsch.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [
+          {
+            "id": "child-1",
+            "birthYear": 2007,
+            "contributionYear": 2027,
+            "ruleContext": "alt-bestand-2027-checked-20261028",
+            "assignment": "eligible_assigned_confirmed"
+          },
+          {
+            "id": "child-2",
+            "birthYear": 2008,
+            "contributionYear": 2027,
+            "ruleContext": "alt-bestand-2027-checked-20261028",
+            "assignment": "eligible_assigned_confirmed"
+          }
+        ],
+        "eligibleOwnContributionCents": 1,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "calculated",
+        "minimumOwnContributionCents": 74000,
+        "baseGrantCents": 0,
+        "childGrantCents": [
+          0,
+          0
+        ],
+        "childrenGrantCents": 0,
+        "totalGrantCents": 0
+      }
+    },
+    {
+      "id": "G14",
+      "source": "AP-00 §7",
+      "mappingNote": "Exakter Halbcent bleibt gesperrt.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 0,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 6,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "rounding_convention_required"
+      }
+    },
+    {
+      "id": "G15",
+      "source": "AP-00 §7",
+      "mappingNote": "Quote und Prozentlesart stimmen überein.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 36000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "calculated",
+        "minimumOwnContributionCents": 122500,
+        "baseGrantCents": 5143,
+        "childGrantCents": [],
+        "childrenGrantCents": 0,
+        "totalGrantCents": 5143
+      }
+    },
+    {
+      "id": "G16",
+      "source": "AP-00 §7",
+      "mappingNote": "M von 1225,76 Euro auf 1225 Euro abrunden.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3501900,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 122500,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "calculated",
+        "minimumOwnContributionCents": 122500,
+        "baseGrantCents": 17500,
+        "childGrantCents": [],
+        "childrenGrantCents": 0,
+        "totalGrantCents": 17500
+      }
+    },
+    {
+      "id": "G17",
+      "source": "AP-00 §7",
+      "mappingNote": "Einnahmen-Cents vor vier Prozent abrunden.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500099,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 122500,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "calculated",
+        "minimumOwnContributionCents": 122500,
+        "baseGrantCents": 17500,
+        "childGrantCents": [],
+        "childrenGrantCents": 0,
+        "totalGrantCents": 17500
+      }
+    },
+    {
+      "id": "N01",
+      "source": "AP-00 §7",
+      "mappingNote": "Unbekanntes Einkommen ausdrücklich null; keine Nullbemessung.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": null,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 36000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "income_required"
+      }
+    },
+    {
+      "id": "N02",
+      "source": "AP-00 §7",
+      "mappingNote": "Berufslabel ist kein API-Feld/Nachweis.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "unconfirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 36000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "entitlement_unconfirmed"
+      }
+    },
+    {
+      "id": "N03",
+      "source": "AP-00 §7",
+      "mappingNote": "Bonusgeschichte ungeklärt, daher auch Grundzulage gesperrt.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "unconfirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 36000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "bonus_history_required"
+      }
+    },
+    {
+      "id": "N04",
+      "source": "AP-00 §7",
+      "mappingNote": "Früherer gekürzter Bonus durch Aufrufer geprüft, keine Nachholung.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 36000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "calculated",
+        "minimumOwnContributionCents": 122500,
+        "baseGrantCents": 5143,
+        "childGrantCents": [],
+        "childrenGrantCents": 0,
+        "totalGrantCents": 5143
+      }
+    },
+    {
+      "id": "N05",
+      "source": "AP-00 §7",
+      "mappingNote": "Kein erhöhter Grund- oder Bonusbetrag aus AP-01b.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "current_year_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 36000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "unsupported",
+        "code": "bonus_year"
+      }
+    },
+    {
+      "id": "N06",
+      "source": "AP-00 §7",
+      "mappingNote": "Haushalts-/Mittelbarenrechnung wird nicht implementiert.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "indirect_included",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 36000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "unsupported",
+        "code": "indirect_partner"
+      }
+    },
+    {
+      "id": "N07",
+      "source": "AP-00 §7",
+      "mappingNote": "Mittelbarer Partner mit 59,99 Euro bleibt Scopegrenze; kein Mittelbarenbetrag.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "indirect_included",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 36000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "unsupported",
+        "code": "indirect_partner"
+      }
+    },
+    {
+      "id": "N08",
+      "source": "AP-00 §7",
+      "mappingNote": "Keine Verteilung auf zwei Altverträge.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "multiple",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 36000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "unsupported",
+        "code": "multiple_contracts"
+      }
+    },
+    {
+      "id": "N09",
+      "source": "AP-00 §7",
+      "mappingNote": "Alt-/Neuverträge durch bestätigten kombinierten Kontext abgegrenzt; keine Doppelzulage.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "new_confirmed",
+        "contract": "multiple_and_new_regime",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 36000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "unsupported",
+        "code": "multiple_contracts_and_regime_transition"
+      }
+    },
+    {
+      "id": "N10",
+      "source": "AP-00 §7",
+      "mappingNote": "Alt-/Neuverträge durch bestätigten kombinierten Kontext abgegrenzt; keine Doppelzulage.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "new_confirmed",
+        "contract": "multiple_and_new_regime",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 36000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "unsupported",
+        "code": "multiple_contracts_and_regime_transition"
+      }
+    },
+    {
+      "id": "N11",
+      "source": "AP-00 §7",
+      "mappingNote": "Zugang/Wirksamkeitsjahr ungeklärt.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "unconfirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 36000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "regime_unconfirmed"
+      }
+    },
+    {
+      "id": "N12",
+      "source": "AP-00 §7",
+      "mappingNote": "Gleiche technische Kinder-ID doppelt.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [
+          {
+            "id": "child-1",
+            "birthYear": 2010,
+            "contributionYear": 2027,
+            "ruleContext": "alt-bestand-2027-checked-20261028",
+            "assignment": "eligible_assigned_confirmed"
+          },
+          {
+            "id": "child-1",
+            "birthYear": 2010,
+            "contributionYear": 2027,
+            "ruleContext": "alt-bestand-2027-checked-20261028",
+            "assignment": "eligible_assigned_confirmed"
+          }
+        ],
+        "eligibleOwnContributionCents": 36000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "invalid_input",
+        "code": "duplicate_child"
+      }
+    },
+    {
+      "id": "N13",
+      "source": "AP-00 §7",
+      "mappingNote": "2027: Kindergeldwechsel A/B, Jahreszuordnung offen. Keine automatische Wahl von A; review_required bis zur vorgelagerten Bestätigung.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [
+          {
+            "id": "child-1",
+            "birthYear": 2010,
+            "contributionYear": 2027,
+            "ruleContext": "alt-bestand-2027-checked-20261028",
+            "assignment": "assignment_unconfirmed"
+          }
+        ],
+        "eligibleOwnContributionCents": 36000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "child_assignment_required"
+      }
+    },
+    {
+      "id": "N14",
+      "source": "AP-00 §7",
+      "mappingNote": "Neurecht 2028: letzter Anspruchszeitraum B, Zuordnung noch offen. AP-01b prüft review_required mit Vorrang vor new_regime; nach Bestätigung nur unsupported, separat getestet.",
+      "input": {
+        "contributionYear": 2028,
+        "ruleContext": "alt-bestand-2028-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "new_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2027,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [
+          {
+            "id": "child-1",
+            "birthYear": 2010,
+            "contributionYear": 2028,
+            "ruleContext": "alt-bestand-2028-checked-20261028",
+            "assignment": "assignment_unconfirmed"
+          }
+        ],
+        "eligibleOwnContributionCents": 36000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "child_assignment_required"
+      }
+    },
+    {
+      "id": "N15",
+      "source": "AP-00 §7",
+      "mappingNote": "Altbestand 2028: erster Anspruchszeitraum bleibt nach eingefrorenem Absatz 1 maßgeblich. Zuordnung offen; keine pauschale Umstellung auf B.",
+      "input": {
+        "contributionYear": 2028,
+        "ruleContext": "alt-bestand-2028-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2027,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [
+          {
+            "id": "child-1",
+            "birthYear": 2010,
+            "contributionYear": 2028,
+            "ruleContext": "alt-bestand-2028-checked-20261028",
+            "assignment": "assignment_unconfirmed"
+          }
+        ],
+        "eligibleOwnContributionCents": 36000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "child_assignment_required"
+      }
+    },
+    {
+      "id": "N16",
+      "source": "AP-00 §7",
+      "mappingNote": "Altbestand 2028: Absatz 2 gilt neu geschlechtsneutral. Jahresfestsetzung/Erklärungen offen; keine automatische Mutter-/Vaterzuordnung.",
+      "input": {
+        "contributionYear": 2028,
+        "ruleContext": "alt-bestand-2028-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2027,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [
+          {
+            "id": "child-1",
+            "birthYear": 2010,
+            "contributionYear": 2028,
+            "ruleContext": "alt-bestand-2028-checked-20261028",
+            "assignment": "assignment_unconfirmed"
+          }
+        ],
+        "eligibleOwnContributionCents": 36000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "child_assignment_required"
+      }
+    },
+    {
+      "id": "N17",
+      "source": "AP-00 §7",
+      "mappingNote": "Keine neue Modellrechnung nach abgeschlossener Rückforderung.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 36000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "retrospective"
+      },
+      "expected": {
+        "status": "unsupported",
+        "code": "retrospective_correction"
+      }
+    },
+    {
+      "id": "N18",
+      "source": "AP-00 §7",
+      "mappingNote": "Oktober-Dezember: bestätigter geplanter Jahresbeitrag 360 Euro, keine Hochrechnung.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 36000,
+        "contributionQuality": "planned_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "calculated",
+        "minimumOwnContributionCents": 122500,
+        "baseGrantCents": 5143,
+        "childGrantCents": [],
+        "childrenGrantCents": 0,
+        "totalGrantCents": 5143
+      }
+    },
+    {
+      "id": "N19",
+      "source": "AP-00 §7",
+      "mappingNote": "Ungeklärte Berechtigungshistorie.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "timeline_unconfirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 36000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "entitlement_timeline_required"
+      }
+    },
+    {
+      "id": "N20",
+      "source": "AP-00 §7",
+      "mappingNote": "Sonder-/Mischbemessung nur abgrenzen.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "special",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 36000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "unsupported",
+        "code": "special_income_basis"
+      }
+    },
+    {
+      "id": "N21",
+      "source": "AP-00 §7",
+      "mappingNote": "Keine gekoppelte Haushaltsrechnung; gesetzlicher Mittelbar-Neu/Alt-Direkt-Kontext.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "indirect_new_direct_old",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 36000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "unsupported",
+        "code": "indirect_new_direct_old"
+      }
+    },
+    {
+      "id": "N22",
+      "source": "AP-00 §7",
+      "mappingNote": "Original prüft AP-01a: dort Null bzw. Centsperre. AP-01b grenzt beide als new_regime ab; AP-01a separat unverändert testen.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "new_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [
+          {
+            "id": "child-1",
+            "birthYear": 2010,
+            "contributionYear": 2027,
+            "ruleContext": "alt-bestand-2027-checked-20261028",
+            "assignment": "eligible_assigned_confirmed"
+          }
+        ],
+        "eligibleOwnContributionCents": 11999,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "unsupported",
+        "code": "new_regime"
+      }
+    },
+    {
+      "id": "N23",
+      "source": "AP-00 §7",
+      "mappingNote": "Original prüft AP-01a: dort Null bzw. Centsperre. AP-01b grenzt beide als new_regime ab; AP-01a separat unverändert testen.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "new_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 12001,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "unsupported",
+        "code": "new_regime"
+      }
+    },
+    {
+      "id": "N24",
+      "source": "AP-00 §7",
+      "mappingNote": "Negativer Eigenbeitrag; Bruchcent separat als N24-fraction getestet.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": -1,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "invalid_input",
+        "code": "invalid_contribution"
+      }
+    },
+    {
+      "id": "N25",
+      "source": "AP-00 §7",
+      "mappingNote": "Kein automatischer Rechtsstand 2029.",
+      "input": {
+        "contributionYear": 2029,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2028,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 36000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "year_not_approved"
+      }
+    },
+    {
+      "id": "N26",
+      "source": "AP-00 §7",
+      "mappingNote": "Original ist neues Bonus-/Wechselproblem; offene Bonusgeschichte hat Vorrang vor bestätigtem new_regime. Keine neue Bonusberechnung.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "new_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "unconfirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 36000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "bonus_history_required"
+      }
+    },
+    {
+      "id": "N27",
+      "source": "AP-00 §7",
+      "mappingNote": "01.01.2002: Aufrufer bestätigt Jahresbeginn 2027 bereits 25; DOB wird bewusst nicht im Kern verarbeitet.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "age_excluded_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 36000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "calculated",
+        "minimumOwnContributionCents": 122500,
+        "baseGrantCents": 5143,
+        "childGrantCents": [],
+        "childrenGrantCents": 0,
+        "totalGrantCents": 5143
+      }
+    },
+    {
+      "id": "N28",
+      "source": "AP-00 §7",
+      "mappingNote": "02.01.2002: Aufrufer bestätigt keine Altersausnahme; unbekannte Bonushistorie sperrt.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "unconfirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 36000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "bonus_history_required"
+      }
+    },
+    {
+      "id": "N29",
+      "source": "AP-00 §7",
+      "mappingNote": "Faktor-/Prozentlesart über derselben Centkante; keine Zahl.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 612500,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 3,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "rounding_convention_required"
+      }
+    },
+    {
+      "id": "V01-1-U",
+      "source": "AP-00 §6 / V0.4 reconstruction",
+      "mappingNote": "Rekonstruktion Familie 1: 2027/Bestand/Y bestätigt; Alters-/Bonushistorie vorgelagert.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "unconfirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 36000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "bonus_history_required"
+      }
+    },
+    {
+      "id": "V01-1-N",
+      "source": "AP-00 §6 / V0.4 reconstruction",
+      "mappingNote": "Rekonstruktion Familie 1: 2027/Bestand/Y bestätigt; Alters-/Bonushistorie vorgelagert.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 36000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "calculated",
+        "minimumOwnContributionCents": 122500,
+        "baseGrantCents": 5143,
+        "childGrantCents": [],
+        "childrenGrantCents": 0,
+        "totalGrantCents": 5143
+      }
+    },
+    {
+      "id": "V01-1-B",
+      "source": "AP-00 §6 / V0.4 reconstruction",
+      "mappingNote": "Rekonstruktion Familie 1: 2027/Bestand/Y bestätigt; Alters-/Bonushistorie vorgelagert.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "current_year_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 36000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "unsupported",
+        "code": "bonus_year"
+      }
+    },
+    {
+      "id": "V01-2-060",
+      "source": "AP-00 §6 / V0.4 reconstruction",
+      "mappingNote": "Rekonstruktion Familie 2, zwei bestätigte Kinder.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 1800000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [
+          {
+            "id": "child-1",
+            "birthYear": 2010,
+            "contributionYear": 2027,
+            "ruleContext": "alt-bestand-2027-checked-20261028",
+            "assignment": "eligible_assigned_confirmed"
+          },
+          {
+            "id": "child-2",
+            "birthYear": 2014,
+            "contributionYear": 2027,
+            "ruleContext": "alt-bestand-2027-checked-20261028",
+            "assignment": "eligible_assigned_confirmed"
+          }
+        ],
+        "eligibleOwnContributionCents": 6000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "calculated",
+        "minimumOwnContributionCents": 6000,
+        "baseGrantCents": 17500,
+        "childGrantCents": [
+          30000,
+          30000
+        ],
+        "childrenGrantCents": 60000,
+        "totalGrantCents": 77500
+      }
+    },
+    {
+      "id": "V01-2-120",
+      "source": "AP-00 §6 / V0.4 reconstruction",
+      "mappingNote": "Rekonstruktion Familie 2, zwei bestätigte Kinder.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 1800000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [
+          {
+            "id": "child-1",
+            "birthYear": 2010,
+            "contributionYear": 2027,
+            "ruleContext": "alt-bestand-2027-checked-20261028",
+            "assignment": "eligible_assigned_confirmed"
+          },
+          {
+            "id": "child-2",
+            "birthYear": 2014,
+            "contributionYear": 2027,
+            "ruleContext": "alt-bestand-2027-checked-20261028",
+            "assignment": "eligible_assigned_confirmed"
+          }
+        ],
+        "eligibleOwnContributionCents": 12000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "calculated",
+        "minimumOwnContributionCents": 6000,
+        "baseGrantCents": 17500,
+        "childGrantCents": [
+          30000,
+          30000
+        ],
+        "childrenGrantCents": 60000,
+        "totalGrantCents": 77500
+      }
+    },
+    {
+      "id": "V01-2-360",
+      "source": "AP-00 §6 / V0.4 reconstruction",
+      "mappingNote": "Rekonstruktion Familie 2, zwei bestätigte Kinder.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 1800000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [
+          {
+            "id": "child-1",
+            "birthYear": 2010,
+            "contributionYear": 2027,
+            "ruleContext": "alt-bestand-2027-checked-20261028",
+            "assignment": "eligible_assigned_confirmed"
+          },
+          {
+            "id": "child-2",
+            "birthYear": 2014,
+            "contributionYear": 2027,
+            "ruleContext": "alt-bestand-2027-checked-20261028",
+            "assignment": "eligible_assigned_confirmed"
+          }
+        ],
+        "eligibleOwnContributionCents": 36000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "calculated",
+        "minimumOwnContributionCents": 6000,
+        "baseGrantCents": 17500,
+        "childGrantCents": [
+          30000,
+          30000
+        ],
+        "childrenGrantCents": 60000,
+        "totalGrantCents": 77500
+      }
+    },
+    {
+      "id": "V01-3-U",
+      "source": "AP-00 §6 / V0.4 reconstruction",
+      "mappingNote": "Rekonstruktion Familie 3: Berufslabel belegt weder alte Berechtigung noch Einkommen.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "unconfirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": null,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 180000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "review_required",
+        "code": "entitlement_unconfirmed"
+      }
+    },
+    {
+      "id": "V01-3-N",
+      "source": "AP-00 §6 / V0.4 reconstruction",
+      "mappingNote": "Neue Selbstständigenberechtigung begründet keine alte Direktberechtigung; AP-01a separat.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "ineligible",
+        "regime": "new_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 180000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "unsupported",
+        "code": "entitlement_out_of_scope"
+      }
+    },
+    {
+      "id": "V01-4-060",
+      "source": "AP-00 §6 / V0.4 reconstruction",
+      "mappingNote": "Rekonstruktion Familie 4; alle Altstandardnachweise bestätigt.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 6000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "calculated",
+        "minimumOwnContributionCents": 122500,
+        "baseGrantCents": 857,
+        "childGrantCents": [],
+        "childrenGrantCents": 0,
+        "totalGrantCents": 857
+      }
+    },
+    {
+      "id": "V01-4-120",
+      "source": "AP-00 §6 / V0.4 reconstruction",
+      "mappingNote": "Rekonstruktion Familie 4; alle Altstandardnachweise bestätigt.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 12000,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "calculated",
+        "minimumOwnContributionCents": 122500,
+        "baseGrantCents": 1714,
+        "childGrantCents": [],
+        "childrenGrantCents": 0,
+        "totalGrantCents": 1714
+      }
+    },
+    {
+      "id": "N24-fraction",
+      "source": "AP-00 §7",
+      "mappingNote": "Explizite zweite N24-Variante: Bruchteil eines Cents, keine stille Normalisierung.",
+      "input": {
+        "contributionYear": 2027,
+        "ruleContext": "alt-bestand-2027-checked-20261028",
+        "entitlement": "direct_old_confirmed",
+        "regime": "old_protected_confirmed",
+        "contract": "single_private_eligible_confirmed",
+        "incomeBasis": "simple_domestic_prior_rv_confirmed",
+        "priorYearIncomeCents": 3500000,
+        "incomeYear": 2026,
+        "partner": "none_relevant_confirmed",
+        "bonus": "history_no_current_confirmed",
+        "childrenStatus": "complete_confirmed",
+        "children": [],
+        "eligibleOwnContributionCents": 0.1,
+        "contributionQuality": "actual_confirmed",
+        "evidenceQuality": "confirmed",
+        "pendingEvidence": [],
+        "correction": "none_confirmed"
+      },
+      "expected": {
+        "status": "invalid_input",
+        "code": "invalid_contribution"
+      }
+    }
+  ]
+}
