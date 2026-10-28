@@ -1,3 +1,4 @@
+import { RetirementEntry, type RetirementNavigation } from "./presentation/retirement/retirement-entry";
 import { NeedTermEditor, useNeedTermChange, type NeedTermInput } from "./presentation/need-term-editor";
 import { isAssetClass } from "./domain/assets/contracts";
 import { validDepotClassifications, CLASSIFICATION_ERROR, currentClassificationError } from "./domain/depot/classification-validation";
@@ -186,7 +187,7 @@ import {
   hasMixedValuationDates,
 } from "./depot-analysis";
 
-type View = "settings" | "recovery" | "home" | "cases" | "wizard" | "planner" | "depot" | "export";
+type View = "retirement" | "settings" | "recovery" | "home" | "cases" | "wizard" | "planner" | "depot" | "export";
 
 const riskText = riskProfiles;
 
@@ -464,7 +465,13 @@ function CustomerChecklistEditor({
 }
 
 export default function Home() {
-  const [view, setView] = useState<View>("home");
+  const [view, setCurrentView] = useState<View>("home");
+  const retirementNavigation = useRef<RetirementNavigation>(null);
+  const leaveRetirement = () => view !== "retirement" || retirementNavigation.current?.confirmDiscard() !== false;
+  const setView = (next: View) => {
+    if (next !== view && !leaveRetirement()) return;
+    setCurrentView(next);
+  };
   const [activeCase, setActiveCaseState] = useState<AdvisoryCase>(() =>
     createCase(),
   );
@@ -587,6 +594,7 @@ export default function Home() {
   };
 
   const start = (scope?: Scope, scenarioId?: string) => {
+    if (!leaveRetirement()) return;
     const scenario = scenarios.find((item) => item.id === scenarioId);
     const next = createCase(
       scenario
@@ -595,15 +603,16 @@ export default function Home() {
       newCaseAdvisorId,
     );
     setActiveCase(next);
-    setView("wizard");
+    setCurrentView("wizard");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const openSavedCase = (item: AdvisoryCase) => {
+    if (!leaveRetirement()) return;
     setActiveCase(clone(item));
     setNewCaseAdvisorId(item.advisorId);
     window.localStorage.setItem("vermoegensnavigator-advisor", item.advisorId);
-    setView("wizard");
+    setCurrentView("wizard");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
   const removeSavedCase = (id: string) => {
@@ -757,6 +766,10 @@ export default function Home() {
           >
             <span>⇩</span>Ergebnis & Export
           </button>
+          <p className="retirement-nav-label">Spezialisierte Beratung</p>
+          <button className={view === "retirement" ? "active" : ""} onClick={() => setView("retirement")}>
+            <span aria-hidden="true">◇</span>Altersvorsorge
+          </button>
         </nav>
         <div className="sidebar-foot">
           <p>
@@ -808,6 +821,7 @@ export default function Home() {
         }}/>}
         {view !== "recovery" && activeCase.capitalPotRecovery && <p className="csv-privacy-note">Historische Fallkopie aus {activeCase.capitalPotRecovery.source.caseId}. {recoveryConfirmationStatus(activeCase) === "content-bound" ? "Der aktuelle Inhalt entspricht der damaligen Kopienfreigabe zur weiteren Bearbeitung." : "Der aktuelle Inhalt hat sich seit der Kopienfreigabe verändert; die frühere Bestätigung gilt nicht für diese Inhalte."}</p>}
         {["wizard", "planner", "depot"].includes(view) && <DepotSaleConflicts depot={activeCase.depot} accounts={activeCase.depotAccounts} />}
+        {view === "retirement" && <RetirementEntry ref={retirementNavigation} />}
         {view === "home" && (
           <HomeView
             start={start}
@@ -819,6 +833,7 @@ export default function Home() {
             openCase={openSavedCase}
             removeCase={removeSavedCase}
             start={() => start()}
+            startRetirement={() => setView("retirement")}
             importCase={() => importRef.current?.click()}
           />
         )}
@@ -954,12 +969,14 @@ function CasesView({
   removeCase,
   start,
   importCase,
+  startRetirement,
 }: {
   cases: AdvisoryCase[];
   openCase: (item: AdvisoryCase) => void;
   removeCase: (id: string) => void;
   start: () => void;
   importCase: () => void;
+  startRetirement: () => void;
 }) {
   return (
     <div className="tool-view">
@@ -979,6 +996,7 @@ function CasesView({
           <button className="primary" onClick={start}>
             ＋ Neuer Fall
           </button>
+          <button className="secondary" onClick={startRetirement}>Altersvorsorge ohne Vermögensfall</button>
         </div>
       </div>
       {cases.length === 0 ? (
