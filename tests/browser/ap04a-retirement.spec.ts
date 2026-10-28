@@ -34,12 +34,12 @@ async function picture(p: Page, info: TestInfo, name: string) {
   console.log(`AP04A_SCREENSHOT ${JSON.stringify({ name, sha256: createHash("sha256").update(bytes).digest("hex"), base64: bytes.toString("base64") })}`);
 }
 
-test("A04-01/02: beide eigenständigen Einstiege, B gesperrt, kein neuer allgemeiner Fall", async ({ page }) => {
+test("A04-01/02: beide eigenständigen Einstiege, B aktiv, kein neuer allgemeiner Fall", async ({ page }) => {
   await page.goto("./"); const before = await state(page);
   await nav(page, "Altersvorsorge").click();
   await expect(btn(page, "A – Neue Altersvorsorge planen")).toBeEnabled();
-  await expect(btn(page, "B – Bestehende Riester-Rente prüfen")).toBeDisabled();
-  await expect(page.locator(".retirement-cards")).toContainText("AP-05a");
+  await expect(btn(page, "B – Bestehende Riester-Rente prüfen")).toBeEnabled();
+  await expect(page.locator(".retirement-cards")).toContainText("B1/B2");
   await nav(page, "Beratungsfälle").click();
   await btn(page, "Altersvorsorge ohne Vermögensfall").click();
   await expect(page.getByRole("heading", { name: "Altersvorsorge", exact: true })).toBeVisible();
