@@ -7292,3 +7292,30 @@ body[data-print-mode="customer"] .internal-only {
 @media (max-width: 700px) {
   .retirement-comparison { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* AP-04b: qualitative product cards and ephemeral neutral projection only. */
+.retirement-product-grid, .retirement-scenario-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.retirement-product, .retirement-scenario-result { min-width: 0; overflow-wrap: anywhere; }
+.retirement-product dl { display: grid; gap: 8px; line-height: 1.5; }
+.retirement-product dt, .retirement-capital-field label { font-weight: 700; }
+.retirement-product dd { margin: 0 0 12px; }
+.retirement-product a, .retirement-capital code { overflow-wrap: anywhere; word-break: break-word; }
+.retirement-source-status { padding: 8px; border-left: 3px solid #b75a00; background: #fff5e8; font-size: 13px; }
+.retirement-capital-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.retirement-capital-field { display: flex; flex-direction: column; gap: 8px; min-width: 0; margin: 10px 0; }
+.retirement-capital .retirement-form fieldset { display: flex; flex-direction: column; gap: 12px; }
+.retirement-capital .retirement-scenario-grid fieldset { padding: 10px; }
+.retirement-capital .retirement-metric { padding: 10px 0; border-bottom: 1px solid #cbd7df; }
+.retirement-capital .retirement-metric dd { margin: 5px 0; font-size: 17px; line-height: 1.5; overflow-wrap: anywhere; }
+.retirement-capital .retirement-metric small { display: block; margin-top: 6px; font-size: 12px; color: #344d60; }
+.retirement-capital .retirement-metric strong { font-size: 20px; color: #005b94; }
+.retirement-model-result { margin-top: 18px; }
+.retirement-reference-result { padding-top: 12px; border-top: 2px solid #8296a5; }
+.retirement-issue { padding: 10px; background: #fff5e8; border-left: 3px solid #b75a00; font-size: 13px; }
+.retirement-issue p { margin: 0 0 8px; }
+.retirement-ledger { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 13px; }
+.retirement-ledger th, .retirement-ledger td { padding: 8px 4px; text-align: left; border-bottom: 1px solid #cbd7df; overflow-wrap: anywhere; }
+.retirement-ledger caption { text-align: left; margin-bottom: 10px; }
+@media (max-width: 900px) {
+  .retirement-product-grid, .retirement-scenario-grid, .retirement-capital-grid { grid-template-columns: minmax(0, 1fr); }
+}

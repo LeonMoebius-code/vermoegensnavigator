@@ -5,6 +5,9 @@ import { annualContribution, changeMode, changeYear, emptyGrantDraft, euro, prev
 import { oldRiesterRuleContext } from "../../domain/retirement/old-riester-grant-rules";
 import { changeOldMode, changeOldYear, emptyOldDraft, oldContribution, oldRuleId, previewComparison, previewOldGrant,
   type Comparison, type NewScenario, type OldDraft, type OldField, type OldPreview, type NewPreview } from "./old-riester-adapter";
+import { emptyCapitalDraft, type CapitalRun } from "./projection-adapter";
+import { RetirementProducts } from "./retirement-products";
+import { RetirementProjection } from "./retirement-projection";
 
 export interface RetirementNavigation { confirmDiscard: () => boolean }
 const discardMessage = "Ungespeicherten Altersvorsorgeentwurf verwerfen? Alle Vorsorgeeingaben gehen verloren. Allgemeine Vermögensfälle bleiben erhalten.";
@@ -18,7 +21,10 @@ function Help({ children }: { children: ReactNode }) {
 /** The entire draft lives here; unmount discards it. No persistence or general-case API. */
 export const RetirementEntry = forwardRef<RetirementNavigation>(function RetirementEntry(_, ref) {
   const [draft, setDraft] = useState(emptyGrantDraft);
-  const [step, setStep] = useState<"choice" | "a1" | "a2" | "b1" | "b2">("choice");
+  const [step, setStep] = useState<"choice" | "a1" | "a2" | "a3" | "a4" | "b1" | "b2">("choice");
+  const [products, setProducts] = useState<string[]>([]);
+  const [capital, setCapital] = useState(emptyCapitalDraft);
+  const [capitalResult, setCapitalResult] = useState<CapitalRun | null>(null);
   const [bDraft, setBDraft] = useState(emptyOldDraft);
   const [bPreview, setBPreview] = useState<Comparison | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -29,6 +35,14 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
   const fieldPrefix = useId();
   const fieldId = (field: DraftField) => `${fieldPrefix}-${field}`;
   const errorId = `${fieldPrefix}-error`;
+  const invalidateCapital = () => {
+    setCapitalResult(null); setCapital(d => ({ ...d, confirmed: false, grantConfirmed: false, costConfirmed: false, referenceCostConfirmed: false }));
+  };
+  const navigateA = (next: "choice" | "a1" | "a2" | "a3" | "a4") => {
+    invalidateCapital();
+    if (next === "choice") { setPreview(null); setBPreview(null); }
+    setStep(next);
+  };
   const confirmDiscard = () => !dirty || window.confirm(discardMessage);
   useImperativeHandle(ref, () => ({ confirmDiscard }), [dirty]);
   useEffect(() => { title.current?.focus(); }, [step]);
@@ -39,7 +53,7 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
   const update = (next: GrantDraft) => {
-    setDraft(next); setDirty(true); setPreview(null); setChanged(true);
+    setDraft(next); setDirty(true); setPreview(null); setChanged(true); invalidateCapital();
   };
   const field = <K extends DraftField>(key: K, value: GrantDraft[K]) => update({ ...draft, [key]: value });
   const contributionField = <K extends DraftField>(key: K, value: GrantDraft[K]) => update({ ...draft, [key]: value, contributionConfirmed: false });
@@ -63,35 +77,42 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
     if (!confirmDiscard()) return;
     setDraft(emptyGrantDraft()); setDirty(false); setPreview(null); setChanged(false); setStep("choice");
     setBDraft(emptyOldDraft()); setBPreview(null);
+    setProducts([]); setCapital(emptyCapitalDraft()); setCapitalResult(null);
     title.current?.focus();
   };
   return <div className="tool-view retirement-view">
     <p className="eyebrow">SPEZIALISIERTE BERATUNG · ALTERSVORSORGE</p>
-    <h1 ref={title} tabIndex={-1}>{step === "choice" ? "Altersvorsorge" : step === "a1" ? "A1 – Fördercheck" : step === "a2" ? "A2 – Sparen & Förderung" : step === "b1" ? "B1 – Bestandsaufnahme" : "B2 – Fördervergleich"}</h1>
+    <h1 ref={title} tabIndex={-1}>{step === "choice" ? "Altersvorsorge" : step === "a1" ? "A1 – Fördercheck" : step === "a2" ? "A2 – Sparen & Förderung" : step === "a3" ? "A3 – Produktvergleich" : step === "a4" ? "A4 – Kapitalentwicklung" : step === "b1" ? "B1 – Bestandsaufnahme" : "B2 – Fördervergleich"}</h1>
     <p className="retirement-notice"><strong>Ungespeicherte Modellvorschau.</strong> Nur synthetische Testdaten verwenden.
       Eingaben bleiben ausschließlich während dieses geöffneten Entwurfs erhalten. Verlassen, Neuladen oder Schließen verwirft sie.
       Ein Browserhinweis beim Neuladen/Schließen ist browserabhängig. Es gibt keine automatische Wiederherstellung.</p>
-    <p className="retirement-notice">{modelNotice} {bonusNotice}</p>
+    {step !== "a3" && step !== "a4" && <p className="retirement-notice">{modelNotice} {bonusNotice}</p>}
     {step === "choice" ? <div className="retirement-cards">
       <section className="panel">
-        <p className="eyebrow">BERATUNGSWEG A · A1/A2</p><h2>Neue Altersvorsorge planen</h2>
-        <p>Bestätigten unmittelbaren Standard 2027/2028 prüfen und Beiträge sowie Grund- und Kinderzulagen ansehen.</p>
-        <button className="primary" onClick={() => { setPreview(null); setBPreview(null); setStep("a1"); }}>A – Neue Altersvorsorge planen</button>
+        <p className="eyebrow">BERATUNGSWEG A · A1–A4</p><h2>Neue Altersvorsorge planen</h2>
+        <p>Jahresförderung prüfen, Produktlinien qualitativ vergleichen und neutrale Kapitalmarktannahmen modellieren.</p>
+        <button className="primary" onClick={() => { setPreview(null); setBPreview(null); navigateA("a1"); }}>A – Neue Altersvorsorge planen</button>
       </section>
       <section className="panel">
         <p className="eyebrow">BERATUNGSWEG B · B1/B2</p><h2>Bestehende Riester-Rente prüfen</h2>
         <p>Alt-Fördercheck und bedingter Fördermodellvergleich ohne Vertragswerte.</p>
-        <button className="primary" onClick={() => { setPreview(null); setBPreview(null); setStep("b1"); }}>B – Bestehende Riester-Rente prüfen</button>
+        <button className="primary" onClick={() => { setPreview(null); setBPreview(null); invalidateCapital(); setStep("b1"); }}>B – Bestehende Riester-Rente prüfen</button>
       </section>
     </div> : step === "b1" || step === "b2" ? <OldRiesterView draft={bDraft} step={step} preview={bPreview}
       navigate={next => { setBPreview(null); setStep(next); }}
       update={next => { setBDraft(next); setDirty(true); setBPreview(null); }}
       show={setBPreview} /> : <>
       <nav className="retirement-steps" aria-label="Altersvorsorge-Schritte">
-        <button onClick={() => { setPreview(null); setBPreview(null); setStep("choice"); }}>A/B-Auswahl</button>
-        <button aria-current={step === "a1" ? "step" : undefined} onClick={() => setStep("a1")}>A1 Fördercheck</button>
-        <button aria-current={step === "a2" ? "step" : undefined} onClick={() => setStep("a2")}>A2 Sparen & Förderung</button>
+        <button onClick={() => navigateA("choice")}>A/B-Auswahl</button>
+        <button aria-current={step === "a1" ? "step" : undefined} onClick={() => navigateA("a1")}>A1 Fördercheck</button>
+        <button aria-current={step === "a2" ? "step" : undefined} onClick={() => navigateA("a2")}>A2 Sparen & Förderung</button>
+        <button aria-current={step === "a3" ? "step" : undefined} onClick={() => navigateA("a3")}>A3 Produktvergleich</button>
+        <button aria-current={step === "a4" ? "step" : undefined} onClick={() => navigateA("a4")}>A4 Kapitalentwicklung</button>
       </nav>
+      {step === "a3" ? <RetirementProducts selected={products} change={ids => { if (ids.length > 2) return; setProducts(ids); setDirty(true); invalidateCapital(); }} />
+        : step === "a4" ? <RetirementProjection draft={capital} result={capitalResult}
+          change={next => { setCapital(next); setCapitalResult(null); setDirty(true); }}
+          show={next => { setCapitalResult(next); setDirty(true); }} /> : <>
       {step === "a1" ? <section className="panel retirement-form" aria-label="Bestätigungen für das Beitragsjahr">
         <p>Die rechtliche Prüfung erfolgt vorgelagert für diese Person und das gewählte Jahr. Diese Oberfläche ermittelt keine Anspruchsberechtigung.</p>
         <label htmlFor={fieldId("year")}>Beitragsjahr</label>
@@ -187,8 +208,9 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
           ? `${preview.status === "review_required" ? "Fachlich prüfen" : preview.status === "unsupported" ? "Derzeit nicht unterstützt" : "Eingabe korrigieren"}: ${preview.message}`
           : changed ? "Angaben geändert – Fördervorschau neu prüfen. Keine aktuellen Förderbeträge." : "Bestätigungen und Beitrag erforderlich. Förderberechtigung fachlich prüfen; noch keine Fördervorschau."}</p>}
       </div>
+      </>}
     </>}
-    {step !== "b1" && step !== "b2" && <details className="retirement-help"><summary>Regelstand, Quellen und Modellgrenzen</summary>
+    {(step === "a1" || step === "a2") && <details className="retirement-help"><summary>Regelstand, Quellen und Modellgrenzen</summary>
       <p>{modelNotice}</p><p>{bonusNotice}</p>
       {rules && <><p>Beitragsjahr: {rules.contributionYear} · Regel-ID: {rules.id} · Geprüft am: {rules.checkedOn} · Rechenversion: {rules.calculationVersion}</p>
         <ul>{rules.sources.map(source => <li key={source}><a href={source} target="_blank" rel="noreferrer">{source}</a></li>)}</ul></>}
