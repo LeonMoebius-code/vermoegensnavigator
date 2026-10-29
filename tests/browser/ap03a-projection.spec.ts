@@ -1,6 +1,8 @@
 import { test, expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
+import { resolve } from "node:path";
+import { build } from "esbuild";
 import { projectRetirement, compareRetirement } from "../../app/domain/retirement/projection";
 import { ProjectionBudget, ProjectionStop, enforceOutputBytes, SCALE, point, checkedCent } from "../../app/domain/retirement/projection-decimal";
 import * as C from "../../app/domain/retirement/projection-contract";
@@ -190,7 +192,7 @@ test("AP03a N31: fixed internal tick and output-size guards, real work stop",()=
 });
 
 test("AP03a integrity: V1 editorial identity, canonical example, deterministic responses",async()=>{
-  const doc=await readFile("docs/AP03a_Neutraler_Projektionsvertrag.md","utf8");expect(createHash("sha256").update(doc).digest("hex")).toBe("234b4dae0a1a01e32b4a6ed3ce54ddd4fabbfea459d4c55a284d1a4380032fc9");
+  const doc=await readFile("docs/AP03a_Neutraler_Projektionsvertrag.md","utf8");expect(createHash("sha256").update(doc).digest("hex")).toBe("c1546f4dcecc6b7172c8f9404d46ddb9bc32a740fab9a26bfabec7f84f01a9d2");
   const raw=doc.match(/```json\n([^\n]+)\n```/)?.[1];expect(raw).toBeTruthy();const z=projectRetirement(raw!);
   expect(z.requestHash).toBe("sha256:c420902072b639a90a26579e626ed0b603df5cba0ec9628b3718908672cdba01");expect(z.status).toBe("calculated");
   expect(JSON.stringify(z)).toBe(canonical(z));expect(projectRetirement(raw!)).toEqual(z);
@@ -223,4 +225,124 @@ test("AP03a comparison matches dated money, not event IDs or redundant schedule 
   const c=comparisonFixture();for(const x of c.scenarios)x.reference.parameters.contributionSchedule.push({fromMonth:"2027-06",monthlyCents:k(10000)});
   const pool=new Map([["assumption",source("assumption")]]);c.scenarios.forEach(x=>{prepareBound(x.retirement,pool);prepareBound(x.reference,pool);});c.sources=[...pool.values()];
   const z=compareRetirement(canonical(c));expect(z.status).toBe("calculated");expect(z.comparisonResults.map(x=>cents(x.completeDifference))).toEqual([0,0,0]);
+});
+
+const issueOrders = [[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]] as const;
+type IssueSelector = (issues: readonly C.Issue[]) => C.Issue | null;
+let selectorPromise: Promise<IssueSelector> | undefined;
+function privateIssueSelector(): Promise<IssueSelector> {
+  // Exercise the actual private function in all collection orders without adding
+  // an export or object-input bypass to the production module's public API.
+  return selectorPromise ??= (async () => {
+    const source = await readFile("app/domain/retirement/projection.ts", "utf8");
+    const bundle = await build({ stdin: { contents: source + "\nexport { first as __selectIssue };\n",
+      resolveDir: resolve("app/domain/retirement"), sourcefile: "projection.ts", loader: "ts" },
+      bundle: true, write: false, platform: "node", format: "cjs", logLevel: "silent" });
+    const sandbox: { exports: Record<string, unknown> } = { exports: {} };
+    new Function("module", "exports", bundle.outputFiles[0].text)(sandbox, sandbox.exports);
+    return sandbox.exports.__selectIssue as IssueSelector;
+  })();
+}
+const stopIssues: readonly C.Issue[] = [
+  { code: "precision_ambiguous", month: "2027-01", path: "/scenarios/0/retirement/parameters" },
+  { code: "insufficient_fee_basis", month: "2027-02", path: "/scenarios/1/retirement/parameters/costs" },
+  { code: "numeric_domain_exceeded", month: null, path: "/scenarios/2/retirement/parameters" },
+];
+async function stopComparison(): Promise<Mutable<C.ComparisonRequest>> {
+  // Fixed STOP witness: exact request hash below binds these independently
+  // derived inputs to the package of 2026-10-29, not to a computed oracle.
+  const doc = await readFile("docs/AP03a_Neutraler_Projektionsvertrag.md", "utf8");
+  const minimal = JSON.parse(doc.match(/```json\n([^\n]+)\n```/)![1]) as Fixture;
+  p(minimal).period.endMonth = "2028-08"; cash(minimal, 1000000000000000);
+  const scenarios = ["a", "b", "c"].map(scenarioId => {
+    const retirement = clone(minimal.projection), reference = clone(minimal.projection);
+    retirement.parameters.projectionId = "retirement-" + scenarioId;
+    reference.parameters.projectionId = "reference-" + scenarioId; reference.parameters.instrument = "unfunded_reference";
+    return { scenarioId, retirement, reference };
+  });
+  scenarios[0].retirement.parameters.marketSchedule[0].equityAnnualReturn = k("0.000000000000006000000000000016500001");
+  const b = scenarios[1].retirement.parameters.costs, c = scenarios[2].retirement.parameters.costs;
+  if (b.mode !== "gross_plus_explicit_costs" || c.mode !== "gross_plus_explicit_costs") throw new Error("fixture mode");
+  b.fixedFees = [{ eventId: "fee-b", month: "2027-02", cents: 1000000000000001, sourceBookingRef: null }];
+  scenarios[2].retirement.parameters.marketSchedule[0].equityAnnualReturn = k(J50);
+  c.fixedFees = Array.from({ length: 20 }, (_, i) => ({ eventId: "fee-c-" + String(i).padStart(2, "0"),
+    month: `${2027 + Math.floor(i / 12)}-${String(i % 12 + 1).padStart(2, "0")}`, cents: 500000000000000, sourceBookingRef: null }));
+  for (const s of scenarios) for (const bound of [s.retirement, s.reference]) {
+    prepareBound(bound, new Map());
+    bound.bindings.forEach(binding => { binding.sourceIds = [minimal.sources[0].sourceId]; });
+  }
+  return { kind: "comparison", versions: clone(minimal.versions), output: { mode: "detailed" }, sources: clone(minimal.sources), scenarios };
+}
+
+test("AP03a priority P01: original STOP request now selects January, preserves other issues", async () => {
+  const raw = canonical(await stopComparison());
+  expect(createHash("sha256").update(raw).digest("hex")).toBe("af4e548f000d2900b654cfa4fb2d5601838de2c9ae4b5884f2c3a3c7c2a28f35");
+  const z = compareRetirement(raw); expect(z.status).toBe("partial"); expect(z.primaryIssue).toEqual(stopIssues[0]);
+  expect(z.projectionResults.filter(x => x.instrument === "retirement_model").map(x => x.primaryIssue)).toEqual(stopIssues);
+  expect(z.projectionResults.filter(x => x.instrument === "unfunded_reference").every(x => x.status === "calculated")).toBe(true);
+  expect(z.comparisonResults.some(x => x.primaryIssue?.code === "basis_mismatch")).toBe(false);
+  expect(compareRetirement(raw)).toEqual(z);
+});
+test("AP03a priority P02: all six identical-issue collection orders have one fixed winner", async () => {
+  const select = await privateIssueSelector(); expect(select([])).toBeNull();
+  for (const order of issueOrders) {
+    const issues = order.map(i => stopIssues[i]), before = JSON.stringify(issues);
+    expect(select(issues)).toEqual(stopIssues[0]); expect(JSON.stringify(issues)).toBe(before);
+  }
+});
+test("AP03a priority P03: dated errors use earliest month before code or path", async () => {
+  const select = await privateIssueSelector();
+  const issues: readonly C.Issue[] = [stopIssues[0], stopIssues[1],
+    { code: "numeric_domain_exceeded", month: "2027-03", path: "/scenarios/0/reference/parameters" }];
+  for (const order of issueOrders) expect(select(order.map(i => issues[i]))).toEqual(stopIssues[0]);
+});
+test("AP03a priority P04: undated errors use documented code, then ASCII path", async () => {
+  const select = await privateIssueSelector();
+  const expected: C.Issue = { code: "evidence_required", month: null, path: "/scenarios/0/reference/parameters/initial" };
+  const issues: readonly C.Issue[] = [
+    { code: "cost_source_unknown", month: null, path: "/scenarios/0/reference/parameters/costs" },
+    { code: "evidence_required", month: null, path: "/scenarios/0/retirement/parameters/initial" }, expected];
+  for (const order of issueOrders) expect(select(order.map(i => issues[i]))).toEqual(expected);
+});
+test("AP03a priority P05: same-month errors use documented code, then ASCII path", async () => {
+  const select = await privateIssueSelector();
+  const expected: C.Issue = { code: "insufficient_fee_basis", month: "2027-01", path: "/scenarios/0/reference/parameters/costs" };
+  const issues: readonly C.Issue[] = [stopIssues[0],
+    { code: "insufficient_fee_basis", month: "2027-01", path: "/scenarios/0/retirement/parameters/costs" }, expected];
+  for (const order of issueOrders) expect(select(order.map(i => issues[i]))).toEqual(expected);
+});
+test("AP03a priority P06: every phase outranks every later phase, including a known month", async () => {
+  const select = await privateIssueSelector();
+  // Independent phase representatives in the literal order of frozen §12.7.
+  const phases: readonly C.Issue[] = [
+    { code: "invalid_type", month: null, path: "" }, { code: "invalid_shape", month: null, path: "" },
+    { code: "version_not_supported", month: null, path: "/versions" },
+    { code: "evidence_required", month: null, path: "/scenarios/0/retirement/parameters/initial" },
+    stopIssues[0], { code: "allowance_coverage_unknown", month: null, path: "/scenarios/0/retirement/parameters/grantCoverage" },
+    { code: "included_cost_amount_unknown", month: null, path: "/scenarios/0/retirement/parameters/costs" }];
+  for (let i = 0; i < phases.length; i++) for (let j = i + 1; j < phases.length; j++) {
+    expect(select([phases[i], phases[j]])).toEqual(phases[i]); expect(select([phases[j], phases[i]])).toEqual(phases[i]);
+  }
+});
+test("AP03a priority P07: scenario comparison also selects its earlier reference dependency", () => {
+  const r = base("2027-01", "2027-02"); cash(r, 1000000000000000);
+  const c = comparisonFixture(r), s = c.scenarios[0], cost = s.retirement.parameters.costs;
+  if (cost.mode !== "gross_plus_explicit_costs") throw new Error("fixture mode");
+  cost.fixedFees = [{ eventId: "fee", month: "2027-02", cents: 1000000000000001, sourceBookingRef: null }];
+  s.reference.parameters.marketSchedule[0].equityAnnualReturn = k("0.000000000000006000000000000016500001");
+  const pool = new Map(c.sources.map(x => [x.sourceId, x]));
+  c.scenarios.forEach(x => { prepareBound(x.retirement, pool); prepareBound(x.reference, pool); });
+  const z = compareRetirement(canonical(c));
+  const expected: C.Issue = { code: "precision_ambiguous", month: "2027-01", path: "/scenarios/0/reference/parameters" };
+  expect(z.projectionResults[0].primaryIssue?.code).toBe("insufficient_fee_basis");
+  expect(z.projectionResults[1].primaryIssue).toEqual(expected); expect(z.comparisonResults[0].primaryIssue).toEqual(expected);
+  expect(z.primaryIssue).toEqual(expected);
+});
+test("AP03a priority P08: response preserves phase priority ahead of dated arithmetic errors", async () => {
+  const c = await stopComparison();
+  c.scenarios[1].retirement.parameters.marketSchedule[0].bondAnnualReturn = { state: "unknown", reason: "missing" };
+  const z = compareRetirement(canonical(c));
+  const expected: C.Issue = { code: "input_fact_unknown", month: null, path: "/scenarios/1/retirement/parameters/marketSchedule/0/bondAnnualReturn" };
+  expect(z.primaryIssue).toEqual(expected); expect(z.comparisonResults[1].primaryIssue).toEqual(expected);
+  expect(z.projectionResults[0].primaryIssue).toEqual(stopIssues[0]);
 });

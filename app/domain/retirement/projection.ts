@@ -12,10 +12,23 @@ type Request = C.ProjectionRequest | C.ComparisonRequest;
 type Located = { bound: C.BoundProjection; path: string };
 const issue = (code: C.IssueCode, path: string, month: string | null = null): C.Issue => ({ code, path, month });
 const compare = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
+// Seven phase boundaries from §12.7; the 2026-10-29 decision orders dates
+// only within a phase, with undated issues following all dated issues.
+const ISSUE_PHASE_ENDS = ["input_bytes_limit", "entry_limit", "detail_rows_limit", "cost_type_not_supported",
+  "precision_ambiguous", "basis_mismatch", "output_bytes_limit"] as const;
+const ISSUE_PHASE_RANKS = ISSUE_PHASE_ENDS.map(code => C.ISSUE_ORDER.indexOf(code));
+function compareIssues(a: C.Issue, b: C.Issue): number {
+  const ar = C.ISSUE_ORDER.indexOf(a.code), br = C.ISSUE_ORDER.indexOf(b.code);
+  const phase = ISSUE_PHASE_RANKS.findIndex(end => ar <= end) - ISSUE_PHASE_RANKS.findIndex(end => br <= end);
+  if (phase) return phase;
+  if (a.month === null && b.month !== null) return 1;
+  if (a.month !== null && b.month === null) return -1;
+  return (a.month !== null && b.month !== null ? compare(a.month, b.month) : 0)
+    || ar - br || compare(a.path, b.path);
+}
 function first(issues: readonly C.Issue[]): C.Issue | null {
   let result: C.Issue | null = null;
-  for (const i of issues) if (!result || C.ISSUE_ORDER.indexOf(i.code) < C.ISSUE_ORDER.indexOf(result.code)
-    || i.code === result.code && compare(i.path, result.path) < 0) result = i;
+  for (const i of issues) if (!result || compareIssues(i, result) < 0) result = i;
   return result;
 }
 function object(v: unknown): v is Data { return v !== null && typeof v === "object" && !Array.isArray(v); }
@@ -649,9 +662,9 @@ function comparison(r: Request, contexts: readonly Context[], results: readonly 
     const sameCostStage = (a.valueBasis === "before_costs") === (b.valueBasis === "before_costs");
     const mismatch = !equal || !sameCostStage ? issue("basis_mismatch", `/scenarios/${i}`) : null;
     const delta = (x: C.MoneyMetric, y: C.MoneyMetric): C.MoneyMetric => {
-      if (mismatch) return blocked(mismatch);
-      if (x.status === "review_required") return x;
-      if (y.status === "review_required") return y;
+      const error = first([...(mismatch ? [mismatch] : []),
+        ...(x.status === "review_required" ? [x.issue] : []), ...(y.status === "review_required" ? [y.issue] : [])]);
+      if (error) return blocked(error);
       return recoverMetric(() => money(minus(metricInterval(x), metricInterval(y)), `/scenarios/${i}`));
     };
     const full = delta(a.summary.completeEndBalance, b.summary.completeEndBalance);

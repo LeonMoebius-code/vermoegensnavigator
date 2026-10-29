@@ -900,6 +900,16 @@ Bei gesperrter Trajektorie werden initialBalance sowie valide reguläre/Einmal-/
 
 ### 12.7 Vollständiger Fehlerkatalog und Priorität
 
+**Verbindlicher Auslegungsbeschluss der Projektleitung vom 29.10.2026 zur V1.0:** Der bisherige vollständige Vertragsstand bleibt über PR #65, Head `fc640b2f1be99baa104ef34594c98c3fbf710b2e`, und seine SHA-256 `234b4dae0a1a01e32b4a6ed3ce54ddd4fabbfea459d4c55a284d1a4380032fc9` nachvollziehbar. Für die Auswahl jedes primaryIssue gilt ab diesem Beschluss die folgende vollständige Ordnung; sie präzisiert den anschließenden unverändert erhaltenen Absatz:
+
+1. Fehlerphase aufsteigend gemäß dem nachstehenden siebenphasigen Fehlerkatalog.
+2. Innerhalb derselben Phase stehen alle Fehler mit bekanntem month vor allen Fehlern mit month:null.
+3. Datierte Fehler werden nach Monat aufsteigend geordnet.
+4. Innerhalb desselben Monats entscheidet die festgelegte Fehlercode-Priorität, danach der Pfad in ASCII-Reihenfolge.
+5. Die anschließend folgenden Fehler mit month:null werden untereinander nach Fehlercode-Priorität und Pfad in ASCII-Reihenfolge geordnet.
+
+Die Auswahl ist unabhängig von der Reihenfolge der Fehlererfassung. Im reproduzierten Drei-Fehler-Fall (precision_ambiguous im Januar 2027, insufficient_fee_basis im Februar 2027, numeric_domain_exceeded ohne Monat, jeweils Phase 5) ist Response.primaryIssue verbindlich `{code:"precision_ambiguous",month:"2027-01",path:"/scenarios/0/retirement/parameters"}`. Die anderen beiden Fehler bleiben in ihren jeweiligen Projektionsergebnissen erhalten. Dies gilt auch bei der Auswahl aus mehreren Projektionen und bei den Abhängigkeiten eines Szenariovergleichs. Die vier API-Versionskennungen sowie Kapitalmathematik, Förderlogik, Kostenmodelle und alle übrigen Fachkonventionen bleiben unverändert. Die neue vollständige Dateiprüfsumme wird wegen Selbstreferenz im gesonderten Integritätsnachweis dokumentiert.
+
 Öffentlich nur code, bekannter path und gegebenenfalls month. Kein freier Text. Reihenfolge nach Phasen, darin nach der folgenden Codefolge; danach bekannter Pointer in ASCII-Reihenfolge. Bei Monatsfehlern zuerst frühester Monat, dann Codefolge. Unbekannte Schlüssel werden nicht in Pfade oder Fehlermeldungen übernommen. Rootpfad leer. Jede Response/Projektion hat genau ein primaryIssue oder null; gesperrte Kennzahlen können zusätzlich ihren konkreten Abhängigkeitsfehler tragen.
 
 | Phase | Codes in Prioritätsreihenfolge | Wirkung |
