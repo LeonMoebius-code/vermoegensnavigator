@@ -32,8 +32,8 @@ export function RetirementCustomer({ plan, change, back }: { plan: CustomerPlan;
     onChange={e => {
       const next = { ...plan.capital, [key]: e.target.checked };
       // Explicit evidence actions are preserved; ordinary edits revoke the evidence.
-      edit({ ...plan, capital: key === "grantConfirmed" || key === "costConfirmed" || key === "referenceCostConfirmed" ? next
-        : editCustomerCapital(plan, next).capital });
+      edit(key === "grantConfirmed" || key === "costConfirmed" || key === "referenceCostConfirmed"
+        ? { ...plan, capital: next } : editCustomerCapital(plan, next));
     }} />{label}</label>{error?.field === key && <p id={id("check-error")} role="alert">{error.message}</p>}</div>;
   const legalSelect = <K extends keyof GrantDraft>(key: K, label: string, choices: readonly (readonly [string, string])[]) => <div className="retirement-capital-field">
     <label htmlFor={id(`evidence-${key}`)}>{label}</label><select id={id(`evidence-${key}`)} value={String(plan.evidence[key])}
