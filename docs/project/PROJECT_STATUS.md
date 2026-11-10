@@ -1,5 +1,26 @@
 # Projektstatus und nächste Schritte
 
+**Aktuelle Fortschreibung vom 28.10.2026.** Quellen: Live-GitHub-Branch, Git-Commit-/PR-APIs, CI-Runs und `package.json`. Die untenstehenden Checkpoints vom 26. und 23.10.2026 bleiben als historische Momentaufnahmen erhalten; ihre dortigen Angaben zu offenen Versions- und UX-PRs sind überholt.
+
+## Bestätigter Live-Stand vom 28.10.2026
+
+| Ebene | Bestätigter Stand / Grenze |
+| --- | --- |
+| `main` | `add55a43ff8b93545b490d6df5bec2d17c4d1f03`; Git-Tree `93d6e3b6533f7cf3ef286bbceb8c8f7e44a76742`; Entwicklungsstand **V0.18.4 / Schema 11**. |
+| Versions-PR [#55](https://github.com/LeonMoebius-code/vermoegensnavigator/pull/55) | Am 26.10.2026 als `ae798dfff80b6f805b013e0a1aa871120bdde1d1` integriert. [R1-Run 40334944352](https://github.com/LeonMoebius-code/vermoegensnavigator/actions/runs/40334944352) auf diesem Source-SHA: `workflow_dispatch`, Attempt 1, erfolgreich. Der aktuelle öffentliche Byte-/Provenienzstand wurde in **dieser** Fortschreibung nicht erneut gemessen. |
+| UX-PR [#58](https://github.com/LeonMoebius-code/vermoegensnavigator/pull/58) | Am 26.10.2026 als `d57b3289911cbc35d93cf72cb0ee4ab39dc645c5` integriert; gebündelte Einstellungen, Navigation und responsives Vermögenshaus nach [UX-Vertrag](../UX_Navigation_Recovery_Vermoegenshaus.md). #56/#57 geschlossen, nicht gemergt. |
+| AP-01a [#59](https://github.com/LeonMoebius-code/vermoegensnavigator/pull/59) | Am 27.10.2026 nach zwei unabhängigen GO auf dem finalen Head `87c6e97a806d6a47100f9d6e27e52872b4ea709c` integriert; Merge ist der obige `main`. Isolierter, strikt validierender Kern zur neuen unmittelbaren Förderung für bestätigte Standardfälle 2027/2028, einschließlich Getter-Nachkorrektur. [Fach- und Laufzeitvertrag](../AP01a_Direkte_Foerderung.md). |
+| AP-01a-Finalgates | [Push 40542844543](https://github.com/LeonMoebius-code/vermoegensnavigator/actions/runs/40542844543) auf finalem Head und [PR 40542854023](https://github.com/LeonMoebius-code/vermoegensnavigator/actions/runs/40542854023) auf synthetischem Merge `87812d8c55784c288dbfdc08685e8ca192ff77cf`: je 223/223 Browsertests und 55/55 R1-Tests. 79 synthetische Sollfälle, 180.005 Cent-Prüffälle und 44 neue Strukturregressionen. Kein neuer eigenständiger main-Gate-Lauf behauptet. |
+| Diagnose-PR [#43](https://github.com/LeonMoebius-code/vermoegensnavigator/pull/43) | Weiterhin offen/Draft und **AUDIT ONLY – NEVER MERGE**. Einziger am 28.10.2026 offen gefundener PR. |
+
+**Abgrenzung AP-01a:** Der integrierte reine Domänenrechenkern ist keine UI, keine Fallpersistenz, keine vollständige Förderberechtigungsprüfung, keine Alt-Riester-/Partner-/Mehrvertragslogik und keine Produkt-, Steuer- oder Bonusberechnung. Insbesondere der 200-€-Bonus und ungeklärte Rundung werden nicht eigenmächtig berechnet. Integration bedeutet weder externe fachliche Freigabe noch Release oder Deployment. Für #59 wurde kein Release oder Deployment ausgelöst.
+
+**Nächste Priorität:** Der weitere Abschnitt „Neue geförderte Altersvorsorge“ ist nach AP-01a noch konkret mit Leon zu priorisieren; ohne neue Zustimmung kein vollständiger Work-Auftrag. Das V0.4-Fach-/Bedienkonzept und die dort vorgesehenen AP-00-Prüf- und Folgegrenzen bleiben maßgeblich. V0.19 freier Planvergleich bleibt als größeres Vorhaben vorgemerkt; es wird durch diese Statuspflege nicht automatisch neu eingeplant. Bestehende Datenschutz-, Store-/Export- und Releaseverträge bleiben unverändert.
+
+---
+
+## Historischer Projektcheckpoint vom 26.10.2026 (überholt)
+
 **Datierter Checkpoint vom 26.10.2026; Live-GitHub vor Entscheidungen erneut prüfen.**
 Quelle: GitHub Commit-/PR-/Actions-/Artefakt-APIs, öffentliche Build-Provenienz
 und erneuter Vergleich mit Originalreleaseartefakten. Dieser Pflegeauftrag
