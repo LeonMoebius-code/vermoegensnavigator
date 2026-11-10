@@ -15,18 +15,20 @@ Refs, PRs und CI erneut zu prüfen; ein Statuscheckpoint ist keine Freigabe.
 
 https://leonmoebius-code.github.io/vermoegensnavigator/
 
-Am 26.10.2026 erneut geprüft: **V0.18.3**, ursprünglicher Release vom
-14.10.2026, Source `80c3317162f79f9a01d2d6f0428d02d14e4e806c`,
-[Original-R1-Run 38542251552](https://github.com/LeonMoebius-code/vermoegensnavigator/actions/runs/38542251552).
-Öffentliche `build-info.json`, `index.html` und `app.js` stimmen mit den
-Originalartefakten überein. Die frühere Angabe „öffentlich V0.18.2“ war ein
-überholter Checkpoint; historische Nachweise bleiben erhalten.
+Am 10.11.2026 erneut belegt: **V0.18.4**, Source
+`70cd8841d9d04d9b9e9de75213b7a6e210a3f78b`,
+[Original-R1-Run 41030503241](https://github.com/LeonMoebius-code/vermoegensnavigator/actions/runs/41030503241)
+vom 30.10.2026, Attempt 1, Candidate und Deploy erfolgreich. Öffentliche
+`build-info.json`, `index.html` und `app.js` stimmen mit den erneut geprüften
+Originalartefakten überein. Ältere Releasebelege bleiben in der historischen
+[V0.18.4-Vorbereitung](docs/V0184_Releasevorbereitung.md) erhalten.
 
-Der integrierte Entwicklungsstand enthält weitere Änderungen bis PR #54.
-Diese Vorbereitung kennzeichnet ihn als **V0.18.4 / unverändert Schema 11**;
-sie ist noch nicht integriert oder veröffentlicht. Umfang, noch offene
-Releasevoraussetzungen und Rollbackweg:
-[V0.18.4-Releasevorbereitung](docs/V0184_Releasevorbereitung.md).
+Integriert auf `main`: V0.18.4 / Schema 11 einschließlich UX-03a/03b (#69),
+Source `1a7f71fc70242fca2039c5ce76c81fe9288d9e77`.
+Dieser isolierte Draft bereitet **V0.18.5 / unverändert Schema 11** vor;
+er ist noch nicht integriert oder veröffentlicht. Vollständiger Sourceumfang,
+Fachtextprüfung und spätere Freigaben:
+[V0.18.5-Releasevorbereitung](docs/V0185_Releasevorbereitung.md).
 Integration, Releasebereitschaft, ausdrückliche Releasefreigabe und tatsächliche
 Veröffentlichung sind getrennte Schritte. Keine Releasefreigabe aus grüner CI.
 
@@ -47,7 +49,7 @@ npm run verify
 auf dasselbe Gate. Der Produktionsbuild liegt anschließend in `.pages-dist`;
 dieser lokale Build veröffentlicht nichts.
 
-### Aktuelles Verify-Gate (V0.18.4-Versionsvorbereitung)
+### Aktuelles Verify-Gate (V0.18.5-Versionsvorbereitung)
 
 Die ausführbare Liste wird ausschließlich im `verify`-Skript in
 [package.json](package.json) gepflegt; feste historische Testzahlen sind kein
@@ -59,11 +61,11 @@ in der [Feature-CI](.github/workflows/ci.yml).
 
 **Separat nach Verify** prüft R1 mit `node scripts/verify-release-artifact.mjs "$(git rev-parse HEAD)"`
 das seit Build/CP0B unveränderte Artefakt gegen den tatsächlich ausgecheckten Commit.
-`node --test scripts/verify-r1.test.mjs` führt die **55 Operationaltests ohne Skips**
-aus. Beides gehört zur Feature-CI, ist aber kein zusätzlicher Fachtesteinstieg in
+`node --test scripts/verify-r1.test.mjs` führt die aktuellen Operationaltests ohne Skips
+aus; die tatsächliche Anzahl wird je Lauf nachgewiesen. Beides gehört zur Feature-CI, ist aber kein zusätzlicher Fachtesteinstieg in
 `npm run verify` und erzeugt keinen weiteren Produktionsbuild.
-Zielversion, gesamter integrierter Umfang und offene Releasevoraussetzungen:
-[V0.18.4-Releasevorbereitung](docs/V0184_Releasevorbereitung.md).
+Zielversion, gesamter noch nicht veröffentlichter Umfang und offene Releasevoraussetzungen:
+[V0.18.5-Releasevorbereitung](docs/V0185_Releasevorbereitung.md).
 Die [V0.18.3-Vorbereitung](docs/V0183_Releasevorbereitung.md) bleibt als
 historischer Stand vom 14.10.2026 unverändert erhalten.
 

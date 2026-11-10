@@ -1,5 +1,61 @@
 # Projektstatus und nächste Schritte
 
+## Aktueller Checkpoint · 10.11.2026
+
+Erneut READ-ONLY anhand Git-Objekten, GitHub-PR-/Actions-/Artefaktbelegen und
+öffentlicher Provenienz geprüft. Dieser Abschnitt ersetzt die Aktualitätsansprüche
+der unten unverändert erhaltenen Oktober-Momentaufnahmen. Kein eigenes Abnahme-GO.
+
+| Ebene | Bestätigter Stand / Grenze |
+| --- | --- |
+| Integrierte Entwicklung | `main` = `1a7f71fc70242fca2039c5ce76c81fe9288d9e77`, Tree `fd393d48f637a8d9fa01ca70466e8e2e7c4fe57f`, V0.18.4 / Schema 11; #69 integriert. |
+| Öffentlich belegter Release | V0.18.4 aus `70cd8841d9d04d9b9e9de75213b7a6e210a3f78b`, Tree `8345eb6e7ffc3a322017e2845d70f4854af48a7a`; [R1 41030503241](https://github.com/LeonMoebius-code/vermoegensnavigator/actions/runs/41030503241), 30.10.2026, Attempt 1, Candidate und Deploy success. Live-Provenienz/HTML/Programm bytegleich mit Originalen; vollständiges gespeichertes Manifest geprüft. |
+| Beauftragte Vorbereitung | V0.18.5 / Schema 11 auf isoliertem `work/release-v0185-preparation`; ausschließlich Versionsmetadaten, Kennzeichnung und Dokumentation. Finaler Head/Tree und Doppel-CI im Draft-PR und identischen externen Nachweisen. Noch nicht integriert oder veröffentlicht. |
+| Readiness / Freigabe | Vorbereitung ersetzt keine unabhängige Abnahme oder Veröffentlichungsentscheidung. Zwei unabhängige Abnahmen desselben finalen Heads, gesonderter Integrationsbeschluss für diesen Versions-PR, danach Readiness des dann aktuellen main. Release und Deployment jeweils ausdrücklich durch Leon. |
+| Offene fremde Drafts | #43, Head `5a8963a4f7c6fd80c83da7f6872139400c51e656`: **AUDIT ONLY – NEVER MERGE**. #60, Head `3aec3f0ffd9e873adad85cfaf95fea918fa9cb9c`: älterer Status-Draft. Beide außerhalb der Feature-/Releasebasis; weder verändert, gemergt noch geschlossen. |
+
+### Seit Oktober tatsächlich integriert
+
+Die folgenden Mergecommits sind Vorfahren des aktuellen main; die Altersvorsorge-
+pakete bis #66 sind bereits im veröffentlichten R1-Source enthalten. Langlebige
+Featurebranches sind keine erneuten Aufträge. Die Tabelle belegt Integration,
+nicht eine eigene Wiederholung früherer Abnahmen.
+
+| Paket / PR | Tatsächlicher Merge-Source |
+| --- | --- |
+| V0.18.4-Versionsvorbereitung #55 | `ae798dfff80b6f805b013e0a1aa871120bdde1d1` |
+| Navigation / Recovery / Vermögenshaus #58 | `d57b3289911cbc35d93cf72cb0ee4ab39dc645c5` |
+| AP-01a neue unmittelbare Förderung #59 | `add55a43ff8b93545b490d6df5bec2d17c4d1f03` |
+| AP-01b Alt-Riester-Jahreskern #61 | `27a896799d0c02eb8976dbe74700956dfd58d69d` |
+| AP-04a A1/A2 #63 | `d2ef1d5b59b729ccdecc04f8d45095bb18bcb56f` |
+| AP-05a B1/B2 #64 | `0bb89fd7e0aad99247c8d23a7efcfa7c86a52841` |
+| AP-03a neutraler Monatskern #65 | `1303ca25776389f0cef1557ae9062a22914f8378` |
+| AP-04b A3/A4 #66 | `c25c2bdd471f77efa0c0e38e77792d153db64f05` |
+| R1 Checkout-Historie #67 | `70cd8841d9d04d9b9e9de75213b7a6e210a3f78b` |
+| UX-03a/03b mit P2-Checkboxregression #69 | `1a7f71fc70242fca2039c5ce76c81fe9288d9e77` (02.11.2026), finaler Feature-Head `cd7d46c68c0f5f9468951984ec21b79dc861311e` |
+
+Der vollständige noch unveröffentlichte Ausgangsvergleich
+`70cd8841…` → `1a7f71fc…` umfasst **3 Commits / 9 Dateien**, ausschließlich #69.
+Hinzu kommen die sieben Versions-/Dokumentationsdateien dieses Drafts.
+[Umfang, aktuelle Fachtext-Sichtprüfung, Datenstände und Rückfallweg](../V0185_Releasevorbereitung.md).
+B1/B2 bleibt ein bedingter bonusfreier Jahreszulagenvergleich, keine individuelle
+Vertragswechselberatung. Neue Regime-/Partner-/Mehrvertragsfälle werden nicht aus
+historischen Angaben automatisch bestätigt. Keine neuen Förderrules oder Produktdaten.
+
+Beschlossene Reihenfolge vom 10.11.2026: zuerst V0.18.5 vorbereiten und getrennte
+Abnahme-/Integrations-/Veröffentlichungsschritte beachten; danach V0.19 freier
+Planvergleich als nächstes größeres Feature priorisieren ([D-15](DECISIONS.md)).
+V0.19 wird hier nicht begonnen. Öffentlicher Desktop-Testprototyp; keine produktive
+Bankfreigabe, keine revisionssichere Speicherung und keine neue Datenaktualitätszusage.
+
+---
+
+## Historische Dokumentation vom 26.10.2026 und davor
+
+**Sämtliche folgenden Aktualitäts-/Offen-/Liveaussagen gehören ausschließlich zu
+ihrem damaligen Checkpoint. Für den Stand 10.11.2026 gilt der Abschnitt oben.**
+
+
 **Datierter Checkpoint vom 26.10.2026; Live-GitHub vor Entscheidungen erneut prüfen.**
 Quelle: GitHub Commit-/PR-/Actions-/Artefakt-APIs, öffentliche Build-Provenienz
 und erneuter Vergleich mit Originalreleaseartefakten. Dieser Pflegeauftrag
