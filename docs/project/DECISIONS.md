@@ -34,6 +34,12 @@ Owner und Änderungsanlässe: [Pflegevertrag](OPERATING_MODEL.md#pflegevertrag).
 
 | D-14 · 26.10.2026 · **beschlossen** | Vier UX-Nachkorrekturen nach V0.18.4: H5b/Originaldownloads/Sicherungen unter „Mehr & Einstellungen“ im Seitenleistenfuß; rein optionale Bestandsdiagnosen ohne geschützte Fälle nicht automatisch anzeigen; vollständiges responsives Vermögenshaus ohne horizontales Scrollen; Navigationsstart „Neue Beratung“ entfernen, Schnellstart und „Neuer Fall“ erhalten. Sicherheits-, Speicher- und Fachverträge unverändert; Version 0.18.4 / Schema 11. | Konkreter UX-Workauftrag vom 26.10.2026; [Umfang und Nachweise](../UX_Navigation_Recovery_Vermoegenshaus.md). Ersetzt ausschließlich die frühere Scrollpflicht und den automatischen optionalen Statushinweis aus PR #40. Kein Merge-/Release-/Deploymentbeschluss. |
 
+## Fortschreibung 10.11.2026
+
+| ID / Datum / Status | Beschluss und Gültigkeitsbereich | Quelle / Ersetzung |
+| --- | --- | --- |
+| D-15 · 10.11.2026 · **beschlossen, keine Releasefreigabe** | Nach Integration von UX-03a/03b zunächst V0.18.5 bei unverändertem Schema 11 technisch vorbereiten; danach V0.19 freier Planvergleich als nächstes größeres Feature priorisieren. Zwei unabhängige Abnahmen desselben finalen Stands und gesonderter Integrationsbeschluss für den Versions-PR; Readiness des dann aktuellen main sowie ausdrückliche Release- und Deploymentautorisierung bleiben getrennt. | Bestätigter V0.18.5-Vorbereitungsauftrag vom 10.11.2026; [Umfang](../V0185_Releasevorbereitung.md). Fortschreibung der Versionsreihenfolge nach D-13, keine Änderung von D-01 bis D-14 und keine Erweiterung der Prozessbefugnisse. V0.19 erhält einen gesonderten Featureauftrag. |
+
 Neue Einträge nur für tatsächlich bestätigte Grundsatz-/Fachentscheidungen:
 Datum, beschlossen/vorgeschlagen/ersetzt, Inhalt, Gültigkeit, Quelle und explizite
 Ersetzung vermerken. Eine technische Zwischenkorrektur ist kein neuer Grundsatz.
