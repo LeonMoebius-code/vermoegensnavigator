@@ -112,6 +112,14 @@ test("UX1 correction of a previously confirmed personal case blocks stale grant 
   await page.getByLabel("Für Person und Jahr geprüft: keine einzubeziehenden Kinder", { exact: true }).check();
   await page.getByLabel("Den geplanten Jahres-Eigenbeitrag für Person, Vertrag und Jahr fachlich als förderfähig geprüft", { exact: true }).check();
   await expect(page.getByTestId("customer-base-grant")).toHaveText("390,00 €");
+  await page.getByLabel("Geprüfte Förderregelung", { exact: true }).selectOption("old");
+  await page.getByLabel("Geprüfte Förderregelung", { exact: true }).selectOption("new_confirmed");
+  await expect(page.getByTestId("customer-base-grant")).toHaveCount(0);
+  await expect(page.getByLabel("Für Person und Jahr geprüft: keine einzubeziehenden Kinder", { exact: true })).not.toBeChecked();
+  await expect(page.getByLabel("Den geplanten Jahres-Eigenbeitrag für Person, Vertrag und Jahr fachlich als förderfähig geprüft", { exact: true })).not.toBeChecked();
+  await page.getByLabel("Für Person und Jahr geprüft: keine einzubeziehenden Kinder", { exact: true }).check();
+  await page.getByLabel("Den geplanten Jahres-Eigenbeitrag für Person, Vertrag und Jahr fachlich als förderfähig geprüft", { exact: true }).check();
+  await expect(page.getByTestId("customer-base-grant")).toHaveText("390,00 €");
   await button(page, "Zurück zu meinen Voraussetzungen").click(); await page.getByRole("radio", { name: "Selbstständig oder freiberuflich", exact: true }).check();
   await expect(page.getByTestId("funding-orientation")).not.toHaveText(possibleText);
   await button(page, "Weiter zum eigenen Sparplan").click();

@@ -14,7 +14,16 @@ export function RetirementCustomer({ plan, change, back, review, orientation }: 
     change(next);
   };
   const cap = (key: keyof CapitalDraft, value: CapitalDraft[keyof CapitalDraft]) => edit(editCustomerCapital(plan, { ...plan.capital, [key]: value }));
-  const evidence = <K extends keyof GrantDraft>(key: K, value: GrantDraft[K]) => edit({ ...plan, evidence: { ...plan.evidence, [key]: value } });
+  const evidence = <K extends keyof GrantDraft>(key: K, value: GrantDraft[K]) => {
+    if (plan.evidence[key] === value) return;
+    const next = { ...plan.evidence, [key]: value };
+    if (key === "entitlement" || key === "regime" || key === "contract") next.contributionConfirmed = false;
+    if (key === "regime" || key === "contract") {
+      next.childrenStatus = "unconfirmed";
+      next.children = next.children.map(c => ({ ...c, status: "assignment_unconfirmed" }));
+    }
+    edit({ ...plan, evidence: next });
+  };
   const derived = plannedGrantDraft(plan), grant = customerGrant(plan);
   const own = "status" in derived ? derived : annualContribution(derived);
   const error = run?.status === "invalid_input" ? run : null;
