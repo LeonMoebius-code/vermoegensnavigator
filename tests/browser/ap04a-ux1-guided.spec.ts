@@ -15,7 +15,8 @@ for (const year of ["2027", "2028"]) test(`UX1 orientation ${year}: employee plu
   expect(customerGrant(emptyCustomerPlan()).status).toBe("review_required");
 });
 for (const year of ["", "2026", "2029", "oops"]) test(`UX1 unapproved or unknown year ${year}: no positive status`, () => {
-  expect(fundingOrientation({ ...emptyRetirementAnswers(), year, employment: "employee" }, year || "2027").possible).toBe(false);
+  const o = fundingOrientation({ ...emptyRetirementAnswers(), year, employment: "employee" }, year || "2027");
+  expect(o.possible).toBe(false); expect(o.next[0]).toMatch(/Beitragsjahr|Startjahr|Rechtsstand/);
 });
 for (const employment of ["civil", "self", "none", "other"] as const) test(`UX1 ${employment}: concrete open condition, no blanket rejection`, () => {
   const o = fundingOrientation({ ...emptyRetirementAnswers(), year: "2027", employment, married: "yes", partner: "yes" }, "2027");
@@ -44,11 +45,13 @@ test("UX1 S1: no selected route, guest details, bounded example, B-specific orie
   await expect(button(page, "B – Bestehende Riester-Rente prüfen")).toBeVisible();
   await expect(page.getByRole("radio")).toHaveCount(0);
   await page.getByText("Mehr erfahren", { exact: true }).click();
-  await expect(page.getByText(/Union Investment sieht einen Fondsauszahlplan vor/)).toBeVisible();
+  await expect(page.getByText(/Beim neuen Altersvorsorgedepot sieht Union Investment einen Fondsauszahlplan vor/)).toBeVisible();
   await expect(page.getByRole("region", { name: "Das Altersvorsorgedepot verstehen" })).toContainText("540 € im Vertrag");
   await expect(page.getByRole("region", { name: "Das Altersvorsorgedepot verstehen" })).toContainText("840 € im Vertrag");
   await button(page, "B – Bestehende Riester-Rente prüfen").click();
   await expect(page.getByRole("region", { name: "Orientierung zum bestehenden Riester-Vertrag" })).toContainText("tatsächlicher Übertragungswert");
+  await page.getByText("Mehr erfahren", { exact: true }).click();
+  await expect(page.getByText(/Bei Ihrem bestehenden Riester-Vertrag prüfen wir Garantie, Auszahltermin/)).toBeVisible();
   await expect(page.getByRole("region", { name: "Das Altersvorsorgedepot verstehen" })).toHaveCount(0);
   await expect(page.getByTestId("old-result")).toHaveCount(0);
 });

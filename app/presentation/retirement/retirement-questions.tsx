@@ -34,6 +34,9 @@ export function fundingOrientation(a: RetirementAnswers, startYear: string) {
     : a.employment === "none" ? "Ohne Erwerbstätigkeit können Versicherungszeiten oder eine Partnerberechtigung relevant sein."
     : "Bitte klären Sie Ihre konkrete Versicherungssituation für das Beitragsjahr.";
   const next: string[] = [];
+  if (!a.year || !/^\d{4}$/.test(a.year) || Number(a.year) < 100) next.push("Beitragsjahr auswählen oder mit dem Berater klären.");
+  else if (Number(a.year) < 2027) next.push("Ein Startjahr ab 2027 wählen oder einen bestehenden Riester-Vertrag gesondert prüfen.");
+  else if (!supported) next.push("Den Rechtsstand für Ihr Beitragsjahr mit dem Berater prüfen.");
   if (!a.employment) next.push("Wählen Sie Ihre Erwerbs- und Versicherungssituation oder klären Sie diese mit Ihrem Berater.");
   if (possible) next.push("Versicherungspflicht für Person und Beitragsjahr, förderfähigen Vertrag und eigenen Jahresbeitrag fachlich prüfen.");
   if (a.employment === "civil") next.push("Besoldungsnachweis und wirksame Einwilligung mit Ihrer zuständigen Stelle prüfen.");
@@ -88,7 +91,8 @@ export function RetirementInformation({ riester = false }: { riester?: boolean }
     <details className="retirement-help"><summary>Mehr erfahren</summary>
       <p>In der Ansparphase werden Erträge im zertifizierten Vertrag grundsätzlich nicht laufend privat besteuert. Ein zusätzlicher Steuervorteil aus der Günstigerprüfung ist gesondert zu beurteilen. Geförderte Leistungen sind bei Auszahlung grundsätzlich nachgelagert steuerpflichtig.</p>
       <p>Grundzulage, mögliche Kinderzulage und ein möglicher einmaliger Berufseinsteigerbonus setzen jeweils die gesetzlichen Voraussetzungen voraus. Familien-, Vertrags- und Jahreskonstellation müssen geprüft werden. Ein Bonus wird nicht automatisch hinzugerechnet.</p>
-      <p>Union Investment sieht einen Fondsauszahlplan vor. Dieser garantiert keine lebenslange Monatsrente. Vorzeitige schädliche Verwendung kann Rückzahlungen auslösen; Auszahlung, Kosten und Garantien sind am konkreten Vertrag zu prüfen.</p>
+      {riester ? <p>Bei Ihrem bestehenden Riester-Vertrag prüfen wir Garantie, Auszahltermin und eine bestehende lebenslange Rentenkomponente anhand der Vertragsunterlagen. Ein anderes Förderregime oder eine andere Auszahlform wird hier nicht automatisch gewählt.</p>
+        : <p>Beim neuen Altersvorsorgedepot sieht Union Investment einen Fondsauszahlplan vor. Dieser garantiert keine lebenslange Monatsrente. Vorzeitige schädliche Verwendung kann Rückzahlungen auslösen; Auszahlung, Kosten und Garantien sind am konkreten Vertrag zu prüfen.</p>}
       <p>Quellenstand: Recht für 2027/2028, geprüft 11.11.2026; öffentliche Union-Information, Stand Oktober 2026. Keine individuelle Produkt- oder Förderzusage.</p>
       <ul><li><a href="https://rvrecht.deutsche-rentenversicherung.de/SharedDocs/rvRecht/05_Normen_und_Vertraege/02_C-K/EStG/0010a/0010a_2027_01_01.html" target="_blank" rel="noreferrer">Gesetzliche Voraussetzungen 2027</a></li>
         <li><a href="https://rvrecht.deutsche-rentenversicherung.de/SharedDocs/rvRecht/05_Normen_und_Vertraege/02_C-K/EStG/0010a/0010a_2028_01_01.html" target="_blank" rel="noreferrer">Gesetzliche Voraussetzungen 2028</a></li>
