@@ -8,8 +8,9 @@ import { changeOldMode, changeOldYear, emptyOldDraft, oldContribution, oldRuleId
 import { emptyCapitalDraft, type CapitalRun } from "./projection-adapter";
 import { RetirementProducts } from "./retirement-products";
 import { RetirementProjection } from "./retirement-projection";
-import { emptyCustomerPlan } from "./customer-plan-adapter";
+import { editCustomerCapital, emptyCustomerPlan } from "./customer-plan-adapter";
 import { RetirementCustomer } from "./retirement-customer";
+import { emptyRetirementAnswers, FundingOrientation, invalidateAnswer, RetirementInformation, RetirementQuestions, type RetirementAnswers } from "./retirement-questions";
 
 export interface RetirementNavigation { confirmDiscard: () => boolean }
 const discardMessage = "Ungespeicherten Altersvorsorgeentwurf verwerfen? Alle Vorsorgeeingaben gehen verloren. Allgemeine Vermögensfälle bleiben erhalten.";
@@ -23,8 +24,25 @@ function Help({ children }: { children: ReactNode }) {
 /** The entire draft lives here; unmount discards it. No persistence or general-case API. */
 export const RetirementEntry = forwardRef<RetirementNavigation>(function RetirementEntry(_, ref) {
   const [draft, setDraft] = useState(emptyGrantDraft);
-  const [step, setStep] = useState<"choice" | "customer" | "a1" | "a2" | "a3" | "a4" | "b1" | "b2">("choice");
+  const [step, setStep] = useState<"choice" | "introduction" | "questions" | "customer" | "a1" | "a2" | "a3" | "a4" | "b1" | "b2">("choice");
   const [customerPlan, setCustomerPlan] = useState(emptyCustomerPlan);
+  const [answers, setAnswers] = useState(emptyRetirementAnswers);
+  const answer = <K extends keyof RetirementAnswers>(key: K, value: RetirementAnswers[K]) => {
+    if (answers[key] === value) return;
+    const next = { ...answers, [key]: value };
+    if ((key === "care" || key === "upbringing") && value) next.additions = "";
+    if (key === "additions" && value) { next.care = false; next.upbringing = false; }
+    setAnswers(next); setDirty(true);
+    setCustomerPlan(plan => {
+      let p = invalidateAnswer(plan, key);
+      if (key === "childBenefit") p = { ...p, children: value === "yes" ? "yes" : "unknown" };
+      if (key === "year" && /^\d{4}$/.test(String(value)) && Number(value) >= 100) {
+        const start = `${value}${p.capital.start.slice(4)}`;
+        p = editCustomerCapital(p, { ...p.capital, start });
+      }
+      return p;
+    });
+  };
   const [products, setProducts] = useState<string[]>([]);
   const [capital, setCapital] = useState(emptyCapitalDraft);
   const [capitalResult, setCapitalResult] = useState<CapitalRun | null>(null);
@@ -82,32 +100,41 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
     setBDraft(emptyOldDraft()); setBPreview(null);
     setProducts([]); setCapital(emptyCapitalDraft()); setCapitalResult(null);
     setCustomerPlan(emptyCustomerPlan());
+    setAnswers(emptyRetirementAnswers());
     title.current?.focus();
   };
   return <div className="tool-view retirement-view">
     <p className="eyebrow">SPEZIALISIERTE BERATUNG · ALTERSVORSORGE</p>
-    <h1 ref={title} tabIndex={-1}>{step === "choice" ? "Altersvorsorge" : step === "customer" ? "Neue Altersvorsorge planen" : step === "a1" ? "A1 – Fördercheck" : step === "a2" ? "A2 – Sparen & Förderung" : step === "a3" ? "A3 – Produktvergleich" : step === "a4" ? "A4 – Kapitalentwicklung" : step === "b1" ? "B1 – Bestandsaufnahme" : "B2 – Fördervergleich"}</h1>
+    <h1 ref={title} tabIndex={-1}>{step === "choice" ? "Altersvorsorge" : step === "introduction" ? "Neue Altersvorsorge verstehen" : step === "questions" ? "Ihre mögliche Förderung" : step === "customer" ? "Neue Altersvorsorge planen" : step === "a1" ? "A1 – Fördercheck" : step === "a2" ? "A2 – Sparen & Förderung" : step === "a3" ? "A3 – Produktvergleich" : step === "a4" ? "A4 – Kapitalentwicklung" : step === "b1" ? "B1 – Bestandsaufnahme" : "B2 – Fördervergleich"}</h1>
     {step !== "customer" && <p className="retirement-notice"><strong>Ungespeicherte Modellvorschau.</strong> Nur synthetische Testdaten verwenden.
       Eingaben bleiben ausschließlich während dieses geöffneten Entwurfs erhalten. Verlassen, Neuladen oder Schließen verwirft sie.
       Ein Browserhinweis beim Neuladen/Schließen ist browserabhängig. Es gibt keine automatische Wiederherstellung.</p>}
-    {step !== "customer" && step !== "a3" && step !== "a4" && <p className="retirement-notice">{modelNotice} {bonusNotice}</p>}
-    {step === "choice" ? <div className="retirement-cards">
+    {!["choice", "introduction", "questions", "customer", "a3", "a4"].includes(step) && <p className="retirement-notice">{modelNotice} {bonusNotice}</p>}
+    {step === "choice" || step === "introduction" ? <><div className="retirement-cards">
       <section className="panel">
-        <p className="eyebrow">BERATUNGSWEG A · A1–A4</p><h2>Neue Altersvorsorge planen</h2>
-        <p>Mit wenigen Angaben den eigenen Sparplan und drei mögliche Kapitalverläufe ansehen.</p>
-        <button className="primary" onClick={() => setStep("customer")}>Neue Altersvorsorge planen</button>
+        <p className="eyebrow">NEUE VORSORGE</p><h2>Neue Altersvorsorge planen</h2>
+        <p>Verstehen, welche Förderung möglich ist und welcher Sparbetrag zu Ihnen passt.</p>
+        <button className="primary" onClick={() => setStep("introduction")}>Neue Altersvorsorge planen</button>
         <div className="retirement-diagnostic-entry"><small>Separate Berater-Prüfansicht · bisherige Fachformulare</small>
           <button className="secondary" onClick={() => { setPreview(null); setBPreview(null); navigateA("a1"); }}>A – Neue Altersvorsorge planen</button></div>
       </section>
       <section className="panel">
-        <p className="eyebrow">BERATUNGSWEG B · B1/B2</p><h2>Bestehende Riester-Rente prüfen</h2>
+        <p className="eyebrow">BESTEHENDE VORSORGE</p><h2>Bestehende Riester-Rente prüfen</h2>
         <p>Alt-Fördercheck und bedingter Fördermodellvergleich ohne Vertragswerte.</p>
         <button className="primary" onClick={() => { setPreview(null); setBPreview(null); invalidateCapital(); setStep("b1"); }}>B – Bestehende Riester-Rente prüfen</button>
       </section>
-    </div> : step === "customer" ? <RetirementCustomer plan={customerPlan} change={next => { setCustomerPlan(next); setDirty(true); }} back={() => setStep("choice")} /> : step === "b1" || step === "b2" ? <OldRiesterView draft={bDraft} step={step} preview={bPreview}
+    </div><RetirementInformation />{step === "introduction" && <button className="primary" onClick={() => setStep("questions")}>Meine Voraussetzungen prüfen</button>}</>
+    : step === "questions" ? <RetirementQuestions answers={answers} plan={customerPlan} change={answer}
+      birth={value => { setCustomerPlan(p => ({ ...p, birthYear: value, evidence: changeYear(p.evidence, p.evidence.year) })); setDirty(true); }}
+      back={() => setStep("introduction")} next={() => setStep("customer")} riester={() => setStep("b1")} />
+    : step === "customer" ? <RetirementCustomer plan={customerPlan} change={next => {
+      if (next.capital.start.slice(0, 4) !== customerPlan.capital.start.slice(0, 4)) setAnswers(a => ({ ...a, year: next.capital.start.slice(0, 4) }));
+      setCustomerPlan(next); setDirty(true);
+    }} back={() => setStep("choice")} review={() => setStep("questions")} orientation={<FundingOrientation answers={answers} year={customerPlan.capital.start.slice(0, 4)} />} />
+    : step === "b1" || step === "b2" ? <><RetirementInformation riester /><OldRiesterView draft={bDraft} step={step} preview={bPreview}
       navigate={next => { setBPreview(null); setStep(next); }}
       update={next => { setBDraft(next); setDirty(true); setBPreview(null); }}
-      show={setBPreview} /> : <>
+      show={setBPreview} /></> : <>
       <nav className="retirement-steps" aria-label="Altersvorsorge-Schritte">
         <button onClick={() => navigateA("choice")}>A/B-Auswahl</button>
         <button aria-current={step === "a1" ? "step" : undefined} onClick={() => navigateA("a1")}>A1 Fördercheck</button>

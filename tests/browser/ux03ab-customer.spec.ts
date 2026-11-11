@@ -1,7 +1,8 @@
 import { test, expect, type Page } from "@playwright/test";
 import { gzipSync } from "node:zlib";
 const label = (p: Page, name: string) => p.getByLabel(name, { exact: true });
-async function enter(p: Page) { await p.goto("./"); await p.locator(".sidebar nav").getByRole("button", { name: /Altersvorsorge/ }).click(); await p.getByRole("button", { name: "Neue Altersvorsorge planen", exact: true }).click(); }
+async function enter(p: Page) { await p.goto("./"); await p.locator(".sidebar nav").getByRole("button", { name: /Altersvorsorge/ }).click(); await p.getByRole("button", { name: "Neue Altersvorsorge planen", exact: true }).click(); await p.getByRole("button", { name: "Meine Voraussetzungen prüfen", exact: true }).click(); await p.getByRole("button", { name: "Weiter zum eigenen Sparplan", exact: true }).click(); }
+async function advisor(p: Page) { if (!await label(p, "Wurde Ihre Förderberechtigung bereits geklärt?").isVisible()) await p.getByText("Beraterprüfung: Förderung und Sonderfälle", { exact: true }).click(); }
 async function zero(p: Page) {
   await label(p, "Ab wann möchten Sie sparen?").fill("2027-10"); await label(p, "Bis wann möchten Sie sparen?").fill("2027-12");
   await p.getByText("Feineinstellungen und Modellannahmen", { exact: true }).click();
@@ -10,18 +11,18 @@ async function zero(p: Page) {
 }
 const calculate = (p: Page) => p.getByRole("button", { name: "Modellrechnung anzeigen", exact: true }).click();
 
-test("UX03 U1: six normal questions, no checkboxes, open funding plus three actual curves", async ({ page }) => {
+test("UX03 U1: four payment questions after guided entry, no checkboxes, open funding plus three actual curves", async ({ page }) => {
   await enter(page);
-  await expect(page.locator(".retirement-customer-inputs input:visible, .retirement-customer-inputs select:visible")).toHaveCount(6);
+  await expect(page.locator(".retirement-customer-inputs input:visible, .retirement-customer-inputs select:visible")).toHaveCount(4);
   await expect(page.locator(".retirement-customer input[type=checkbox]:visible")).toHaveCount(0);
   await expect(page.getByTestId("customer-grant-status")).toHaveText("Gemeinsam prüfen");
   await calculate(page);
   await expect(page.getByTestId("scenario-line")).toHaveCount(3);
-  await label(page, "Gibt es Kinder, für die eine Kinderzulage infrage kommt?").selectOption("no");
+  await expect(page.getByRole("region", { name: "Ihre Ergebnisse" })).toBeFocused();
+  await advisor(page); await label(page, "Gibt es Kinder, für die eine Kinderzulage infrage kommt?").selectOption("no");
   await expect(page.getByTestId("scenario-line")).toHaveCount(3);
   await expect(page.getByTestId("customer-base-grant")).toHaveCount(0);
   await expect(page.getByTestId("customer-own")).toContainText("36.000,00 €");
-  await expect(page.getByRole("region", { name: "Ihre Ergebnisse" })).toBeFocused();
 });
 
 test("UX03 one central rate, October first year, no annualisation or stale results", async ({ page }) => {
@@ -38,18 +39,18 @@ test("UX03 one central rate, October first year, no annualisation or stale resul
 });
 
 test("UX03 U2: two unassigned children do not block independent capital", async ({ page }) => {
-  await enter(page); await label(page, "Gibt es Kinder, für die eine Kinderzulage infrage kommt?").selectOption("yes");
-  await page.getByText("Beraterprüfung: Förderung und Sonderfälle", { exact: true }).click();
+  await enter(page); await advisor(page); await label(page, "Gibt es Kinder, für die eine Kinderzulage infrage kommt?").selectOption("yes");
+  await advisor(page);
   await page.getByRole("button", { name: "Kind zur Prüfung hinzufügen" }).click(); await page.getByRole("button", { name: "Kind zur Prüfung hinzufügen" }).click();
   await calculate(page); await expect(page.getByTestId("scenario-line")).toHaveCount(3); await expect(page.getByTestId("customer-base-grant")).toHaveCount(0);
   await expect(page.getByLabel("Kind 2: Förderfähigkeit und Zuordnung", { exact: true })).toHaveValue("assignment_unconfirmed");
 });
 
 test("UX03 customer Yes never confirms a grant; advisor evidence required and revoked", async ({ page }) => {
-  await enter(page); await label(page, "Wurde Ihre Förderberechtigung bereits geklärt?").selectOption("checked");
-  await label(page, "Gibt es Kinder, für die eine Kinderzulage infrage kommt?").selectOption("no");
+  await enter(page); await advisor(page); await label(page, "Wurde Ihre Förderberechtigung bereits geklärt?").selectOption("checked");
+  await advisor(page); await label(page, "Gibt es Kinder, für die eine Kinderzulage infrage kommt?").selectOption("no");
   await expect(page.getByTestId("customer-base-grant")).toHaveCount(0);
-  await page.getByText("Beraterprüfung: Förderung und Sonderfälle", { exact: true }).click();
+  await advisor(page);
   await label(page, "Geprüfte unmittelbare Berechtigung").selectOption("direct_confirmed"); await label(page, "Geprüfte Förderregelung").selectOption("new_confirmed"); await label(page, "Geprüfte Vertragszuordnung").selectOption("single_eligible_confirmed");
   await label(page, "Für Person und Jahr geprüft: keine einzubeziehenden Kinder").check();
   await label(page, "Den geplanten Jahres-Eigenbeitrag für Person, Vertrag und Jahr fachlich als förderfähig geprüft").check();
@@ -100,7 +101,7 @@ test("UX03 optional ETF comparison uses the same period and own payments", async
 test("UX03 customer draft survives internal navigation; general storage stays byte-identical", async ({ page }) => {
   await enter(page); const before = await page.evaluate(() => ({ local: JSON.stringify(localStorage), session: JSON.stringify(sessionStorage) }));
   await label(page, "Wie viel möchten Sie monatlich einzahlen?").fill("125");
-  await page.getByRole("button", { name: "Zurück zur Auswahl", exact: true }).click(); await page.getByRole("button", { name: "Neue Altersvorsorge planen", exact: true }).click();
+  await page.getByRole("button", { name: "Zurück zur Auswahl", exact: true }).click(); await page.getByRole("button", { name: "Neue Altersvorsorge planen", exact: true }).click(); await page.getByRole("button", { name: "Meine Voraussetzungen prüfen", exact: true }).click(); await page.getByRole("button", { name: "Weiter zum eigenen Sparplan", exact: true }).click();
   await expect(label(page, "Wie viel möchten Sie monatlich einzahlen?")).toHaveValue("125");
   page.once("dialog", d => d.dismiss()); await page.locator(".sidebar nav").getByRole("button", { name: /Beratungsfälle/ }).click();
   await expect(page.getByTestId("customer-retirement")).toBeVisible();

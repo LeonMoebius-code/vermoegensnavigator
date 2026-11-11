@@ -1,11 +1,11 @@
-import { useId, useRef, useState } from "react";
+import { useId, useRef, useState, type ReactNode } from "react";
 import { annualContribution, changeYear, euro, type GrantDraft } from "./direct-grant-adapter";
 import { customerGrant, editCustomerCapital, metricCents, plannedGrantDraft, runCustomerCapital, type CustomerPlan } from "./customer-plan-adapter";
 import { issueMessage, type CapitalDraft } from "./projection-adapter";
 import { projectionEuro, RetirementProjection } from "./retirement-projection";
 import { RetirementChart, customerScenarioNames } from "./retirement-chart";
 
-export function RetirementCustomer({ plan, change, back }: { plan: CustomerPlan; change: (p: CustomerPlan) => void; back: () => void }) {
+export function RetirementCustomer({ plan, change, back, review, orientation }: { plan: CustomerPlan; change: (p: CustomerPlan) => void; back: () => void; review?: () => void; orientation?: ReactNode }) {
   const prefix = useId(), resultRef = useRef<HTMLElement>(null);
   const [run, setRun] = useState<ReturnType<typeof runCustomerCapital> | null>(null);
   const id = (key: string) => `${prefix}-${key}`;
@@ -61,6 +61,8 @@ export function RetirementCustomer({ plan, change, back }: { plan: CustomerPlan;
   const year = plan.capital.start.slice(0, 4);
   return <div className="retirement-customer" data-testid="customer-retirement">
     <div className="retirement-customer-intro"><p>Ihr Sparvorhaben, verständlich auf einen Blick.</p><p className="retirement-test-note">Testansicht · nur synthetische Daten · Eingaben werden nicht gespeichert.</p></div>
+    {orientation}
+    {review && <button className="secondary" onClick={review}>Zurück zu meinen Voraussetzungen</button>}
     <div className="retirement-customer-layout">
       <section className="panel retirement-customer-inputs" aria-labelledby={id("inputs")}>
         <h2 id={id("inputs")}>Ihr Sparvorhaben</h2>
@@ -76,15 +78,6 @@ export function RetirementCustomer({ plan, change, back }: { plan: CustomerPlan;
           {text("start", "Ab wann möchten Sie sparen?", true)}
           {text("end", "Bis wann möchten Sie sparen?", true)}
           <small>Modellziel, kein bestätigter Auszahlungsbeginn. Die tatsächliche Verfügbarkeit hängt vom Vertrag und den rechtlichen Voraussetzungen ab.</small>
-          <label htmlFor={id("funding")}>Wurde Ihre Förderberechtigung bereits geklärt?</label>
-          <select id={id("funding")} value={plan.funding} onChange={e => edit({ ...plan, funding: e.target.value as CustomerPlan["funding"], evidence: changeYear(plan.evidence, plan.evidence.year) })}>
-            <option value="open">Noch nicht</option><option value="checked">Ja – gesonderte Prüfung erforderlich</option><option value="special">Unklarer Sonderfall</option>
-          </select>
-          <label htmlFor={id("children")}>Gibt es Kinder, für die eine Kinderzulage infrage kommt?</label>
-          <select id={id("children")} value={plan.children} onChange={e => edit({ ...plan, children: e.target.value as CustomerPlan["children"], evidence: { ...plan.evidence, childrenStatus: "unconfirmed", children: plan.evidence.children.map(c => ({ ...c, status: "assignment_unconfirmed" })) } })}>
-            <option value="unknown">Unklar</option><option value="no">Nein</option><option value="yes">Ja</option>
-          </select>
-          {plan.children === "yes" && <p>Förderfähigkeit und Zuordnung klären wir für jedes Kind in der Beraterprüfung. Der Sparverlauf bleibt unabhängig davon nutzbar.</p>}
           <button className="primary" type="submit">Modellrechnung anzeigen</button>
         </form>
       </section>
@@ -141,6 +134,15 @@ export function RetirementCustomer({ plan, change, back }: { plan: CustomerPlan;
     </details>
     <details className="retirement-customer-details"><summary>Beraterprüfung: Förderung und Sonderfälle</summary>
       <div className="retirement-form"><p>Diese Angaben dokumentieren eine gesonderte fachliche Prüfung. Eine Kundenantwort bestätigt weder Berechtigung noch Vertrag oder Kinderzuordnung. Beitragsjahr {year}.</p>
+          <label htmlFor={id("funding")}>Wurde Ihre Förderberechtigung bereits geklärt?</label>
+          <select id={id("funding")} value={plan.funding} onChange={e => edit({ ...plan, funding: e.target.value as CustomerPlan["funding"], evidence: changeYear(plan.evidence, plan.evidence.year) })}>
+            <option value="open">Noch nicht</option><option value="checked">Ja – gesonderte Prüfung erforderlich</option><option value="special">Unklarer Sonderfall</option>
+          </select>
+          <label htmlFor={id("children")}>Gibt es Kinder, für die eine Kinderzulage infrage kommt?</label>
+          <select id={id("children")} value={plan.children} onChange={e => edit({ ...plan, children: e.target.value as CustomerPlan["children"], evidence: { ...plan.evidence, childrenStatus: "unconfirmed", children: plan.evidence.children.map(c => ({ ...c, status: "assignment_unconfirmed" })) } })}>
+            <option value="unknown">Unklar</option><option value="no">Nein</option><option value="yes">Ja</option>
+          </select>
+          {plan.children === "yes" && <p>Förderfähigkeit und Zuordnung klären wir für jedes Kind in der Beraterprüfung. Der Sparverlauf bleibt unabhängig davon nutzbar.</p>}
         {legalSelect("entitlement", "Geprüfte unmittelbare Berechtigung", [["unconfirmed", "Noch zu prüfen"], ["direct_confirmed", "Für Person und Jahr fachlich bestätigt"], ["indirect", "Mittelbare Berechtigung"], ["ineligible", "Nicht berechtigt"]])}
         {legalSelect("regime", "Geprüfte Förderregelung", [["unconfirmed", "Noch zu prüfen"], ["new_confirmed", "Neues Regime einschließlich etwaigem Wechsel fachlich bestätigt"], ["old", "Altes Riester-Regime"]])}
         {legalSelect("contract", "Geprüfte Vertragszuordnung", [["unconfirmed", "Noch zu prüfen"], ["single_eligible_confirmed", "Genau ein zulässiger Vertrag fachlich bestätigt"], ["multiple", "Mehrere Verträge"], ["transition_unconfirmed", "Übergang offen"]])}

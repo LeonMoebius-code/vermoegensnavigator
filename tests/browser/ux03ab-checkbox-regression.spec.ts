@@ -98,6 +98,9 @@ test("P2 browser: remove confirmed own once, block grant, invalidate capital, re
   await page.goto("./");
   await page.locator(".sidebar nav").getByRole("button", { name: /Altersvorsorge/ }).click();
   await page.getByRole("button", { name: "Neue Altersvorsorge planen", exact: true }).click();
+  await page.getByRole("button", { name: "Meine Voraussetzungen prüfen", exact: true }).click();
+  await page.getByRole("button", { name: "Weiter zum eigenen Sparplan", exact: true }).click();
+  await page.getByText("Beraterprüfung: Förderung und Sonderfälle", { exact: true }).click();
   await input(page, "Ab wann möchten Sie sparen?").fill("2027-10");
   await input(page, "Bis wann möchten Sie sparen?").fill("2027-12");
   await input(page, "Wurde Ihre Förderberechtigung bereits geklärt?").selectOption("checked");
@@ -107,7 +110,6 @@ test("P2 browser: remove confirmed own once, block grant, invalidate capital, re
     await input(page, `${scenario}: ${asset} in % p. a.`).fill("0");
   const once = input(page, "Zusätzliche eigene Einmalzahlung einplanen");
   await once.check(); await input(page, "Einmalzahlung in Euro").fill("60"); await input(page, "Monat der Einmalzahlung").fill("2027-12");
-  await page.getByText("Beraterprüfung: Förderung und Sonderfälle", { exact: true }).click();
   await input(page, "Geprüfte unmittelbare Berechtigung").selectOption("direct_confirmed");
   await input(page, "Geprüfte Förderregelung").selectOption("new_confirmed");
   await input(page, "Geprüfte Vertragszuordnung").selectOption("single_eligible_confirmed");
