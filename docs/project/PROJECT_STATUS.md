@@ -1,6 +1,60 @@
 # Projektstatus und nächste Schritte
 
-## Aktueller Checkpoint · 10.11.2026
+## Aktueller Checkpoint · 13.11.2026
+
+READ-ONLY gegen Live-GitHub (Refs, Git-Objekte, PRs und Actions) sowie die
+öffentliche Build-Provenienz geprüft. Grundlage: bestätigter Nachführungsauftrag
+vom 13.11.2026 einschließlich der verbindlichen Fortsetzungsentscheidung nach
+Preflight-STOP. Die früher genannte öffentliche V0.18.4 ist als aktueller Stand
+korrigiert; die datierten früheren Checkpoints bleiben historisch erhalten.
+Integriert, abgenommen, releasebereit und veröffentlicht sind getrennte Zustände.
+
+| Ebene | Bestätigter Stand / Grenze |
+| --- | --- |
+| Integrierte Entwicklung | `main` = `ba0dbd422575280e74e4899bacf1f1990e3ce30b`, Tree `e425dd97692d0e22c28def8eaee6d640664649eb`; Entwicklungsversion **0.18.5**, Datenschema **11**. PR #70 und PR #71 integriert. |
+| Öffentlich veröffentlicht | **V0.18.5** aus `e444d612d5ba5194d2816a592603744e4234aee3`, Tree `44cfbe81202f6676712e5f49c9051e662a0caa86`; [R1 42851919439](https://github.com/LeonMoebius-code/vermoegensnavigator/actions/runs/42851919439) vom 10.11.2026, Attempt 1, Candidate und Deployment erfolgreich. Öffentliche [build-info.json](https://leonmoebius-code.github.io/vermoegensnavigator/build-info.json) bestätigt Source, Run und Attempt. PR #70 ist damit integriert und veröffentlicht; PR #71 ist **nicht veröffentlicht**. |
+| PR #71: Abnahme und CI | Doppelabnahme abgeschlossen: zwei unabhängige positive fachlich-technische Bewertungen auf Feature-Head `08d3701423e22ef80aaa3d961abfbe1b533715d3`, vom [Mergevermerk](https://github.com/LeonMoebius-code/vermoegensnavigator/commit/ba0dbd422575280e74e4899bacf1f1990e3ce30b) bestätigt. Finale Feature-CI [Push 43262104301](https://github.com/LeonMoebius-code/vermoegensnavigator/actions/runs/43262104301) und [PR 43262118999](https://github.com/LeonMoebius-code/vermoegensnavigator/actions/runs/43262118999), jeweils Attempt 1, vollständig erfolgreich einschließlich Verify, Browser, R1 und Diffcheck. Keine neue Ausführung oder Wiederholung dieser Abnahmen in diesem Pflegeauftrag. |
+| Readiness / Freigabe | Integration und technische Abnahmen von PR #71 sind kein Gesamt-Readiness-GO. Für den neuen Entwicklungsstand einschließlich #71 besteht **keine Release- oder Deploymentfreigabe**. Der bereits veröffentlichte #70-Stand ist davon getrennt. |
+| Praktische Nutzungsprüfung / AP-07c | Für PR #71 einmalig als Merge-Voraussetzung ausgenommen, **nicht durchgeführt und nicht bestanden**. Vollständige menschliche E2E-/Usability-Abnahme bleibt für **AP-07c verpflichtend und ausstehend**; automatisierte Tests ersetzen sie nicht. [Beschluss](https://github.com/LeonMoebius-code/vermoegensnavigator/pull/71#issuecomment-6852006273), [D-16](DECISIONS.md#fortschreibung-13112026). |
+| Schwerpunkt / Roadmap | Altersvorsorge-Spezialberatungstool weiter fertigstellen; **V0.19 freier Planvergleich vorerst zurückgestellt**. Dies ersetzt ausschließlich die frühere nächste Featurepriorität, nicht die dauerhafte Governance; [D-17](DECISIONS.md#fortschreibung-13112026). Kein neuer Implementierungsauftrag. |
+| Rollenübernahme | Unabhängiger Review-Chat am **13.11.2026 erfolgreich neu übernommen** (realer Reviewer-Kaltstart, von Leon bestätigt). Kein eigenständiger Work-Kaltstart als durchgeführt belegt. D-10 bleibt der historische Einführungsbeschluss vom 23.10.2026. |
+| Offene fremde Drafts | PR #43 bleibt **AUDIT ONLY – NEVER MERGE**, Head `5a8963a4f7c6fd80c83da7f6872139400c51e656`. PR #60 bleibt älterer Status-Draft, Head `3aec3f0ffd9e873adad85cfaf95fea918fa9cb9c`. Beide unverändert und außerhalb dieses Auftrags. |
+
+### Tatsächliche Integrationsidentitäten seit dem vorigen Checkpoint
+
+| PR | Finaler Feature-Head / damalige Base | Tatsächliche Integration |
+| --- | --- | --- |
+| [#70 V0.18.5-Vorbereitung](https://github.com/LeonMoebius-code/vermoegensnavigator/pull/70) | Head `63b07bb9f7c95be822d061faa87d5dd7540773d5`; Base `1a7f71fc70242fca2039c5ce76c81fe9288d9e77` | Merge `e444d612d5ba5194d2816a592603744e4234aee3`, Tree `44cfbe81202f6676712e5f49c9051e662a0caa86`, 10.11.2026; anschließend durch R1 oben veröffentlicht. |
+| [#71 AP-04a-UX1](https://github.com/LeonMoebius-code/vermoegensnavigator/pull/71) | Head `08d3701423e22ef80aaa3d961abfbe1b533715d3`; Base `e444d612d5ba5194d2816a592603744e4234aee3` | Merge `ba0dbd422575280e74e4899bacf1f1990e3ce30b`, Parents genau Base + Feature-Head; Tree `e425dd97692d0e22c28def8eaee6d640664649eb`, identisch zum Feature-Tree; 13.11.2026. |
+
+### Offene P3-Restpunkte aus PR #71
+
+Quelle: finale getrennte Projektleiter-/Review-Abnahmen vom 13.11.2026;
+P3-Restpunkte auch im Mergevermerk festgehalten. Die vollständigen Originalnachweise
+bleiben separat geschützt. Diese Nachführung ist keine erneute Fach-/UX-Abnahme.
+
+| Befund | Offener Stand |
+| --- | --- |
+| R71-01 · Jahresabweichung | Meldung bei abweichendem Förder- und Zahlungsstartjahr ist unpräzise; offen. |
+| R71-02 · Responsive / Zoom | Menschliche Bestätigung fehlt. Automatisierte Ansichten bei 375/768/1.280 px und CSS-Zoom-Simulation ersetzen keinen echten Browserzoom-/Menschentest; offen. |
+| S2-Frageführung | Weniger stark in Einzelschritte gegliedert als im Bildschirmkonzept; offener P3-Punkt. |
+
+Diese P3-Punkte waren für den beschlossenen PR-#71-Merge nicht blockierend;
+sie sind weder behoben noch durch die Ausnahme als UX-bestanden erklärt.
+AP-07c bleibt offen. Keine neuen Fachentscheidungen, Produktdaten oder Zusagen
+zur Datenaktualität. Öffentlicher Desktop-Testprototyp, keine produktive Bankfreigabe.
+
+Dieser Dokumentations-PR benötigt zwei getrennte Abnahmen und danach **Leons
+gesonderte Integrationsentscheidung**; die bedingte Feature-Mergebefugnis reicht
+hierfür nicht aus. Kein eigenes GO, Merge, Release oder Deployment durch Work.
+
+---
+
+## Historischer Checkpoint · 10.11.2026
+
+**Die folgenden damaligen Status-, Offen- und Prioritätsaussagen gelten nur für
+diesen historischen Checkpoint. Aktuell maßgeblich ist der Checkpoint 13.11.2026
+oben; insbesondere sind #70 inzwischen veröffentlicht und #71 integriert.**
 
 Erneut READ-ONLY anhand Git-Objekten, GitHub-PR-/Actions-/Artefaktbelegen und
 öffentlicher Provenienz geprüft. Dieser Abschnitt ersetzt die Aktualitätsansprüche
@@ -53,7 +107,7 @@ Bankfreigabe, keine revisionssichere Speicherung und keine neue Datenaktualität
 ## Historische Dokumentation vom 26.10.2026 und davor
 
 **Sämtliche folgenden Aktualitäts-/Offen-/Liveaussagen gehören ausschließlich zu
-ihrem damaligen Checkpoint. Für den Stand 10.11.2026 gilt der Abschnitt oben.**
+ihrem damaligen Checkpoint. Für den Stand 13.11.2026 gilt der aktuelle Abschnitt oben.**
 
 
 **Datierter Checkpoint vom 26.10.2026; Live-GitHub vor Entscheidungen erneut prüfen.**
