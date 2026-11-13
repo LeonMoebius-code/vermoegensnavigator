@@ -39,7 +39,17 @@ test("A04-01/02: beide eigenständigen Einstiege, B aktiv, kein neuer allgemeine
   await nav(page, "Altersvorsorge").click();
   await expect(btn(page, "A – Neue Altersvorsorge planen")).toBeEnabled();
   await expect(btn(page, "B – Bestehende Riester-Rente prüfen")).toBeEnabled();
-  await expect(page.locator(".retirement-cards")).toContainText("B1/B2");
+  await expect(btn(page, "B – Bestehende Riester-Rente prüfen")).toBeVisible();
+  await btn(page, "B – Bestehende Riester-Rente prüfen").click();
+  await expect(page.getByRole("heading", { name: "B1 – Bestandsaufnahme", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Alt-Riester-Nachweise", exact: true })).toBeVisible();
+  await btn(page, "B2 Fördervergleich").click();
+  await expect(page.getByRole("heading", { name: "B2 – Fördervergleich", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Neues hypothetisches Vergleichsszenario", exact: true })).toBeVisible();
+  await btn(page, "A/B-Auswahl").click();
+  await expect(page.getByRole("heading", { name: "Altersvorsorge", exact: true })).toBeVisible();
+  await expect(btn(page, "A – Neue Altersvorsorge planen")).toBeVisible();
+  await expect(btn(page, "B – Bestehende Riester-Rente prüfen")).toBeVisible();
   await nav(page, "Beratungsfälle").click();
   await btn(page, "Altersvorsorge ohne Vermögensfall").click();
   await expect(page.getByRole("heading", { name: "Altersvorsorge", exact: true })).toBeVisible();
