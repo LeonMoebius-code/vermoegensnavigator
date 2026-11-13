@@ -77,7 +77,9 @@ gefährdeter bestehender Arbeit oder nicht lösbarem Pflichtgate gezielt stoppen
 Rollenbeschreibung und grüne CI lösen keine weiteren Arbeiten automatisch aus.
 Releases, Deployments, Rollbacks und Settings verlangen eigene Autorisierung.
 Für die Erstintegration genügt gemäß Leons Beschluss vom 23.10.2026 der
-bereits erfolgreich durchgeführte reale Projektleiter-Kaltstart. Work- und
-Review-Kaltstarts sind nicht durchgeführt und nicht als bestanden belegt;
-sie werden bei tatsächlichen Chatwechseln erprobt. Eigene Simulationen zählen
-nicht als reale Probe. Historische Vorgabe und Ersetzung: [D-09/D-10](docs/project/DECISIONS.md).
+bereits erfolgreich durchgeführte reale Projektleiter-Kaltstart. Am 13.11.2026
+wurde der unabhängige Review-Chat erfolgreich neu übernommen (realer Reviewer-
+Kaltstart, von Leon bestätigt). Ein eigenständiger Work-Kaltstart ist weiterhin
+nicht als durchgeführt belegt. Weitere tatsächliche Chatwechsel werden regulär
+erprobt; eigene Simulationen zählen nicht als reale Probe. Historische Vorgabe
+und Ersetzung: [D-09/D-10](docs/project/DECISIONS.md).

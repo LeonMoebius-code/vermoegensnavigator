@@ -208,10 +208,14 @@ Erstintegration. [D-09/D-10](DECISIONS.md) hält Ursprung und Ersetzung fest.
 
 Leon bestätigt am 23.10.2026 den realen Projektleiter-Test als erfolgreich und
 seine positive Bewertung durch beide Review-Chats. Work hat diesen Test nicht
-selbst erneut durchgeführt. **Work- und Review-Kaltstarts sind nicht durchgeführt;
-ein eigenständiger Kaltstartnachweis für diese Rollen fehlt.** Sie werden bei
-zukünftigen tatsächlichen Chatwechseln im regulären Betrieb erprobt, ohne
-zusätzliche künstliche Erstintegrationsproben.
+selbst erneut durchgeführt. **Zum damaligen Stand 23.10.2026 waren Work- und
+Review-Kaltstarts nicht durchgeführt; eigenständige Nachweise fehlten.**
+Fortschreibung 13.11.2026: Der unabhängige Review-Chat wurde erfolgreich neu
+übernommen (realer Reviewer-Kaltstart, von Leon bestätigt). Ein eigenständiger
+Work-Kaltstart ist weiterhin nicht als durchgeführt belegt. Weitere tatsächliche
+Chatwechsel werden im regulären Betrieb erprobt, ohne zusätzliche künstliche
+Erstintegrationsproben. Der Einführungsbeschluss D-10 und die Governance bleiben
+unverändert.
 
 Bei zukünftigen tatsächlichen Rollenwechseln gelten die folgenden Prüfregeln;
 sie begründen keine zusätzlichen Pflichtproben für die Erstintegration:
