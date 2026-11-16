@@ -77,12 +77,23 @@ voneinander und von Work unabhängige Reviews für kritische Änderungen.
 > Übernimm den unabhängigen READ-ONLY-Review für
 > LeonMoebius-code/vermoegensnavigator, PR <Nummer>, finaler Head <SHA>.
 > Lies Regeln und Originalverträge; prüfe Code, Ausgaben, Git-/CI-Identitäten
-> eigenständig einschließlich vollständiger Originalnachweise. Prüfe die
+> eigenständig anhand zugeordneter Originalnachweise gemäß CI und Evidenz.
+> Nach wirksamer GOV-03-Integration genügen im erfolgreichen Standardfall
+> strukturierte Run-/Jobdaten und verpflichtende automatische JSON-Identitätsbelege.
+> Vollständige Originaljoblogs nur bei Fehlern, Lücken, Widersprüchen oder
+> begründeten Zweifeln vertieft prüfen. Grüne CI allein genügt nicht. Prüfe die
 > Risikoklasse und verlange bei kritischen Auswirkungen die Doppelabnahme.
 > Bei Doppelreview möglichst vor Kenntnis des anderen Abnahmeurteils prüfen.
 > Liefere den kompakten Abschlussbericht gemäß Operating Model. Für GOV-02 selbst
 > bleiben zwei unabhängige vollständige Reviews und Leons gesonderte
 > Integrationsentscheidung erforderlich.
+
+Für GOV-03 selbst bleiben bis zur gesondert autorisierten Integration die bisherigen
+Originalnachweispflichten maßgeblich. Technisch fehlende Pflichtbelege bedeuten HOLD,
+keine automatische Ausnahme. Zwei vollständige organisatorisch unabhängige Reviews
+desselben finalen Stands und Leons gesonderte Integrationsentscheidung sind erforderlich.
+Die neue Nachweisroutine ändert weder D-19 noch D-05, Originalschutz oder Befugnisse.
+[Übergang und Evidenz](docs/project/OPERATING_MODEL.md#gov-03-übergang-und-wirksamkeit).
 
 Optionaler **Audit/Monitoring-Agent** liest ausschließlich; er implementiert,
 priorisiert und autorisiert keine Folgearbeiten. Es gilt der
