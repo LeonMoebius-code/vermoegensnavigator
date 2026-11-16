@@ -19,6 +19,21 @@ Bis dahin gelten D-01/D-02 in ihrer bisherigen Fassung. GOV-02 darf seine eigene
 Review- oder Merge-Anforderungen nicht erleichtern. Abgeschlossene Reviews und
 historische Merges werden nicht nachträglich umklassifiziert.
 
+## GOV-03: Übergang und Wirksamkeit
+
+[D-20](DECISIONS.md#gov-03-16112026) ersetzt die manuelle CI-Nachweisroutine
+**erst nach zwei organisatorisch unabhängigen vollständigen GO-Reviews desselben
+finalen GOV-03-Stands, Leons gesonderter Integrationsentscheidung und erfolgter
+Integration**. GOV-02 / D-19 ist seit PR #75 integriert und bleibt wirksam.
+Bis zur GOV-03-Integration gelten die bisherigen Originalnachweispflichten,
+insbesondere auch für GOV-03 selbst: vollständige finale Originaljoblogs beider
+regulären CI-Läufe prüfen und erforderliche Belege sichern. Die neuen JSON-Belege
+sind für diesen PR zusätzliche Evidenz, keine automatische Befreiung. Sind alte
+Pflichtbelege technisch nicht verfügbar, gilt HOLD und Vorlage an die
+Projektleitung zur gesonderten Entscheidung. Keine automatische Ausnahme.
+Frühere Reviews, HOLD-Entscheidungen und Ausnahmen bleiben historisch unverändert.
+Die folgenden Nachweisregeln beschreiben den Zielzustand nach dieser Integration.
+
 ## Quellen und Widersprüche
 
 Live-GitHub belegt implementierten Code, Ref-/PR-/CI-Zustand; Releaseartefakte
@@ -35,7 +50,7 @@ sind STOP. Der Kopf der Master-Spezifikation und alte Schema-/Testzahlen können
 | --- | --- |
 | Leon | Entscheidet Fachvarianten, Prioritäten und Veröffentlichungen; führt selbst keine Shell-/Git-/npm-Befehle aus. |
 | Projektleiter | Empfiehlt eigenständig kurz Priorität, Aufwand, Risiken und Alternativen; bittet um „Ja, passt“. Erst nach Zustimmung vollständiger neuer Work-Auftrag, außer Leon verlangt ihn direkt. Verantwortet fachliche Konzeption und Entscheidungen im bestätigten Rahmen, Priorisierung, Koordination, Risikoeinstufung und Statuskonsistenz. Prüft kompakte belastbare Review-Ergebnisse, Blocker und Restrisiken. Keine routinemäßige vollständige Code-/Diff-/CI-Originalprotokollprüfung. Unmittelbare Integritätskontrolle und bedingter Feature-Merge gemäß untenstehendem Vertrag. |
-| Work | Nur beschlossenes Paket; Preflight, Originalschutz, Umsetzung, Commit, erlaubte Veröffentlichung, Draft-PR, eigene vollständige fachliche und technische Prüfung, volle reguläre Tests/CI, Korrekturen, vollständige Originalnachweise und kompakte Übergabe. Kein unabhängiges GO für eigene Umsetzung, kein Merge. |
+| Work | Nur beschlossenes Paket; Preflight, Originalschutz, Umsetzung, Commit, erlaubte Veröffentlichung, Draft-PR, eigene vollständige fachliche und technische Prüfung, volle reguläre Tests/CI, Korrekturen, überprüfbare Originalnachweise gemäß CI und Evidenz sowie kompakte Übergabe. Kein unabhängiges GO für eigene Umsetzung, kein Merge. |
 | Unabhängige Reviewer | Je nach Risikoklasse ein oder zwei organisatorisch unabhängige Review-Chats, getrennt von Work und Projektleitung, bei Doppelreview auch voneinander unabhängig. Vollständige fachliche und technische Prüfung ausschließlich READ-ONLY: finaler Code-/Dateidiff, Fach-/Sicherheits-/Datenintegritätsverträge, Originale, Commit-Parents/Trees, originale CI-/Checkout-Belege, erforderliche Regressionen sowie kritische Anzeige-, Berechnungs- und Exportpfade. Eigene Entscheidung GO/HOLD/NO-GO, Befunde und Restrisiken. Keine Dateiänderungen, Commits, GitHub-Schreibaktionen oder Merges. |
 | Audit | Separater READ-ONLY-Nebenprozess; Findings sind keine Fix-, Work-, Merge- oder Veröffentlichungserlaubnis. |
 
@@ -132,7 +147,7 @@ Jeder unabhängige Reviewer liefert einen kompakten, nachvollziehbaren Bericht:
 | Identitäten | Finaler Head, Base, Tree, synthetischer Merge und Parents. |
 | Umfang | Tatsächlich geprüfte Dateien und Abweichungen vom Auftrag. |
 | CI | Finale Push-/PR-Runs und tatsächliche Checkout-Identitäten. |
-| Originalnachweise | Fundstellen und ausdrückliche Bestätigung der vollständigen eigenen Prüfung. |
+| Originalnachweise | Run-/Job- und JSON-Artefaktreferenzen, eigene Prüfung ihrer Commit-/Tree-/Parent-Zuordnung und Pflichtgates. Vertiefte Originalquellen samt Anlass und Ergebnis bei Eskalation. Für GOV-03 selbst gilt die Übergangsregel. |
 | Teststatus | Relevante Tests, tatsächliche Ergebnisse, Skips und Abweichungen. |
 | Fachprüfung | Wesentliche geprüfte Vertrags-, Sicherheits- und Datenintegritätsbereiche. |
 | Befunde | Offene Probleme mit Schweregrad und Restrisiken. |
@@ -161,7 +176,7 @@ Unmittelbar vor dem Merge mindestens kontrollieren:
 2. Finalen PR-Head und erwartete Commit-/Tree-Identitäten.
 3. Vorgesehenen Integrationstree und gültige Merge-Parents.
 4. Zulässigen Umfang anhand des bestätigten Review-Berichts und der Dateiliste.
-5. Finale vollständige Push-/PR-CI-Status und ihre korrekte Identitätszuordnung.
+5. Finale vollständige Push-/PR-CI-Status, erfolgreiche Pflichtjobs und Identitätschecks, zugehörige JSON-Nachweise sowie korrekte Commit-/Tree-/Parent-/Run-/Attempt-Zuordnung. Ein grüner Status allein genügt nicht.
 6. Erforderliche unabhängige GO-Entscheidungen für denselben finalen Stand.
 7. Geltende bedingte Feature-Mergebefugnis und Sonderfreigabegrenzen.
 
@@ -181,6 +196,12 @@ Arbeitsbaum auf bestätigter Basis erzeugen. Kein Hard Reset, Force-Push oder
 Löschen fremder Stände, kein heimliches Rebase/Cherry-Pick. Geschlossene oder
 ersetzte PRs bedeuten nicht gelöschte lokale Originale. Bei langen Läufen einen
 nachvollziehbaren persistenten Checkpoint erhalten. Kein Doppelstart derselben Arbeit.
+
+Originalschutz verlangt keine zusätzliche Routinekopie: Sind Git-Originalobjekte
+und erforderliche Belege zuverlässig erhalten und prüfbar, ist kein Git-Bundle
+als allgemeiner Review-Anhang erforderlich. Bei konkret gefährdetem Erhalt eine
+geeignete gezielte Sicherung vornehmen. Vorhandene Nachweisarchive nicht pauschal
+löschen. Zusätzliche Archivierung und Erhalt der Originale sind getrennte Pflichten.
 
 ## Authentifizierter GitHub-Transport
 
@@ -205,6 +226,13 @@ erlaubt diese Alternative einmalig unter denselben Identitätsbedingungen.
 Bei zwischenzeitlich verändertem main: Ausgangslage erneut bewerten, vorhandene Arbeit erhalten;
 keine unkontrollierte Neuschreibung. Ohne sicheren Transport gezielter STOP.
 
+Der D-05-Vertrag zu Originalerhalt, identischem Tree einschließlich Bytes/Modi,
+gleichem direkten Parent und transparenter lokaler/Remote-Identität bleibt
+unverändert. Aus ihm folgt keine pauschale Pflicht zu zusätzlichen Bundles,
+SHA-256-Manifesten oder ZIP-Übergaben. Originale weiter erhalten und prüfbar halten.
+Der konkret freigegebene GOV-03-Auftrag erlaubt den nachvollziehbaren API-Transport
+unter denselben Identitätsbedingungen, ohne allgemeine neue Transportbefugnisse.
+
 ## CI und Evidenz
 
 [package.json](../../package.json) mit `npm run verify` und
@@ -217,28 +245,82 @@ Drei-Lebenszyklen-Baseline, keine Obergrenze der heutigen Browser-Gesamtsuite.
 Keine volatile Browserzahl als aktuelle Mindestzahl hardcodieren.
 Verify/Einzelskripte wegen gemeinsamer temporärer Pfade sequenziell ausführen.
 
-Originaljoblogs müssen tatsächlichen **Push-Checkout = Feature-Head** und
-**PR-Checkout = synthetischer Merge** belegen. Run-Metadatum `head_sha` allein
-beweist den Mergecheckout nicht. Mergeparents und Tree, finale Base und Runs
-abgleichen. Lokaler Browsermangel ist kein bestandener Test; reguläre GitHub-CI
-kann auf beiden Identitäten den maßgeblichen vollständigen Nachweis erbringen.
-Keine Abschwächung von Assertions, Retries, Flags, Browserkonfiguration oder
-Workflows zum Grünfärben. Fehler nach Infrastruktur, Fixture/Selector, Fachdefekt
-und Flakiness ursächlich trennen; mögliche Datenverluste gezielt prüfen.
-Nach Korrektur finalen Diff/Tree und beide CI-Seiten erneut nachweisen.
+### Drei getrennte Prüfebenen
 
-Abnahmepaket: Abschlussbericht, originale Run-/Jobbelege, Head/Base/Parent/Tree,
-Prüfmatrix, SHA-256-Manifest und wesentliche Fachbeweise. Große historische Logs,
-Diagnosen und Traces separat geschützt und unverändert verfügbar halten.
-Bericht oder Testzählung ohne originären Lauf sind keine Ersatzbeweise.
-Die erforderlichen unabhängigen Reviewer prüfen diese Originale vollständig und
-bestätigen dies im Abschlussbericht. Die Projektleitung prüft belastbare
-Ergebnisse und Zuordnung sowie die unmittelbare Integrität, ohne routinemäßige
-erneute Vollauswertung. Sämtliche Tests, Typechecks, Builds, R1-Gates und der
-Transportvertrag D-05 einschließlich identischer Trees und gültiger Parents
-bleiben unverändert. Keine künstlichen Skips, Retries oder Timeout-Anpassungen
-zum Erzwingen grüner CI. Die erforderlichen Review-Entscheidungen bleiben
-vollständig unabhängig.
+1. **Technische Tests:** Alle bestehenden Gatebefehle bleiben vollständig und
+   unverändert verpflichtend. Keine neuen Skips, Retries, Assertionabschwächungen
+   oder pauschalen Timeout-Erhöhungen zum Erzwingen grüner CI.
+2. **Technischer Identitätsnachweis:** Nach Checkout verpflichtend
+   `scripts/verify-ci-checkout-identity.mjs` ausführen. Tatsächliche Commit-, Tree-
+   und direkte Parent-Objekte prüfen. Push muss GitHub-SHA und Push-Payload auf
+   `work/**` entsprechen. PR gegen `main` muss synthetischer Merge mit genau
+   Base als erstem und Feature-Head als zweitem Parent sein. Repository, Workflow,
+   Event, PR, Run und Attempt zuordnen. Fehlende oder widersprüchliche Daten sind
+   Fehler, kein Fallback. `head_sha` allein beweist keinen Checkout.
+3. **Zusätzliche manuelle Auswertung und Archivierung:** Vollständige
+   Originaljoblogauswertung und separate Sicherung nur bei konkretem Bedarf.
+   Keine allgemeine Pflicht zu großen ZIP-Paketen, historischen Logsammlungen,
+   redundanten Artefaktkopien oder Git-Bundles für reguläre Übergaben.
+
+### Erfolgreicher Standardfall
+
+Für **beide finalen regulären Push-/PR-Läufe** genügen zugeordnete strukturierte
+GitHub-Originalquellen: Run `completed` / `success`, erfolgreiche Pflichtjobs und
+Steps ohne übersprungene Gates, erfolgreicher verpflichtender Identitätscheck,
+vorhandener zugehöriger JSON-Nachweis und übereinstimmende Commit-/Tree-/Parent-
+Identitäten. JSON unter `ci-checkout-identity-<run_id>-<attempt>` (Schema 1),
+Run-/Job-Referenzen und kompakte Jobzusammenfassung nachvollziehbar prüfen.
+JSON bestätigt ausschließlich die Checkout-Identität, nicht den späteren Erfolg
+aller Tests. Ein Artefakt aus fehlgeschlagener CI ist kein bestandenes Vollgate.
+
+Die Regressionen des neuen Checks laufen zusätzlich und ersetzen keinen
+bestehenden Test. `workflow_dispatch` wird als `manual_limited` mit
+`regular_evidence: false` gekennzeichnet und prüft nur Branchref, Eventkontext
+und Checkout-SHA. Es ersetzt niemals einen regulären finalen Push- oder PR-Lauf.
+Unbekannte Ereignisse schlagen fehl. Keine zusätzlichen Secrets/Berechtigungen.
+
+Reviewer prüfen unverändert den tatsächlichen finalen Diff sowie alle relevanten
+fachlichen, technischen und sicherheitsbezogenen Anforderungen entsprechend der
+Risikoklasse. Nur die manuelle CI-Nachweisführung wird reduziert, nicht die
+Review-Tiefe, Review-Anzahl oder organisatorische Unabhängigkeit.
+
+### Vertiefte Prüfung und HOLD
+
+Bei fehlgeschlagener/unvollständiger CI, fehlendem oder fehlerhaftem JSON,
+Identitätsabweichungen, widersprüchlichen Run-/Job-/Git-Daten, Hinweisen auf
+übersprungene Pflichtgates oder Testabschwächungen, unklaren Ausführungsbedingungen
+oder begründeten Reviewerzweifeln gezielt GitHub-Originalquellen vertieft prüfen.
+Dazu zählen Originaljoblogs, Artefakte und andere geeignete Originalbelege.
+Wenn zur Klärung notwendig, vollständige Protokollsicherung anordnen.
+Fehler nach Infrastruktur, Fixture/Selector, Fachdefekt und Flakiness ursächlich
+trennen. Mögliche Datenverluste gezielt prüfen. Nach Korrekturen finalen Diff/Tree
+und beide regulären CI-Seiten erneut nachweisen.
+
+Fehlende oder nicht vertrauenswürdige Pflichtnachweise bedeuten **HOLD und
+Merge-STOP**. Ein grüner Run allein genügt nicht. Ein nachweislich gleichwertiger,
+nachvollziehbarer alternativer Originalbeleg darf zur Klärung dienen, wenn seine
+Beweiskraft und eindeutige Zuordnung zum geprüften Stand ausdrücklich dokumentiert
+und unabhängig bewertet werden. Eine bloße Identitätsbehauptung genügt nicht.
+Dies hebt kein fehlgeschlagenes technisches Gate auf und ist keine automatische
+Ausnahme für den GOV-03-Übergang.
+
+### Kompakte Übergabe und Aufbewahrung
+
+Abschlussbericht mit Head/Base/Parent/Tree, finalen Run-/Jobreferenzen,
+JSON-Artefaktreferenzen und wesentlichen Fachbeweisen genügt im erfolgreichen
+Standardfall. Reviewer bestätigen ihre eigene vollständige fachliche und
+technische Prüfung sowie die konkrete Evidenzzuordnung im kompakten Bericht.
+Die Projektleitung prüft belastbare Ergebnisse und unmittelbare Integrität,
+ohne routinemäßige erneute Vollauswertung. D-05 und alle technischen Gates
+bleiben unverändert.
+
+Der Workflow fordert für das kleine Identitätsartefakt **30 Tage** Aufbewahrung
+an. Die tatsächlich von GitHub ausgewiesenen Ablauf-/Verfügbarkeitsdaten prüfen,
+keine unbegrenzte Verfügbarkeit behaupten. Ist langfristige Nachweisbarkeit
+explizit erforderlich oder droht Verlust notwendiger Originalbelege, rechtzeitig
+eine gezielte Sicherungsentscheidung treffen. Bestehende geschützte Originale
+und Archive unverändert erhalten. Öffentlich ausschließlich unverfängliche
+technische Metadaten veröffentlichen, keine Secrets oder vertraulichen Daten.
 
 ## Diagnose-PR 43
 
