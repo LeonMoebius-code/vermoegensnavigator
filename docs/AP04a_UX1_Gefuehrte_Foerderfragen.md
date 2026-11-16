@@ -122,3 +122,74 @@ Navigations- und Verlustschutz sind zu prüfen. Reale fachfremde/beraterseitige
 Nutzungsabnahmen sind ausstehend und werden nicht durch automatisierte Tests
 ersetzt. Beide vollständigen neuen CI-Nachweise bleiben Pflicht; fehlende
 Originallogs bedeuten Nachweis-HOLD, nicht Testfehlschlag.
+
+## Abschlussnachtrag S2 / R71-01 · 16.11.2026
+
+Dieses reguläre Featurepaket ergänzt ausschließlich den Anzeige- und Bedienvertrag
+auf main `e828095c46ced07735ca7f7a6c902344e16be2ca`. PR #71 ist bereits integriert.
+Die obigen Mapping- und Invalidierungsmatrizen bleiben unverändert wirksam.
+
+### Jahreskonflikt R71-01
+
+Bei ausdrücklich gewähltem Beitragsjahr 2027 oder 2028 und abweichendem wirksamem
+Zahlungsstartjahr lautet die Orientierung:
+
+> Das gewählte Beitragsjahr stimmt nicht mit dem Beginn Ihres Sparplans überein.
+> Bitte prüfen und korrigieren Sie die Jahresangaben, bevor wir Ihre persönliche
+> Förderung für dieses Jahr beurteilen.
+
+Nächster Prüfschritt: Beitragsjahr und Zahlungsstartjahr gemeinsam prüfen und die
+abweichende Jahresangabe korrigieren. Kein positives oder negatives Anspruchsurteil,
+keine automatische Jahreskorrektur. Leere/ungültige Jahre, Jahre vor 2027 und nach
+2028 behalten ihre bisherigen Meldungen. Bei gleichen unterstützten Jahren bleibt
+die bestehende Arbeitnehmer-/Sonderfallorientierung unverändert. Einziger fachlicher
+Anzeigeursprung bleibt `fundingOrientation`, auch in der Zusammenfassung.
+
+### Tatsächliche Fragenfolge
+
+| Abschnitt | Inhalt / Sichtbarkeit |
+| --- | --- |
+| Zeitraum und Person | Beitragsjahr, optionales Geburtsjahr; bisherige feldbezogene Validierung |
+| Erwerb und Versicherung | Bestehende Hauptsituation und unabhängig kombinierbare Erziehungs-/Pflegezeiten |
+| Besondere Voraussetzungen | Nur bei Beamten oder self/none/other; unveränderte Einwilligungs-, Versicherungs- und Partnerbedingungen |
+| Bestehende Vorsorge und Kinder | Bestehender Riester-Vertrag einschließlich B-Einstieg und Kindergeldfrage |
+| Ihre erste Orientierung | Eigene relevante Antworten, offene Angaben, bestehende Förderorientierung und nächste Prüfungen |
+
+Im Standardpfad gibt es vier Abschnitte, im Sonderfall fünf. Die Gliederung folgt
+der fachlichen Abhängigkeit: Hauptsituation vor bedingten Nachfragen, eigene
+Vertrags-/Kinderangaben vor der abschließenden Einordnung. Keine zusätzlichen
+fachlichen Felder. Fortschritt zählt die tatsächlich relevanten Abschnitte und
+markiert den aktuellen mit `aria-current=step`. Weiter/Zurück und Abschnittswahl
+sind Tastaturbuttons. Schrittwechsel fokussiert die Abschnittsüberschrift;
+ungültige Jahres-/Geburtsangaben fokussieren das betroffene Feld im ersten Abschnitt.
+Offene Angaben bleiben zulässig. Der bestehende direkte Button zum eigenen
+Sparplan ist weiterhin in jedem Abschnitt verfügbar. Er erlaubt neutrale Planung
+bei offener persönlicher Förderung; er bestätigt keine übersprungenen Antworten.
+
+Antworten bleiben ausschließlich im bisherigen RetirementEntry-State. Der lokale
+Abschnittsindex besitzt weder Antworten noch Nachweise. Rückkehr aus Kundenplanung,
+Einführung oder B startet die Fragenanzeige wieder im ersten Abschnitt und erhält
+die Antworten. Ausgeblendete Antworten bleiben erhalten; die Zusammenfassung zeigt
+nur die aktuell relevanten Folgeangaben. Weder Aus-/Einblenden noch reine Navigation
+bestätigt oder invalidiert Evidenz. Nur tatsächliche Wertänderungen verwenden die
+bestehenden Handler und die unveränderte gezielte Invalidierungsmatrix.
+
+Fach-/Bedienkonzept V0.5.2 §2/§3 und Bildschirmkonzept V0.5.2 S2/M2 wurden außerhalb
+des öffentlichen Repositorys eingesehen. Dieser Nachtrag setzt die freigegebene
+begrenzte S2-Nachbesserung um, keine vollständige Konformität mit sämtlichen Funktionen
+des Gesamtkonzepts. Insbesondere bleiben umfassende Kindererfassung, alternative
+Vorstatusklassen und weitere A-/B-Funktionen außerhalb dieses Pakets.
+
+### Regressionen und Grenzen
+
+`ap04a-s2-closeout.spec.ts` ergänzt die Jahreskonfliktmatrix und echte geführte
+Standard-/Sonderfall-, Partner-, Beamten-, Kindergeld-, Validierungs- und Rückwege.
+`ap04a-ux1-guided.spec.ts` erhält ausschließlich notwendige Abschnittsnavigation
+und zusätzliche Beweise zum Erhalt bereits bestätigter Förderung. Bestehende
+wirtschaftliche Assertions bleiben erhalten. Die bisherigen UX03-/PR69-Tests
+können den unverändert erlaubten direkten neutralen Einstieg weiter benutzen.
+
+Die finalen vollständigen Push-/PR-Gates und Originalcheckout-Belege gehören in
+identische externe Abnahmeunterlagen. Automatisierte responsive Ansichten und
+CSS-Zoom bleiben technische Regressionen. R71-02 und die menschliche AP-07c-Abnahme
+bleiben offen. Kein unabhängiges GO, Merge, Release oder Deployment durch Work.
