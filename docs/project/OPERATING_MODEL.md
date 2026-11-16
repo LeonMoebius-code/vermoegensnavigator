@@ -8,6 +8,17 @@ kann den geltenden Rahmen einmal bestätigen. Daraus folgt keine wiederholte
 Einzelfreigabe für ordnungsgemäße Feature-Merges oder den vorgesehenen API-Transport.
 Außerhalb dieses Rahmens anhalten. Governance-Integration ist separat zu entscheiden.
 
+## GOV-02: Übergang und Wirksamkeit
+
+Der Folgebeschluss [D-19](DECISIONS.md#fortschreibung-16112026) vom 16.11.2026
+ist fachlich bestätigt und zur Dokumentationsumsetzung freigegeben. Das hier
+beschriebene risikobasierte Verfahren gilt **erst nach zwei organisatorisch
+unabhängigen vollständigen GO für denselben finalen Governance-Stand und Leons
+gesonderter ausdrücklicher Integrationsentscheidung sowie erfolgter Integration**.
+Bis dahin gelten D-01/D-02 in ihrer bisherigen Fassung. GOV-02 darf seine eigenen
+Review- oder Merge-Anforderungen nicht erleichtern. Abgeschlossene Reviews und
+historische Merges werden nicht nachträglich umklassifiziert.
+
 ## Quellen und Widersprüche
 
 Live-GitHub belegt implementierten Code, Ref-/PR-/CI-Zustand; Releaseartefakte
@@ -23,33 +34,142 @@ sind STOP. Der Kopf der Master-Spezifikation und alte Schema-/Testzahlen können
 | Rolle | Verantwortung und Grenze |
 | --- | --- |
 | Leon | Entscheidet Fachvarianten, Prioritäten und Veröffentlichungen; führt selbst keine Shell-/Git-/npm-Befehle aus. |
-| Projektleiter | Empfiehlt eigenständig kurz Priorität, Aufwand, Risiken und Alternativen; bittet um „Ja, passt“. Erst nach Zustimmung vollständiger neuer Work-Auftrag, außer Leon verlangt ihn direkt. Eigene unabhängige Code-/Fach-/Architekturabnahme; führt beide Urteile zusammen. Bedingter Feature-Merge gemäß untenstehendem Vertrag. |
-| Work | Nur beschlossenes Paket; Preflight, Originalschutz, Umsetzung, Commit, erlaubte Veröffentlichung, Draft-PR, volle CI, Korrekturen und kompakte Nachweise. Kein unabhängiges GO, kein Merge. |
-| Separater Reviewer | Organisatorisch unabhängig, ausschließlich READ-ONLY: tatsächlicher Produktionsdiff, Fach-/Sicherheitsverträge, Originale, Git-/CI-Identitäten und konkrete Anzeige-/Exportpfade. Eigenes GO/NO-GO; keine GitHub-Schreibaktionen. |
+| Projektleiter | Empfiehlt eigenständig kurz Priorität, Aufwand, Risiken und Alternativen; bittet um „Ja, passt“. Erst nach Zustimmung vollständiger neuer Work-Auftrag, außer Leon verlangt ihn direkt. Verantwortet fachliche Konzeption und Entscheidungen im bestätigten Rahmen, Priorisierung, Koordination, Risikoeinstufung und Statuskonsistenz. Prüft kompakte belastbare Review-Ergebnisse, Blocker und Restrisiken. Keine routinemäßige vollständige Code-/Diff-/CI-Originalprotokollprüfung. Unmittelbare Integritätskontrolle und bedingter Feature-Merge gemäß untenstehendem Vertrag. |
+| Work | Nur beschlossenes Paket; Preflight, Originalschutz, Umsetzung, Commit, erlaubte Veröffentlichung, Draft-PR, eigene vollständige fachliche und technische Prüfung, volle reguläre Tests/CI, Korrekturen, vollständige Originalnachweise und kompakte Übergabe. Kein unabhängiges GO für eigene Umsetzung, kein Merge. |
+| Unabhängige Reviewer | Je nach Risikoklasse ein oder zwei organisatorisch unabhängige Review-Chats, getrennt von Work und Projektleitung, bei Doppelreview auch voneinander unabhängig. Vollständige fachliche und technische Prüfung ausschließlich READ-ONLY: finaler Code-/Dateidiff, Fach-/Sicherheits-/Datenintegritätsverträge, Originale, Commit-Parents/Trees, originale CI-/Checkout-Belege, erforderliche Regressionen sowie kritische Anzeige-, Berechnungs- und Exportpfade. Eigene Entscheidung GO/HOLD/NO-GO, Befunde und Restrisiken. Keine Dateiänderungen, Commits, GitHub-Schreibaktionen oder Merges. |
 | Audit | Separater READ-ONLY-Nebenprozess; Findings sind keine Fix-, Work-, Merge- oder Veröffentlichungserlaubnis. |
 
 ## Paketablauf und Feature-Merge
 
-Kurze Empfehlung → Leons Zustimmung → vollständiger Work-Auftrag → isolierter
-Preflight/Transport → Umsetzung/Originalcommit → Draft-PR → vollständige Push-
-und PR-CI → zwei parallel unabhängige GO/NO-GO → unmittelbare Integritätsprüfung
-→ bedingt autorisierter Feature-Merge → main-/Parent-/Tree-Nachprüfung → kurze
-nächste Empfehlung. Kein automatischer Folgeauftrag nach Merge.
+Kurze Empfehlung → Leons Zustimmung → vollständiger Work-Auftrag mit vorläufiger
+Risikoklasse → isolierter Preflight/Transport → Umsetzung/Originalcommit und
+Work-Selbstprüfung → Draft-PR → vollständige finale Push- und PR-CI → ein oder
+zwei vollständige unabhängige Reviews gemäß Risikoklasse → Prüfung der kompakten
+Ergebnisse durch die Projektleitung → unmittelbare Integritätskontrolle → bedingt
+autorisierter Feature-Merge → main-/Parent-/Tree-Nachprüfung → kurze nächste
+Empfehlung. Kein automatischer Folgeauftrag nach Merge.
 
-Work übergibt **identische finale Unterlagen gleichzeitig** an Projektleiter und
-separaten Reviewer. Beide prüfen möglichst vor Kenntnis des anderen Urteils.
-Sie entscheiden selbst anhand desselben finalen Stands; fremdes GO ist kein eigenes.
-CI ersetzt keine fachliche Abnahme. Veränderte Stände, widersprüchliche Urteile,
-offene Fachfragen oder fehlende finale Gates sind Merge-STOP.
+Work übergibt denselben finalen Prüfstand und identische vollständige Unterlagen
+an die erforderlichen unabhängigen Reviewer, bei Doppelreview möglichst
+gleichzeitig. Beide prüfen eigenständig, möglichst vor Kenntnis des anderen
+Urteils. Fremdes GO darf nicht ungeprüft übernommen werden. Die Projektleitung
+erhält vollständige Prüfberichte und Referenzen auf alle Originalnachweise.
+CI ersetzt keine fachliche Abnahme.
 
-Für von Leon beauftragte reguläre **Feature-PRs** ist der Projektleiter dauerhaft
-bedingt zum Merge autorisiert: zwei positive unabhängige Abnahmen desselben
-finalen Heads; aktuelle Base/Head/Parents/Trees, erlaubter Dateidiff und beide
-vollständigen Gates unmittelbar vorher prüfen. Merge an die erwartete Head-SHA
-binden. Danach tatsächlichen main, Mergeparents und erwarteten Integrationstree
-kontrollieren. Ein Basewechsel erfordert erneute Integrationsbewertung und gültige
-CI; Abnahmen bei relevanten Änderungen erneuern. Keine Freigabe aus Mergeability.
-Governance-PRs, Release, Deployment, Rollback und Settings sind davon ausgeschlossen.
+Für von Leon beauftragte reguläre **Feature-PRs** bleibt der Projektleiter
+dauerhaft bedingt zum Merge autorisiert: ein ausdrückliches unabhängiges GO bei
+Standardfeatures, zwei voneinander unabhängige vollständige GO bei kritischen
+Änderungen, jeweils für denselben konkreten finalen Stand. Es gelten alle
+unveränderten Gates und die untenstehende unmittelbare Integritätskontrolle.
+Governance-PRs, Release, Deployment, Rollback und Repository-Settings sind von
+dieser allgemeinen Feature-Mergebefugnis ausgeschlossen. Ihre bisherigen
+gesonderten Autorisierungs- und Freigabegrenzen bleiben bestehen. Ein positives
+Review allein erlaubt insbesondere keine Governance-Integration.
+
+## Risikoeinstufung und unabhängige Reviews
+
+### Standardfeatures: ein vollständiger unabhängiger Review
+
+Geringes oder begrenztes fachliches und technisches Risiko: rein visuelle
+UI-Anpassungen, Text-/Layoutkorrekturen ohne fachliche Bedeutungsänderung,
+isolierte Navigationsverbesserungen, nichtkritische Präsentationskomponenten
+oder eng begrenzte Funktionen ohne Auswirkungen auf Berechnungen, Persistenz,
+Sicherheit oder geschützte Daten.
+
+Voraussetzungen sind Work-Selbstprüfung, erfolgreiche vollständige reguläre
+finale Push-/PR-CI, vollständig vorliegende Originalnachweise, vollständige
+Prüfung der tatsächlichen finalen Umsetzung und Originale durch einen
+organisatorisch unabhängigen Reviewer, dessen ausdrückliches GO zur konkreten
+finalen Identität und die unmittelbare Integritätskontrolle der Projektleitung.
+
+### Kritische Änderungen: zwei vollständige unabhängige Reviews
+
+Erhöhtes fachliches, technisches oder sicherheitsbezogenes Risiko, insbesondere:
+
+- Finanzmathematische Berechnungen und Projektionen.
+- Förder-, Steuer-, Renten- und Anspruchslogik.
+- Risikoklassifikation und fachlich relevante Produktzuordnungen.
+- Persistenz, Wiederherstellung, Import und Export.
+- Integrität oder Vertraulichkeit von Kundendaten.
+- Sicherheits- und Berechtigungskonzepte.
+- Zentrale Datenmodelle oder wesentliche Architekturverträge.
+- Sicherheits-, Verlustschutz- oder Validierungsmechanismen.
+- Fachlich entscheidungsrelevante Kundenanzeigen, Warnungen und Beratungsergebnisse.
+
+Entscheidend sind die tatsächlichen Auswirkungen, nicht Dateianzahl, Codeumfang
+oder Paketname. Auch eine kleine UI-Änderung ist kritisch, wenn sie die
+Interpretation eines Förderanspruchs, einer Berechnung oder einer wesentlichen
+Risikowarnung beeinflusst. Beide Reviewer prüfen vollständig, unabhängig von
+Work und voneinander, denselben finalen Stand.
+
+### Einstufung, Eskalation und STOP
+
+Die Projektleitung legt die vorläufige Risikoklasse bei Beauftragung fest.
+Work prüft sie im Preflight und während der Umsetzung und meldet Abweichungen
+unverzüglich. Jeder unabhängige Reviewer prüft die Einstufung ebenfalls und
+kann eine Hochstufung verlangen.
+
+- Bei Unsicherheit gilt kritisch.
+- Keine Herabstufung nach einem Review zur Umgehung einer zweiten Abnahme.
+- Kein künstliches Aufteilen zusammenhängender Änderungen zur Review-Reduzierung.
+- Neu erkannte kritische Auswirkungen erfordern die fehlende Doppelabnahme.
+- Bei NO-GO, widersprüchlichen Ergebnissen, fehlenden Nachweisen oder offenen
+  Fachfragen gilt HOLD und Merge-STOP.
+- Nach relevanten Änderungen am finalen Stand betroffene Prüfungen und Abnahmen
+  erneuern. Fehlende finale Gates oder relevante Identitätsabweichungen sind STOP.
+
+Die menschliche E2E-/Usability-Abnahme **AP-07c bleibt verpflichtend und offen**,
+unabhängig von der technischen Review-Anzahl. Automatisierte Tests ersetzen sie
+nicht. Die historische Ausnahme D-16 für PR #71 wird dadurch nicht erweitert.
+
+## Review-Abschlussbericht und Übergabe
+
+Jeder unabhängige Reviewer liefert einen kompakten, nachvollziehbaren Bericht:
+
+| Feld | Pflichtinhalt |
+| --- | --- |
+| PR und Risikoklasse | PR-Nummer, Auftrag, Standard oder kritisch. Governance und andere Sonderfälle gesondert kennzeichnen. |
+| Identitäten | Finaler Head, Base, Tree, synthetischer Merge und Parents. |
+| Umfang | Tatsächlich geprüfte Dateien und Abweichungen vom Auftrag. |
+| CI | Finale Push-/PR-Runs und tatsächliche Checkout-Identitäten. |
+| Originalnachweise | Fundstellen und ausdrückliche Bestätigung der vollständigen eigenen Prüfung. |
+| Teststatus | Relevante Tests, tatsächliche Ergebnisse, Skips und Abweichungen. |
+| Fachprüfung | Wesentliche geprüfte Vertrags-, Sicherheits- und Datenintegritätsbereiche. |
+| Befunde | Offene Probleme mit Schweregrad und Restrisiken. |
+| Entscheidung | Eindeutig GO, HOLD oder NO-GO. |
+| Gültigkeit | Exakter finaler Stand, für den das Urteil gilt. |
+
+Ein bloßes GO ohne Identitäts- und Nachweiszuordnung genügt nicht. Originale
+bleiben vollständig, unverändert und nachvollziehbar verfügbar. Die vollständige
+unabhängige fachliche und technische Abnahme erfolgt in den Review-Chats.
+Die Projektleitung muss Code, PR-Diff und CI-Originalprotokolle nicht routinemäßig
+erneut vollständig prüfen. Bei konkreten Auffälligkeiten, relevanten
+Widersprüchen oder Zweifeln muss sie gezielt nachprüfen oder an einen
+unabhängigen Reviewer zurückgeben.
+
+## Unmittelbare Integritätskontrolle und Feature-Merge
+
+Die Projektleitung prüft anhand der Berichte die richtige Risikoklasse,
+erforderliche Anzahl unabhängiger GO, denselben finalen Stand aller Urteile,
+nachweislich erfolgreiche Pflichtgates, offene Befunde/Restrisiken und die
+geltenden Befugnisse. Keine erneute vollständige technische Abnahme ohne
+relevante Widersprüche oder Zweifel.
+
+Unmittelbar vor dem Merge mindestens kontrollieren:
+
+1. Aktuellen main und PR-Base.
+2. Finalen PR-Head und erwartete Commit-/Tree-Identitäten.
+3. Vorgesehenen Integrationstree und gültige Merge-Parents.
+4. Zulässigen Umfang anhand des bestätigten Review-Berichts und der Dateiliste.
+5. Finale vollständige Push-/PR-CI-Status und ihre korrekte Identitätszuordnung.
+6. Erforderliche unabhängige GO-Entscheidungen für denselben finalen Stand.
+7. Geltende bedingte Feature-Mergebefugnis und Sonderfreigabegrenzen.
+
+Merge an die erwartete Head-SHA binden. Danach tatsächlichen main-Commit,
+dessen Parents und erwarteten Integrationstree kontrollieren. Bei verändertem
+Base-Stand, fehlenden Gates oder relevanten Abweichungen gezielter STOP.
+Basewechsel erfordern erneute Integrationsbewertung und gültige CI, bei
+relevanten Änderungen erneuerte Abnahmen. Mergeability ist keine Freigabe.
 
 ## Preflight und Originalschutz
 
@@ -111,6 +231,14 @@ Abnahmepaket: Abschlussbericht, originale Run-/Jobbelege, Head/Base/Parent/Tree,
 Prüfmatrix, SHA-256-Manifest und wesentliche Fachbeweise. Große historische Logs,
 Diagnosen und Traces separat geschützt und unverändert verfügbar halten.
 Bericht oder Testzählung ohne originären Lauf sind keine Ersatzbeweise.
+Die erforderlichen unabhängigen Reviewer prüfen diese Originale vollständig und
+bestätigen dies im Abschlussbericht. Die Projektleitung prüft belastbare
+Ergebnisse und Zuordnung sowie die unmittelbare Integrität, ohne routinemäßige
+erneute Vollauswertung. Sämtliche Tests, Typechecks, Builds, R1-Gates und der
+Transportvertrag D-05 einschließlich identischer Trees und gültiger Parents
+bleiben unverändert. Keine künstlichen Skips, Retries oder Timeout-Anpassungen
+zum Erzwingen grüner CI. Die erforderlichen Review-Entscheidungen bleiben
+vollständig unabhängig.
 
 ## Diagnose-PR 43
 
@@ -183,7 +311,7 @@ checkpoint durchführen, ohne Verwaltungsauftrag pro Commit/Testzahl.
 
 | Auslöser | Kleinste erforderliche Aktion des Projektleiters |
 | --- | --- |
-| Feature nach zwei Reviews integriert | Checkpoint/aktive Arbeit prüfen, materielle Änderungen eng gebündelt nachführen. |
+| Feature nach risikogemäß erforderlichen unabhängigen Reviews integriert | Checkpoint/aktive Arbeit prüfen, materielle Änderungen eng gebündelt nachführen. |
 | Neuer bestätigter Fach-/Organisationsbeschluss | Knapper DECISIONS-Eintrag oder Ersatzmarkierung; Status nur bei geänderter Priorität/Umfang. |
 | Neue belastbare P1-/P2-Evidenz oder Entscheidung | Risikostatus/Quellenlink aktualisieren, kein Vollaudit wiederholen. |
 | Readiness-/Releaseentscheidung | integriert / bereit / freigegeben / live getrennt mit tatsächlichen Nachweisen führen. |
