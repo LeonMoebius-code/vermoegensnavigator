@@ -5,6 +5,8 @@ import { emptyCustomerPlan, customerGrant } from "../../app/presentation/retirem
 const button = (p: Page, name: string) => p.getByRole("button", { name, exact: true });
 async function entry(p: Page) { await p.goto("./"); await p.locator(".sidebar nav").getByRole("button", { name: /Altersvorsorge/ }).click(); }
 async function questions(p: Page) { await entry(p); await button(p, "Neue Altersvorsorge planen").click(); await button(p, "Meine Voraussetzungen prüfen").click(); }
+const section = (p: Page, name: string) => p.getByRole("navigation", { name: "Abschnitte der Förderfragen", exact: true }).getByRole("button", { name: new RegExp(name + "$") });
+async function show(p: Page, name: string) { await section(p, name).click(); await expect(p.getByRole("heading", { name, exact: true })).toBeFocused(); }
 const tri = (p: Page, question: string, answer: string) => p.getByRole("group", { name: question, exact: true }).getByRole("radio", { name: answer, exact: true });
 const employee = "Angestellt und in der deutschen gesetzlichen Rentenversicherung pflichtversichert";
 const yearLabel = "Für welches Jahr möchten Sie erstmals einzahlen?";
@@ -61,6 +63,7 @@ test("UX1 S2: unselected answers; standard orientation, multiple times, no fabri
   await expect(page.getByRole("radio").filter({ has: page.locator(":checked") })).toHaveCount(0);
   expect(await page.locator('.retirement-questionnaire input:checked').count()).toBe(0);
   await page.getByLabel(yearLabel, { exact: true }).fill("2027");
+  await show(page, "Erwerb und Versicherung");
   await page.getByRole("radio", { name: employee, exact: true }).check();
   await page.getByRole("checkbox", { name: "Kindererziehungszeiten", exact: true }).check();
   await page.getByRole("checkbox", { name: "Ich pflege Angehörige", exact: true }).check();
@@ -74,6 +77,7 @@ test("UX1 S2: unselected answers; standard orientation, multiple times, no fabri
   await page.getByText("Beraterprüfung: Förderung und Sonderfälle", { exact: true }).click();
   for (const label of ["Geprüfte unmittelbare Berechtigung", "Geprüfte Förderregelung", "Geprüfte Vertragszuordnung"]) await expect(page.getByLabel(label, { exact: true })).toHaveValue("unconfirmed");
   await button(page, "Zurück zu meinen Voraussetzungen").click();
+  await show(page, "Erwerb und Versicherung");
   await expect(page.getByRole("checkbox", { name: "Kindererziehungszeiten", exact: true })).toBeChecked();
   await expect(page.getByRole("checkbox", { name: "Ich pflege Angehörige", exact: true })).toBeChecked();
 });
@@ -81,10 +85,13 @@ test("UX1 S2: unselected answers; standard orientation, multiple times, no fabri
 test("UX1 partner, Riester, child evidence remain open; A/B navigation retains answers and keeps B independent", async ({ page }) => {
   await questions(page); const before = await page.evaluate(() => JSON.stringify({ local: localStorage, session: sessionStorage }));
   await page.getByLabel(yearLabel, { exact: true }).fill("2028");
+  await show(page, "Erwerb und Versicherung");
   await page.getByRole("radio", { name: "Derzeit nicht erwerbstätig", exact: true }).check();
+  await show(page, "Besondere Voraussetzungen");
   await tri(page, "Sind Sie verheiratet oder in einer eingetragenen Lebenspartnerschaft?", "Ja").check();
   await tri(page, "Leben Sie dauerhaft getrennt?", "Nein").check();
   await tri(page, "Ist Ihr Partner selbst unmittelbar förderberechtigt?", "Ja").check();
+  await show(page, "Bestehende Vorsorge und Kinder");
   await tri(page, "Wird für eines Ihrer Kinder aktuell Kindergeld gezahlt?", "Ja").check();
   await tri(page, "Haben Sie bereits einen Riester-Vertrag?", "Ja").check();
   await expect(page.getByTestId("funding-orientation")).not.toHaveText(possibleText);
@@ -92,7 +99,9 @@ test("UX1 partner, Riester, child evidence remain open; A/B navigation retains a
   await button(page, "Bestehenden Riester-Vertrag zuerst prüfen").click();
   await expect(page.getByTestId("old-result")).toHaveCount(0);
   await button(page, "A/B-Auswahl").click(); await button(page, "Neue Altersvorsorge planen").click(); await button(page, "Meine Voraussetzungen prüfen").click();
+  await show(page, "Besondere Voraussetzungen");
   await expect(tri(page, "Ist Ihr Partner selbst unmittelbar förderberechtigt?", "Ja")).toBeChecked();
+  await show(page, "Zeitraum und Person");
   await expect(page.getByLabel(yearLabel, { exact: true })).toHaveValue("2028");
   expect(await page.evaluate(() => JSON.stringify({ local: localStorage, session: sessionStorage }))).toBe(before);
   page.once("dialog", d => d.dismiss()); await button(page, "Spezialentwurf neu starten").click();
@@ -103,7 +112,7 @@ test("UX1 partner, Riester, child evidence remain open; A/B navigation retains a
 });
 
 test("UX1 correction of a previously confirmed personal case blocks stale grant immediately", async ({ page }) => {
-  await questions(page); await page.getByLabel(yearLabel, { exact: true }).fill("2027"); await page.getByRole("radio", { name: employee, exact: true }).check();
+  await questions(page); await page.getByLabel(yearLabel, { exact: true }).fill("2027"); await show(page, "Erwerb und Versicherung"); await page.getByRole("radio", { name: employee, exact: true }).check();
   await button(page, "Weiter zum eigenen Sparplan").click();
   await page.getByText("Beraterprüfung: Förderung und Sonderfälle", { exact: true }).click();
   await page.getByLabel("Wurde Ihre Förderberechtigung bereits geklärt?", { exact: true }).selectOption("checked");
@@ -120,7 +129,12 @@ test("UX1 correction of a previously confirmed personal case blocks stale grant 
   await page.getByLabel("Für Person und Jahr geprüft: keine einzubeziehenden Kinder", { exact: true }).check();
   await page.getByLabel("Den geplanten Jahres-Eigenbeitrag für Person, Vertrag und Jahr fachlich als förderfähig geprüft", { exact: true }).check();
   await expect(page.getByTestId("customer-base-grant")).toHaveText("390,00 €");
-  await button(page, "Zurück zu meinen Voraussetzungen").click(); await page.getByRole("radio", { name: "Selbstständig oder freiberuflich", exact: true }).check();
+  await button(page, "Zurück zu meinen Voraussetzungen").click();
+  await show(page, "Erwerb und Versicherung"); await show(page, "Bestehende Vorsorge und Kinder");
+  await show(page, "Ihre erste Orientierung"); await button(page, "Zurück").click();
+  await button(page, "Weiter zum eigenen Sparplan").click();
+  await expect(page.getByTestId("customer-base-grant")).toHaveText("390,00 €");
+  await button(page, "Zurück zu meinen Voraussetzungen").click(); await show(page, "Erwerb und Versicherung"); await page.getByRole("radio", { name: "Selbstständig oder freiberuflich", exact: true }).check();
   await expect(page.getByTestId("funding-orientation")).not.toHaveText(possibleText);
   await button(page, "Weiter zum eigenen Sparplan").click();
   await expect(page.getByTestId("customer-base-grant")).toHaveCount(0);
@@ -138,9 +152,10 @@ for (const width of [375, 768, 1280]) test(`UX1 M1/M2 ${width}px: long labels, k
   await expect(page.getByRole("heading", { name: "Ihre mögliche Förderung", exact: true })).toBeFocused();
   const year = page.getByLabel(yearLabel, { exact: true }); await year.fill("oops"); await button(page, "Weiter zum eigenen Sparplan").click();
   await expect(year).toBeFocused(); await expect(year).toHaveAttribute("aria-invalid", "true");
-  await year.fill("2027"); await page.getByRole("radio", { name: employee, exact: true }).check();
+  await year.fill("2027"); await show(page, "Erwerb und Versicherung"); await page.getByRole("radio", { name: employee, exact: true }).check();
   await expect(page.getByTestId("funding-orientation")).toHaveText(possibleText);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await show(page, "Zeitraum und Person");
   await year.focus(); await page.keyboard.press("Tab"); await expect(page.getByLabel("In welchem Jahr sind Sie geboren? (optional)", { exact: true })).toBeFocused();
   await page.screenshot({ path: info.outputPath(`ux1-m2-${width}.png`), fullPage: true });
   // CSS zoom exercises enlarged controls and reflow; half-width viewport additionally
