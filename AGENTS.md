@@ -44,12 +44,22 @@ Die folgenden Nachrichten sind **Beispiele**, keine Ausführungsauslöser.
 Vor Integration dieses Dokumentationspakets muss der Kickoff zusätzlich den
 Dokumentations-PR/Branch-Ref nennen; lies diese Dateien dann auf genau diesem Ref.
 
-**Projektleiter** priorisiert, koordiniert und prüft unabhängig von Work.
+Für GOV-02 gilt die [Übergangsgrenze](docs/project/OPERATING_MODEL.md#gov-02-übergang-und-wirksamkeit):
+Bis zum Vorliegen zweier unabhängiger vollständiger GO, Leons gesonderter
+Entscheidung und erfolgter Integration bleibt die bisherige Governance wirksam.
+Die folgenden angepassten Rollen gelten erst danach für künftige Feature-Aufträge.
+
+**Projektleiter** priorisiert, koordiniert, stuft Risiken ein und prüft kompakte
+unabhängige Review-Ergebnisse sowie unmittelbar die Git-/Tree-/CI-Integrität.
+Keine routinemäßige vollständige technische Zweitabnahme. Bei konkreten Zweifeln
+gezielt nachprüfen oder an unabhängige Reviewer zurückgeben.
 
 > Übernimm die Projektleitung für LeonMoebius-code/vermoegensnavigator.
 > Lies den Einstieg und seine Quellen, prüfe live zunächst READ-ONLY.
 > Ich bestätige die dokumentierten bedingten Feature-Befugnisse im geltenden
 > Rahmen. Nenne Abweichungen, Blocker und eine kurze nächste Empfehlung.
+> Wende für künftige Features erst nach wirksamer GOV-02-Integration die
+> Risikoklassen und erforderlichen unabhängigen Reviews gemäß Operating Model an.
 > Vor meiner Zustimmung keinen vollständigen neuen Work-Auftrag erstellen.
 
 **Work** setzt ausschließlich ein konkret beschlossenes Paket um und liefert
@@ -59,12 +69,20 @@ Draft-PR, vollständige CI und Nachweise; keine unabhängige Abnahme, kein Merge
 > konkretem Auftrag. Lies die Projektregeln, prüfe live zunächst READ-ONLY
 > und arbeite danach ausschließlich innerhalb der erteilten Befugnisse.
 
-**Organisatorisch unabhängiger Review** prüft selbst READ-ONLY und gibt GO/NO-GO.
+**Organisatorisch unabhängiger Review** prüft selbst vollständig READ-ONLY und
+gibt GO/HOLD/NO-GO für den exakten finalen Stand mit kompaktem Pflichtbericht.
+Nach wirksamer GOV-02-Integration: ein Review für Standardfeatures, zwei
+voneinander und von Work unabhängige Reviews für kritische Änderungen.
 
 > Übernimm den unabhängigen READ-ONLY-Review für
 > LeonMoebius-code/vermoegensnavigator, PR <Nummer>, finaler Head <SHA>.
 > Lies Regeln und Originalverträge; prüfe Code, Ausgaben, Git-/CI-Identitäten
-> eigenständig, möglichst vor Kenntnis des anderen Abnahmeurteils.
+> eigenständig einschließlich vollständiger Originalnachweise. Prüfe die
+> Risikoklasse und verlange bei kritischen Auswirkungen die Doppelabnahme.
+> Bei Doppelreview möglichst vor Kenntnis des anderen Abnahmeurteils prüfen.
+> Liefere den kompakten Abschlussbericht gemäß Operating Model. Für GOV-02 selbst
+> bleiben zwei unabhängige vollständige Reviews und Leons gesonderte
+> Integrationsentscheidung erforderlich.
 
 Optionaler **Audit/Monitoring-Agent** liest ausschließlich; er implementiert,
 priorisiert und autorisiert keine Folgearbeiten. Es gilt der
