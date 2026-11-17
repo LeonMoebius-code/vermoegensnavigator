@@ -89,6 +89,20 @@ Technisch nicht verfügbare bisherige Pflichtoriginale bedeuten HOLD und Vorlage
 zur gesonderten Entscheidung, keine automatische Ausnahme. Keine rückwirkende
 Umdeutung früherer Reviews, HOLD-Entscheidungen oder Ausnahmen.
 
+## GOV-04 17.11.2026
+
+| ID / Datum / Status | Beschluss und Gültigkeitsbereich | Quelle / Ersetzung |
+| --- | --- | --- |
+| D-21 · 17.11.2026 · **Umsetzung freigegeben, Wirksamkeit erst nach gesonderter Integration und wirksamem Merge-Schutz** | Gewöhnliche Entwicklungs-Pushes nutzen Checkout-Identität, gezielte Sicherheitsregressionen, schnelle Fachkernprüfungen, Typecheck und Diffcheck. Erforderlich sind die erfolgreiche schnelle finale Push-CI auf dem tatsächlichen finalen Remote-Head und die erfolgreiche vollständige finale PR-CI auf dem aktuell geprüften synthetischen Merge gegen aktuelles main einschließlich unverändertem Verify, sämtlichen vorhandenen Fach-/Regressionstests, Build, Browser, R1 und maschinenlesbarer Identität. Der bisherige erforderliche Status bleibt exklusiv dem vollständigen PR-Abschlussgate zugeordnet. Fehlgeschlagene, übersprungene, fehlende oder veraltete Vollprüfungen dürfen nicht freigeben. Strikter aktueller Base-Schutz, Head-/Merge-Zuordnung und PR-Pflicht ohne direkten main-Push müssen wirksam sein. Settings zunächst ausschließlich lesen, erforderliche Änderungen gesondert entscheiden. | Leons freigegebener WORK-AUFTRAG C – GOV-04, präzisiert durch Nachbesserung G04-R1-01. D-21 ist die spätere Fortschreibung der CI-Anforderungen aus D-05, D-04, D-19 und D-20 ausschließlich insoweit, als diese eine vollständige Push-CI voraussetzen. Der ursprüngliche D-05-Beschluss und die übrigen historischen Beschlüsse bleiben unverändert. Originalerhalt, identischer Git-Tree einschließlich Bytes und Modi, identischer direkter Parent, transparente Identitäten und sonstige Transportbedingungen bleiben verbindlich. GOV-02-Risikomodell, GOV-03-Identitätsnachweise und R1-Release-/Rollback bleiben erhalten. [Vertrag](GOV04_CI_MODELL.md), [Übergang](OPERATING_MODEL.md#gov-04-übergang-und-wirksamkeit). |
+
+**Übergang:** GOV-04 ist kritisch. Zwei organisatorisch unabhängige vollständige
+Reviews mit GO für denselben finalen Stand und Leons gesonderte ausdrückliche
+Integrationsentscheidung sind erforderlich. Die neue Routine gilt erst nach
+Integration und wirksamem Merge-Schutz. Bis dahin bleibt die vollständige
+Push-/PR-Routine auf main gültig. Der isolierte Draft dient der beauftragten
+technischen Erprobung. Work erteilt kein unabhängiges GO und mergt nicht.
+Keine Settings-, Release-, Deployment- oder Rollbackfreigabe.
+
 Neue Einträge nur für tatsächlich bestätigte Grundsatz-/Fachentscheidungen:
 Datum, beschlossen/vorgeschlagen/ersetzt, Inhalt, Gültigkeit, Quelle und explizite
 Ersetzung vermerken. Eine technische Zwischenkorrektur ist kein neuer Grundsatz.
