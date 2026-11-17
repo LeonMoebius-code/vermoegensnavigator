@@ -66,7 +66,7 @@ function ComparisonResult({ comparison }: { comparison: ScenarioComparison }) {
       : <Problem issue={comparison.primaryIssue} />}
   </section>;
 }
-function Results({ result }: { result: Extract<CapitalRun, { status: "responses" }> }) {
+export function RetirementProjectionResults({ result }: { result: Extract<CapitalRun, { status: "responses" }> }) {
   return <div data-testid="capital-results"><h2>Neutrale Kapitalentwicklung – drei Szenarien</h2>
     <p>Keine Produktsimulation, keine garantierte Unterkurve, kein individueller Förderanspruch. Die Beispielrenditen sind veränderbare Hypothesen.
       Zulagen sind Vertragszuflüsse, keine weiteren Eigenbeiträge und keine frei verfügbare Girogutschrift.</p>
@@ -187,7 +187,7 @@ export function RetirementProjection({ draft, change, result, show }: { draft: C
     </form>
     <div className="retirement-result" ref={output} tabIndex={-1} aria-live="polite">
       {result?.status === "invalid_input" ? <p id={error} role="alert">Eingabe korrigieren: {result.message}</p>
-        : result?.status === "responses" ? <Results result={result} />
+        : result?.status === "responses" ? <RetirementProjectionResults result={result} />
         : <p role="status" data-testid="capital-empty">Noch kein aktuelles Kapitalergebnis. Angaben und Bestätigungen prüfen; nach Änderungen neu berechnen.</p>}
     </div>
   </div>;

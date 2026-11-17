@@ -7407,3 +7407,14 @@ body[data-print-mode="customer"] .internal-only {
 .retirement-answer-summary dt { font-weight: 700; }
 .retirement-answer-summary dd { margin: 4px 0 0; }
 .retirement-questionnaire .retirement-question-actions button { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+
+/* AP-04a-UX2: scoped annual contribution goals. */
+.retirement-contribution-targets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .7rem; margin: 1rem 0; }
+.retirement-contribution-targets button { display: flex; flex-direction: column; align-items: flex-start; gap: .45rem; text-align: left; white-space: normal; padding: 1rem; border: 1px solid #b9c8d8; border-radius: 12px; background: #fff; color: #153c63; min-width: 0; overflow-wrap: anywhere; }
+.retirement-contribution-targets button[aria-pressed="true"] { border: 2px solid #0066a6; background: #eef6fc; padding: calc(1rem - 1px); }
+.retirement-contribution-targets button:focus-visible { outline: 3px solid #e87800; outline-offset: 3px; }
+.retirement-contribution-targets small { color: #43566a; line-height: 1.45; }
+.retirement-optimizer { min-width: 0; }
+.retirement-optimizer > input { width: 100%; box-sizing: border-box; }
+.retirement-optimizer > small { display: block; margin-top: .5rem; }
+@media (max-width: 650px) { .retirement-contribution-targets { grid-template-columns: minmax(0, 1fr); } }
