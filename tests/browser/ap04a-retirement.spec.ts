@@ -42,6 +42,7 @@ test("A04-01/02: beide eigenständigen Einstiege, B aktiv, kein neuer allgemeine
   await expect(btn(page, "B – Bestehende Riester-Rente prüfen")).toBeVisible();
   await btn(page, "B – Bestehende Riester-Rente prüfen").click();
   await expect(page.getByRole("heading", { name: "B1 – Bestandsaufnahme", exact: true })).toBeVisible();
+  await btn(page, "Förderangaben mit Berater prüfen").click();
   await expect(page.getByRole("region", { name: "Alt-Riester-Nachweise", exact: true })).toBeVisible();
   await btn(page, "B2 Fördervergleich").click();
   await expect(page.getByRole("heading", { name: "B2 – Fördervergleich", exact: true })).toBeVisible();
