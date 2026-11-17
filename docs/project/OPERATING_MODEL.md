@@ -34,6 +34,28 @@ Projektleitung zur gesonderten Entscheidung. Keine automatische Ausnahme.
 Frühere Reviews, HOLD-Entscheidungen und Ausnahmen bleiben historisch unverändert.
 Die folgenden Nachweisregeln beschreiben den Zielzustand nach dieser Integration.
 
+## GOV-04: Übergang und Wirksamkeit
+
+[D-21](DECISIONS.md#gov-04-17112026) trennt schnelle Entwicklungs-Push-CI und
+vollständige PR-CI. Die neue Routine gilt erst nach zwei organisatorisch
+unabhängigen vollständigen GO desselben finalen GOV-04-Stands, Leons gesonderter
+Integrationsentscheidung, erfolgter Integration und nachweislich wirksamem
+Merge-Schutz. Bis dahin bleibt auf main die bisherige vollständige Push-/PR-CI
+maßgeblich. Die neuen Workflows werden im isolierten GOV-04-Draft erprobt,
+daraus folgt keine allgemeine vorzeitige Umstellung oder Integrationsfreigabe.
+GOV-02/D-19 und GOV-03/D-20 sind in der Ausgangsbasis über #75/#76 integriert.
+Ihre Review- und Identitätsanforderungen bleiben erhalten. Die CI-Anforderung aus
+D-05 wird durch D-21 gezielt fortgeschrieben. Seine Original-, Identitäts- und
+sonstigen Transportbedingungen bleiben verbindlich. Die folgenden CI-Angaben
+beschreiben den Zielzustand nach wirksamer GOV-04-Integration.
+
+[Technischer Vertrag und Merge-Schutz](GOV04_CI_MODELL.md): Der bisherige
+Pflichtstatus bleibt ausschließlich der vollständigen PR-CI zugeordnet.
+Repository-Settings werden nur lesend geprüft. Fehlender strikter Merge-Schutz
+ist eine gesondert zu autorisierende Integrationsvoraussetzung, kein Anlass
+für eigenmächtige Änderungen. GOV-04 ist kritisch und benötigt zwei voneinander,
+von Work und Projektleitung unabhängige vollständige Reviews.
+
 ## Quellen und Widersprüche
 
 Live-GitHub belegt implementierten Code, Ref-/PR-/CI-Zustand; Releaseartefakte
@@ -58,7 +80,7 @@ sind STOP. Der Kopf der Master-Spezifikation und alte Schema-/Testzahlen können
 
 Kurze Empfehlung → Leons Zustimmung → vollständiger Work-Auftrag mit vorläufiger
 Risikoklasse → isolierter Preflight/Transport → Umsetzung/Originalcommit und
-Work-Selbstprüfung → Draft-PR → vollständige finale Push- und PR-CI → ein oder
+Work-Selbstprüfung → Draft-PR → erfolgreiche finale schnelle Push-CI und vollständige PR-CI → ein oder
 zwei vollständige unabhängige Reviews gemäß Risikoklasse → Prüfung der kompakten
 Ergebnisse durch die Projektleitung → unmittelbare Integritätskontrolle → bedingt
 autorisierter Feature-Merge → main-/Parent-/Tree-Nachprüfung → kurze nächste
@@ -91,8 +113,8 @@ isolierte Navigationsverbesserungen, nichtkritische Präsentationskomponenten
 oder eng begrenzte Funktionen ohne Auswirkungen auf Berechnungen, Persistenz,
 Sicherheit oder geschützte Daten.
 
-Voraussetzungen sind Work-Selbstprüfung, erfolgreiche vollständige reguläre
-finale Push-/PR-CI, vollständig vorliegende Originalnachweise, vollständige
+Voraussetzungen sind Work-Selbstprüfung, erfolgreiche finale schnelle Push-CI
+und vollständige PR-CI, vollständig vorliegende Originalnachweise, vollständige
 Prüfung der tatsächlichen finalen Umsetzung und Originale durch einen
 organisatorisch unabhängigen Reviewer, dessen ausdrückliches GO zur konkreten
 finalen Identität und die unmittelbare Integritätskontrolle der Projektleitung.
@@ -176,7 +198,7 @@ Unmittelbar vor dem Merge mindestens kontrollieren:
 2. Finalen PR-Head und erwartete Commit-/Tree-Identitäten.
 3. Vorgesehenen Integrationstree und gültige Merge-Parents.
 4. Zulässigen Umfang anhand des bestätigten Review-Berichts und der Dateiliste.
-5. Finale vollständige Push-/PR-CI-Status, erfolgreiche Pflichtjobs und Identitätschecks, zugehörige JSON-Nachweise sowie korrekte Commit-/Tree-/Parent-/Run-/Attempt-Zuordnung. Ein grüner Status allein genügt nicht.
+5. Finale schnelle Push-CI und vollständige PR-CI einschließlich verpflichtendem Abschlussjob, erfolgreiche Pflichtjobs und Identitätschecks, zugehörige JSON-Nachweise sowie korrekte Commit-/Tree-/Parent-/Run-/Attempt-Zuordnung. Aktuellen strikten Merge-Schutz gemäß GOV-04 prüfen. Ein grüner Status allein genügt nicht.
 6. Erforderliche unabhängige GO-Entscheidungen für denselben finalen Stand.
 7. Geltende bedingte Feature-Mergebefugnis und Sonderfreigabegrenzen.
 
@@ -216,8 +238,12 @@ Remote-Commit-ID, ausschließlich wenn:
 2. Exakter Git-Tree inklusive Bytes, Dateimodi und Struktur identisch ist.
 3. Original und Remote denselben frisch bestätigten direkten main-Parent haben.
 4. Original/Remote/Parent/Tree und Identitätsabweichungen transparent belegt sind.
-5. Vollständige reguläre CI auf tatsächlichem finalem Remote-Head und synthetischem
-   PR-Merge erfolgreich ist; Metadatenabweichung nicht als gleiche SHA ausgegeben wird.
+5. Nach wirksamer GOV-04-Integration die schnelle finale Push-CI auf dem tatsächlichen
+   finalen Remote-Head und die vollständige finale PR-CI auf dem aktuell geprüften
+   synthetischen Merge gegen aktuelles main erfolgreich sind. Bis dahin bleibt die
+   vollständige finale Push- und PR-CI erforderlich. Es gilt die
+   [GOV-04-Übergangsregel](#gov-04-übergang-und-wirksamkeit).
+   Metadatenabweichung wird nicht als gleiche SHA ausgegeben.
 
 Kein regelmäßiger neuer Sonderfreigabebedarf allein wegen dieser Metadatenabweichung.
 Frühere fallbezogene API-Erlaubnisse sind historische Vorläufer, kein heutiges Verbot.
@@ -235,20 +261,39 @@ unter denselben Identitätsbedingungen, ohne allgemeine neue Transportbefugnisse
 
 ## CI und Evidenz
 
+Es gilt die [GOV-04-Übergangsgrenze](#gov-04-übergang-und-wirksamkeit).
+
 [package.json](../../package.json) mit `npm run verify` und
 [Feature CI](../../.github/workflows/ci.yml) sind die ausführbaren Gatequellen.
-Regulär Push auf `work/**` **und** PR gegen `main`: Fach-/Domainprüfungen,
-Referenzbasis, Typecheck, genau ein regulärer Build, echte Playwright-Chromiumtests;
-danach R1-Artefaktvalidator auf unveränderten Buildbytes, Operationaltests ohne
-Skips und Diffcheck. R1 hatte historisch 55/55; CP0B ist die ursprüngliche
-Drei-Lebenszyklen-Baseline, keine Obergrenze der heutigen Browser-Gesamtsuite.
-Keine volatile Browserzahl als aktuelle Mindestzahl hardcodieren.
-Verify/Einzelskripte wegen gemeinsamer temporärer Pfade sequenziell ausführen.
+Entwicklungs-Push auf `work/**`: [Development CI](../../.github/workflows/development-ci.yml)
+mit Checkout-JSON, CI-Sicherheitsregressionen, `npm run verify:development`
+und Diffcheck. Das Paket umfasst gezielte Speicher-/Referenz-/Verlustschutztests,
+Finanzvalidierung, Risiko- und Riester-Kern sowie Referenzbasis und Typecheck.
+Kein regulärer Produktionsbuild, Chromiumlauf oder R1-Artefakttest im Push-Gate.
+Es ist kein Integrationsnachweis und liefert niemals den bisherigen Pflichtstatus.
+
+PR gegen `main`: vollständiges unverändertes `npm run verify` mit allen Fach-/
+Domainprüfungen, Referenzbasis, Typecheck, genau einem regulären Build und echten
+Playwright-Chromiumtests. Danach R1-Artefaktvalidator auf unveränderten Buildbytes,
+Operationaltests ohne Skips und Diffcheck. CI-Sicherheitsregressionen und
+GOV-03-Checkout-JSON bleiben zusätzlich verpflichtend. Der abschließende Job
+**Tests, Typecheck, Build und Browser** läuft mit `always()` und verlangt einen
+explizit erfolgreichen Vollprüfungsjob, dessen vollständige Step-Ergebnisse und
+eine stand-/run-/attemptgebundene Bestätigung. Fehlende, fehlgeschlagene oder
+übersprungene Vollgates geben keinen erfolgreichen Pflichtstatus frei.
+Vor Bestätigung und Abschlussjob müssen aktuelle Remote-Refs für main, PR-Head
+und synthetischen Merge exakt den geprüften Identitäten entsprechen.
+
+R1 hatte historisch 55/55; CP0B ist die ursprüngliche Drei-Lebenszyklen-Baseline,
+keine Obergrenze der heutigen Browser-Gesamtsuite. Keine volatile Browserzahl
+als aktuelle Mindestzahl hardcodieren. Verify/Einzelskripte wegen gemeinsamer
+temporärer Pfade sequenziell ausführen. Release- und Rollbackworkflows bleiben
+unverändert. Kein Testfall entfällt aus der vollständigen Integrationsprüfung.
 
 ### Drei getrennte Prüfebenen
 
-1. **Technische Tests:** Alle bestehenden Gatebefehle bleiben vollständig und
-   unverändert verpflichtend. Keine neuen Skips, Retries, Assertionabschwächungen
+1. **Technische Tests:** Alle bestehenden Vollgatebefehle bleiben vor Integration vollständig und
+   unverändert verpflichtend. Entwicklungs-Pushes nutzen das ausdrücklich begrenzte Schnellgate. Keine neuen Skips, Retries, Assertionabschwächungen
    oder pauschalen Timeout-Erhöhungen zum Erzwingen grüner CI.
 2. **Technischer Identitätsnachweis:** Nach Checkout verpflichtend
    `scripts/verify-ci-checkout-identity.mjs` ausführen. Tatsächliche Commit-, Tree-
@@ -270,13 +315,18 @@ Steps ohne übersprungene Gates, erfolgreicher verpflichtender Identitätscheck,
 vorhandener zugehöriger JSON-Nachweis und übereinstimmende Commit-/Tree-/Parent-
 Identitäten. JSON unter `ci-checkout-identity-<run_id>-<attempt>` (Schema 1),
 Run-/Job-Referenzen und kompakte Jobzusammenfassung nachvollziehbar prüfen.
-JSON bestätigt ausschließlich die Checkout-Identität, nicht den späteren Erfolg
-aller Tests. Ein Artefakt aus fehlgeschlagener CI ist kein bestandenes Vollgate.
+JSON enthält zusätzlich `validation_scope` (`development`, `full` oder
+`manual_limited`) und bestätigt ausschließlich die Checkout-Identität, nicht
+den späteren Erfolg aller Tests. Push-Erfolg belegt nur das Schnellgate,
+PR-Erfolg muss den vollständigen Prüfjob und den Abschlussjob umfassen.
+Ein Artefakt aus fehlgeschlagener CI ist kein bestandenes Vollgate.
 
 Die Regressionen des neuen Checks laufen zusätzlich und ersetzen keinen
 bestehenden Test. `workflow_dispatch` wird als `manual_limited` mit
 `regular_evidence: false` gekennzeichnet und prüft nur Branchref, Eventkontext
-und Checkout-SHA. Es ersetzt niemals einen regulären finalen Push- oder PR-Lauf.
+und Checkout-SHA. Die beiden CI-Workflows bieten keinen manuellen Trigger mehr an.
+Ein manueller
+Lauf ersetzt niemals einen regulären finalen Push- oder PR-Lauf.
 Unbekannte Ereignisse schlagen fehl. Keine zusätzlichen Secrets/Berechtigungen.
 
 Reviewer prüfen unverändert den tatsächlichen finalen Diff sowie alle relevanten
@@ -311,8 +361,11 @@ JSON-Artefaktreferenzen und wesentlichen Fachbeweisen genügt im erfolgreichen
 Standardfall. Reviewer bestätigen ihre eigene vollständige fachliche und
 technische Prüfung sowie die konkrete Evidenzzuordnung im kompakten Bericht.
 Die Projektleitung prüft belastbare Ergebnisse und unmittelbare Integrität,
-ohne routinemäßige erneute Vollauswertung. D-05 und alle technischen Gates
-bleiben unverändert.
+ohne routinemäßige erneute Vollauswertung. D-05 bleibt historisch unverändert.
+Seine Original-, Identitäts- und sonstigen Transportbedingungen bleiben verbindlich.
+Ausschließlich die CI-Anforderung wird gemäß D-21 und der GOV-04-Übergangsregel
+fortgeschrieben. Die vollständigen technischen PR-Gates bleiben vor jeder
+Integration verpflichtend.
 
 Der Workflow fordert für das kleine Identitätsartefakt **30 Tage** Aufbewahrung
 an. Die tatsächlich von GitHub ausgewiesenen Ablauf-/Verfügbarkeitsdaten prüfen,

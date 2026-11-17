@@ -58,6 +58,25 @@ test('valid push accepts actual commit, parent and tree', t => {
   assert.equal(result.tree, f.git('rev-parse', 'HEAD^{tree}'));
   assert.equal(result.event.classification, 'regular_push');
 });
+test('development push binds its own workflow, job and limited scope', t => {
+  const f = fixture(t); push(f);
+  Object.assign(f.env, { GITHUB_WORKFLOW: 'Development CI', GITHUB_JOB: 'fast' });
+  f.env.GITHUB_WORKFLOW_REF = `${repository}/.github/workflows/development-ci.yml@${f.env.GITHUB_REF}`;
+  const result = check(f);
+  assert.equal(result.validation_scope, 'development');
+  assert.equal(result.workflow.path, '.github/workflows/development-ci.yml');
+  assert.equal(result.event.classification, 'regular_push');
+});
+test('development workflow cannot provide PR evidence', t => {
+  const f = fixture(t);
+  Object.assign(f.env, { GITHUB_WORKFLOW: 'Development CI', GITHUB_JOB: 'fast' });
+  assert.throws(() => check(f), /pushes only/);
+});
+test('development workflow with full workflow ref fails', t => {
+  const f = fixture(t); push(f);
+  Object.assign(f.env, { GITHUB_WORKFLOW: 'Development CI', GITHUB_JOB: 'fast' });
+  assert.throws(() => check(f), /workflow ref/);
+});
 test('push SHA mismatch fails', t => { const f = fixture(t); push(f); f.env.GITHUB_SHA = other; assert.throws(() => check(f), /Checkout/); });
 test('push payload SHA mismatch fails', t => { const f = fixture(t); push(f); f.event.after = other; assert.throws(() => check(f), /Push event SHA/); });
 test('push outside work branches fails', t => { const f = fixture(t); push(f); f.env.GITHUB_REF = 'refs/heads/main'; f.env.GITHUB_WORKFLOW_REF = `${repository}/.github/workflows/ci.yml@${f.env.GITHUB_REF}`; assert.throws(() => check(f), /push ref/); });
