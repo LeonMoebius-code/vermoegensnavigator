@@ -5,6 +5,7 @@ import { annualContribution, changeMode, changeYear, emptyGrantDraft, euro, prev
 import { oldRiesterRuleContext } from "../../domain/retirement/old-riester-grant-rules";
 import { changeOldMode, changeOldYear, emptyOldDraft, oldContribution, oldRuleId, previewComparison, previewOldGrant,
   type Comparison, type NewScenario, type OldDraft, type OldField, type OldPreview, type NewPreview } from "./old-riester-adapter";
+import { emptyRiesterJourney, RiesterJourney } from "./riester-journey";
 import { emptyCapitalDraft, type CapitalRun } from "./projection-adapter";
 import { RetirementProducts } from "./retirement-products";
 import { RetirementProjection } from "./retirement-projection";
@@ -47,7 +48,12 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
   const [capital, setCapital] = useState(emptyCapitalDraft);
   const [capitalResult, setCapitalResult] = useState<CapitalRun | null>(null);
   const [bDraft, setBDraft] = useState(emptyOldDraft);
+  const [bJourney, setBJourney] = useState(emptyRiesterJourney);
   const [bPreview, setBPreview] = useState<Comparison | null>(null);
+  const updateB = (next: OldDraft) => {
+    if (next.year !== bDraft.year || next.contract !== bDraft.contract || next.regime !== bDraft.regime) setBJourney(ux => ({ ...ux, payout: "" }));
+    setBDraft(next); setDirty(true); setBPreview(null);
+  };
   const [dirty, setDirty] = useState(false);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [changed, setChanged] = useState(false);
@@ -97,7 +103,7 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
   const restart = () => {
     if (!confirmDiscard()) return;
     setDraft(emptyGrantDraft()); setDirty(false); setPreview(null); setChanged(false); setStep("choice");
-    setBDraft(emptyOldDraft()); setBPreview(null);
+    setBDraft(emptyOldDraft()); setBPreview(null); setBJourney(emptyRiesterJourney());
     setProducts([]); setCapital(emptyCapitalDraft()); setCapitalResult(null);
     setCustomerPlan(emptyCustomerPlan());
     setAnswers(emptyRetirementAnswers());
@@ -120,7 +126,7 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
       </section>
       <section className="panel">
         <p className="eyebrow">BESTEHENDE VORSORGE</p><h2>Bestehende Riester-Rente prüfen</h2>
-        <p>Alt-Fördercheck und bedingter Fördermodellvergleich ohne Vertragswerte.</p>
+        <p>Ihren bisherigen Vertrag verstehen, vier Möglichkeiten prüfen und die Förderung vergleichen.</p>
         <button className="primary" onClick={() => { setPreview(null); setBPreview(null); invalidateCapital(); setStep("b1"); }}>B – Bestehende Riester-Rente prüfen</button>
       </section>
     </div><RetirementInformation />{step === "introduction" && <button className="primary" onClick={() => setStep("questions")}>Meine Voraussetzungen prüfen</button>}</>
@@ -131,10 +137,13 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
       if (next.capital.start.slice(0, 4) !== customerPlan.capital.start.slice(0, 4)) setAnswers(a => ({ ...a, year: next.capital.start.slice(0, 4) }));
       setCustomerPlan(next); setDirty(true);
     }} back={() => setStep("choice")} review={() => setStep("questions")} orientation={<FundingOrientation answers={answers} year={customerPlan.capital.start.slice(0, 4)} />} />
-    : step === "b1" || step === "b2" ? <><RetirementInformation riester /><OldRiesterView draft={bDraft} step={step} preview={bPreview}
+    : step === "b1" || step === "b2" ? <RiesterJourney ux={bJourney} draft={bDraft} step={step} preview={bPreview}
+      change={(next, dirty = true) => { setBJourney(next); if (dirty) setDirty(true); }}
+      update={updateB}
+      navigate={next => { setBPreview(null); setStep(next); }}><OldRiesterView draft={bDraft} step={step} preview={bPreview}
       navigate={next => { setBPreview(null); setStep(next); }}
-      update={next => { setBDraft(next); setDirty(true); setBPreview(null); }}
-      show={setBPreview} /></> : <>
+      update={updateB}
+      show={setBPreview} /></RiesterJourney> : <>
       <nav className="retirement-steps" aria-label="Altersvorsorge-Schritte">
         <button onClick={() => navigateA("choice")}>A/B-Auswahl</button>
         <button aria-current={step === "a1" ? "step" : undefined} onClick={() => navigateA("a1")}>A1 Fördercheck</button>
@@ -317,11 +326,6 @@ function OldRiesterView({ draft: d, step, preview, update, navigate, show }: {
     });
   };
   return <>
-    <nav className="retirement-steps" aria-label="Altersvorsorge-Schritte">
-      <button onClick={() => navigate("choice")}>A/B-Auswahl</button>
-      <button aria-current={step === "b1" ? "step" : undefined} onClick={() => navigate("b1")}>B1 Bestandsaufnahme</button>
-      <button aria-current={step === "b2" ? "step" : undefined} onClick={() => navigate("b2")}>B2 Fördervergleich</button>
-    </nav>
     <p>Eine bestimmte Person · Beitragsjahr {d.year} · Alt-Regel: {oldRuleId(d.year) || "ungeprüft"}.</p>
     {step === "b1" ? <section className="panel retirement-form" aria-label="Alt-Riester-Nachweise">
       <p>Nachweise für diese Person, dieses Jahr und diesen Alt-Regelstand vorgelagert prüfen. Keine Namen, Belege oder Vertragsnummern eingeben.</p>

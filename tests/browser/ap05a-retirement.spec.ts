@@ -8,8 +8,13 @@ const btn = (p: Page, name: string) => p.getByRole("button", { name, exact: true
 const label = (p: Page, name: string) => p.getByLabel(name, { exact: true });
 const nav = (p: Page, name: string) => p.locator(".sidebar nav").getByRole("button", { name: new RegExp(name) });
 const state = (p: Page) => p.evaluate(async () => ({ local: Object.fromEntries(Object.entries(localStorage)), session: Object.fromEntries(Object.entries(sessionStorage)), cookie: document.cookie, url: location.href, databases: await indexedDB.databases() }));
-async function entry(p: Page, year = 2027) { await p.goto("./"); await nav(p, "Altersvorsorge").click(); await btn(p, "B – Bestehende Riester-Rente prüfen").click(); if (year !== 2027) await label(p, "Alt-Beitragsjahr").selectOption(String(year)); }
+async function openChecks(p: Page) {
+  const open = btn(p, "Förderangaben mit Berater prüfen");
+  if (await open.count()) await open.click();
+}
+async function entry(p: Page, year = 2027) { await p.goto("./"); await nav(p, "Altersvorsorge").click(); await btn(p, "B – Bestehende Riester-Rente prüfen").click(); await openChecks(p); if (year !== 2027) await label(p, "Alt-Beitragsjahr").selectOption(String(year)); }
 async function oldConfirm(p: Page, year = 2027, children: number[] = [], income = "35.000") {
+  await openChecks(p);
   await label(p, "Alt-unmittelbare Berechtigung").selectOption("direct_old_confirmed");
   await label(p, "Alt-Regime und Bestandsschutz").selectOption(year === 2026 ? "old_2026_confirmed" : "old_protected_confirmed");
   await label(p, "Alt-Vertragskontext").selectOption("single_private_eligible_confirmed");
@@ -46,7 +51,7 @@ async function noOld(p: Page) { for (const name of ["old-result", "old-base", "o
 async function noComparison(p: Page) { await noOld(p); await expect(p.getByTestId("new-result")).toHaveCount(0); await expect(p.getByTestId("comparison-delta")).toHaveCount(0); }
 
 test("B05-01/02/03: real B navigation, empty states, independent A/B drafts", async ({ page }) => {
-  await entry(page); await expect(page.getByRole("heading", { name: "B1 – Bestandsaufnahme", exact: true })).toBeFocused();
+  await entry(page); await expect(page.getByRole("region", { name: "Einzelprüfung der Förderannahmen", exact: true })).toBeFocused();
   for (const name of ["Alt-unmittelbare Berechtigung", "Alt-Regime und Bestandsschutz", "Alt-Vertragskontext", "Alt-Partnerstatus", "Alt-Berufseinsteigerbonus", "Vollständige Alt-Kinderliste", "Alt-Korrekturstatus"]) await expect(label(page, name)).toHaveValue("unconfirmed");
   await calculate(page); await noOld(page);
   await oldConfirm(page); await own(page); await calculate(page); await expect(page.getByTestId("old-total")).toHaveText("51,43 €");
@@ -54,7 +59,7 @@ test("B05-01/02/03: real B navigation, empty states, independent A/B drafts", as
   await expect(label(page, "Alt-unmittelbare Berechtigung")).toHaveValue("direct_old_confirmed"); await noOld(page);
   await btn(page, "A/B-Auswahl").click(); await btn(page, "A – Neue Altersvorsorge planen").click();
   await expect(label(page, "Unmittelbare Berechtigung")).toHaveValue("unconfirmed"); await label(page, "Unmittelbare Berechtigung").selectOption("direct_confirmed");
-  await btn(page, "A/B-Auswahl").click(); await btn(page, "B – Bestehende Riester-Rente prüfen").click();
+  await btn(page, "A/B-Auswahl").click(); await btn(page, "B – Bestehende Riester-Rente prüfen").click(); await openChecks(page);
   await expect(label(page, "B-Jahres-Eigenbeitrag in Euro")).toHaveValue("360"); await noOld(page);
   await btn(page, "A/B-Auswahl").click(); await btn(page, "A – Neue Altersvorsorge planen").click(); await expect(label(page, "Unmittelbare Berechtigung")).toHaveValue("direct_confirmed");
 });
@@ -145,17 +150,17 @@ test("B05-27/29/30: both results invalidated; separate 2028 children and new cap
 });
 
 for (const destination of ["Übersicht", "Beratungsfälle", "Strukturplanung", "Depotcheck", "Ergebnis & Export", "Mehr & Einstellungen", "Neustart"]) test(`B05-31: shared loss protection ${destination}, cancel preserves both drafts`, async ({ page }) => {
-  await entry(page); await btn(page, "A/B-Auswahl").click(); await btn(page, "A – Neue Altersvorsorge planen").click(); await label(page, "Unmittelbare Berechtigung").selectOption("direct_confirmed"); await btn(page, "A/B-Auswahl").click(); await btn(page, "B – Bestehende Riester-Rente prüfen").click();
+  await entry(page); await btn(page, "A/B-Auswahl").click(); await btn(page, "A – Neue Altersvorsorge planen").click(); await label(page, "Unmittelbare Berechtigung").selectOption("direct_confirmed"); await btn(page, "A/B-Auswahl").click(); await btn(page, "B – Bestehende Riester-Rente prüfen").click(); await openChecks(page);
   await oldConfirm(page); await own(page); await calculate(page); const before = await state(page);
   const action = () => destination === "Neustart" ? btn(page, "Spezialentwurf neu starten").click() : destination === "Mehr & Einstellungen" ? btn(page, destination).click() : nav(page, destination).click();
   page.once("dialog", async d => { expect(d.message()).toContain("verwerfen"); await d.dismiss(); }); await action(); await expect(page.getByTestId("old-total")).toHaveText("51,43 €"); expect(await state(page)).toEqual(before);
-  await btn(page, "A/B-Auswahl").click(); await btn(page, "A – Neue Altersvorsorge planen").click(); await expect(label(page, "Unmittelbare Berechtigung")).toHaveValue("direct_confirmed"); await btn(page, "A/B-Auswahl").click(); await btn(page, "B – Bestehende Riester-Rente prüfen").click();
-  page.once("dialog", async d => { expect(d.message()).toContain("Vermögensfälle bleiben erhalten"); await d.accept(); }); await action(); if (destination !== "Neustart") await nav(page, "Altersvorsorge").click(); await btn(page, "B – Bestehende Riester-Rente prüfen").click(); await expect(label(page, "Alt-unmittelbare Berechtigung")).toHaveValue("unconfirmed"); expect(await state(page)).toEqual(before);
+  await btn(page, "A/B-Auswahl").click(); await btn(page, "A – Neue Altersvorsorge planen").click(); await expect(label(page, "Unmittelbare Berechtigung")).toHaveValue("direct_confirmed"); await btn(page, "A/B-Auswahl").click(); await btn(page, "B – Bestehende Riester-Rente prüfen").click(); await openChecks(page);
+  page.once("dialog", async d => { expect(d.message()).toContain("Vermögensfälle bleiben erhalten"); await d.accept(); }); await action(); if (destination !== "Neustart") await nav(page, "Altersvorsorge").click(); await btn(page, "B – Bestehende Riester-Rente prüfen").click(); await openChecks(page); await expect(label(page, "Alt-unmittelbare Berechtigung")).toHaveValue("unconfirmed"); expect(await state(page)).toEqual(before);
 });
 
 test("B05-31/32: reload discards B without persistence", async ({ page }) => {
   await entry(page); const before = await state(page); await oldConfirm(page); await own(page); await calculate(page); expect(await state(page)).toEqual(before);
-  page.once("dialog", d => d.accept()); await page.reload(); await nav(page, "Altersvorsorge").click(); await btn(page, "B – Bestehende Riester-Rente prüfen").click(); await expect(label(page, "Alt-unmittelbare Berechtigung")).toHaveValue("unconfirmed"); await noOld(page); expect(await state(page)).toEqual(before);
+  page.once("dialog", d => d.accept()); await page.reload(); await nav(page, "Altersvorsorge").click(); await btn(page, "B – Bestehende Riester-Rente prüfen").click(); await openChecks(page); await expect(label(page, "Alt-unmittelbare Berechtigung")).toHaveValue("unconfirmed"); await noOld(page); expect(await state(page)).toEqual(before);
 });
 
 for (const width of [1440, 390]) test(`B05-32: ${width}px keyboard, error/result focus, source details, no overflow`, async ({ page }, info) => {
@@ -181,7 +186,7 @@ test("B05-32: general originals and exact JSON/XLSX/print before/after B2", asyn
     return { case: json.case, sheets: Object.fromEntries(wb.SheetNames.map(n => [n, XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: null })])), print: await page.locator(".print-document").textContent() };
   }
   const before = await state(page), outputBefore = await outputs("before");
-  await nav(page, "Altersvorsorge").click(); await btn(page, "B – Bestehende Riester-Rente prüfen").click(); await oldConfirm(page, 2027, [2010, 2014], "20.000"); await own(page); await btn(page, "B2 Fördervergleich").click(); await newConfirm(page, 2027, 2); await btn(page, "Getrennte Fördermodelle prüfen").click(); await expect(page.getByTestId("comparison-delta")).toHaveText("+5,00 €"); expect(await state(page)).toEqual(before);
+  await nav(page, "Altersvorsorge").click(); await btn(page, "B – Bestehende Riester-Rente prüfen").click(); await openChecks(page); await oldConfirm(page, 2027, [2010, 2014], "20.000"); await own(page); await btn(page, "B2 Fördervergleich").click(); await newConfirm(page, 2027, 2); await btn(page, "Getrennte Fördermodelle prüfen").click(); await expect(page.getByTestId("comparison-delta")).toHaveText("+5,00 €"); expect(await state(page)).toEqual(before);
   page.once("dialog", d => d.accept()); await nav(page, "Ergebnis & Export").click(); expect(await outputs("after")).toEqual(outputBefore); expect(await state(page)).toEqual(before); expect(await page.evaluate(key => localStorage.getItem(key), CASE_STORAGE_KEY)).toBe(raw); expect(outputBefore.case.schemaVersion).toBe(11);
   expect(JSON.stringify(outputBefore)).not.toMatch(/newScenario|eligibleOwnContributionCents|minimumOwnContributionCents/);
 });
