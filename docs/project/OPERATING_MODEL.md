@@ -44,9 +44,10 @@ Merge-Schutz. Bis dahin bleibt auf main die bisherige vollständige Push-/PR-CI
 maßgeblich. Die neuen Workflows werden im isolierten GOV-04-Draft erprobt,
 daraus folgt keine allgemeine vorzeitige Umstellung oder Integrationsfreigabe.
 GOV-02/D-19 und GOV-03/D-20 sind in der Ausgangsbasis über #75/#76 integriert.
-Ihre Review- und Identitätsanforderungen bleiben erhalten. D-05 und Originalschutz
-werden nicht geändert. Die folgenden CI-Angaben beschreiben den Zielzustand
-nach wirksamer GOV-04-Integration.
+Ihre Review- und Identitätsanforderungen bleiben erhalten. Die CI-Anforderung aus
+D-05 wird durch D-21 gezielt fortgeschrieben. Seine Original-, Identitäts- und
+sonstigen Transportbedingungen bleiben verbindlich. Die folgenden CI-Angaben
+beschreiben den Zielzustand nach wirksamer GOV-04-Integration.
 
 [Technischer Vertrag und Merge-Schutz](GOV04_CI_MODELL.md): Der bisherige
 Pflichtstatus bleibt ausschließlich der vollständigen PR-CI zugeordnet.
@@ -237,8 +238,12 @@ Remote-Commit-ID, ausschließlich wenn:
 2. Exakter Git-Tree inklusive Bytes, Dateimodi und Struktur identisch ist.
 3. Original und Remote denselben frisch bestätigten direkten main-Parent haben.
 4. Original/Remote/Parent/Tree und Identitätsabweichungen transparent belegt sind.
-5. Vollständige reguläre CI auf tatsächlichem finalem Remote-Head und synthetischem
-   PR-Merge erfolgreich ist; Metadatenabweichung nicht als gleiche SHA ausgegeben wird.
+5. Nach wirksamer GOV-04-Integration die schnelle finale Push-CI auf dem tatsächlichen
+   finalen Remote-Head und die vollständige finale PR-CI auf dem aktuell geprüften
+   synthetischen Merge gegen aktuelles main erfolgreich sind. Bis dahin bleibt die
+   vollständige finale Push- und PR-CI erforderlich. Es gilt die
+   [GOV-04-Übergangsregel](#gov-04-übergang-und-wirksamkeit).
+   Metadatenabweichung wird nicht als gleiche SHA ausgegeben.
 
 Kein regelmäßiger neuer Sonderfreigabebedarf allein wegen dieser Metadatenabweichung.
 Frühere fallbezogene API-Erlaubnisse sind historische Vorläufer, kein heutiges Verbot.
@@ -356,8 +361,11 @@ JSON-Artefaktreferenzen und wesentlichen Fachbeweisen genügt im erfolgreichen
 Standardfall. Reviewer bestätigen ihre eigene vollständige fachliche und
 technische Prüfung sowie die konkrete Evidenzzuordnung im kompakten Bericht.
 Die Projektleitung prüft belastbare Ergebnisse und unmittelbare Integrität,
-ohne routinemäßige erneute Vollauswertung. D-05 und alle technischen Gates
-bleiben unverändert.
+ohne routinemäßige erneute Vollauswertung. D-05 bleibt historisch unverändert.
+Seine Original-, Identitäts- und sonstigen Transportbedingungen bleiben verbindlich.
+Ausschließlich die CI-Anforderung wird gemäß D-21 und der GOV-04-Übergangsregel
+fortgeschrieben. Die vollständigen technischen PR-Gates bleiben vor jeder
+Integration verpflichtend.
 
 Der Workflow fordert für das kleine Identitätsartefakt **30 Tage** Aufbewahrung
 an. Die tatsächlich von GitHub ausgewiesenen Ablauf-/Verfügbarkeitsdaten prüfen,
