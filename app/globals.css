@@ -7407,3 +7407,31 @@ body[data-print-mode="customer"] .internal-only {
 .retirement-answer-summary dt { font-weight: 700; }
 .retirement-answer-summary dd { margin: 4px 0 0; }
 .retirement-questionnaire .retirement-question-actions button { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+
+/* AP-05a-UX1: isolated Riester presentation. */
+.retirement-riester-journey { min-width: 0; line-height: 1.6; }
+.retirement-riester-journey > .panel, .retirement-riester-strategies > .panel { margin: 20px 0; padding: 20px; }
+.retirement-riester-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.retirement-riester-card { padding: 20px; min-width: 0; display: flex; flex-direction: column; overflow-wrap: anywhere; }
+.retirement-riester-card h3 { margin-top: 0; font-size: 19px; }
+.retirement-riester-card .eyebrow { color: #005b94; }
+.retirement-riester-actions { display: grid; gap: 8px; margin-top: auto; padding-top: 14px; }
+.retirement-riester-journey button { white-space: normal; overflow-wrap: anywhere; min-height: 44px; }
+.retirement-riester-actions [aria-pressed="true"] { background: #eaf3f9; border: 2px solid #005b94; color: #004c7e; }
+.retirement-riester-journey select, .retirement-riester-journey input { max-width: 100%; min-width: 0; }
+.retirement-riester-card select, .retirement-riester-payout select { width: 100%; min-height: 44px; padding: 10px; border: 1px solid #b9cbd8; border-radius: 6px; background: white; color: #173b54; }
+.retirement-riester-card label, .retirement-riester-payout label { display: block; font-weight: 650; margin: 12px 0 6px; }
+.retirement-riester-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.retirement-riester-facts dt { font-weight: 700; }
+.retirement-riester-facts dd { margin: 5px 0 0; }
+.retirement-riester-table { overflow-x: auto; max-width: 100%; }
+.retirement-riester-table table { border-collapse: collapse; width: 100%; min-width: 660px; table-layout: fixed; }
+.retirement-riester-table th, .retirement-riester-table td { text-align: left; vertical-align: top; padding: 12px; border: 1px solid #ccd9e2; overflow-wrap: anywhere; }
+.retirement-riester-table th { background: #eef5f9; }
+.retirement-riester-table caption { text-align: left; padding: 10px 0; font-weight: 650; }
+.retirement-riester-journey :focus-visible { outline: 3px solid #005b94; outline-offset: 3px; }
+.retirement-riester-journey [hidden] { display: none; }
+@media (max-width: 900px) {
+  .retirement-riester-grid, .retirement-riester-facts { grid-template-columns: minmax(0, 1fr); }
+  .retirement-riester-journey .panel { padding: 18px; }
+}
