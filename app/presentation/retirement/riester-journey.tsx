@@ -37,7 +37,8 @@ export function RiesterJourney({ ux, draft: d, step, preview, change, update, na
   const id = (key: string) => `${prefix}-${key}`;
   const answer = <K extends AnswerKey>(key: K, value: RiesterJourneyDraft[K]) => {
     if (ux[key] === value) return;
-    change({ ...ux, [key]: value, ...(["provider", "product", "contractYear"].includes(key) ? { payout: "" as const } : {}) });
+    const contractChanged = key === "provider" || key === "product" || key === "contractYear";
+    change({ ...ux, [key]: value, ...(contractChanged ? { selected: [], variant: "" as const, payout: "" as const } : {}) });
     update(invalidateRiesterAnswer(d, key));
   };
   const editContribution = (patch: Partial<OldDraft>) => update({ ...d, ...patch, contributionConfirmed: false, evidenceQuality: "unconfirmed", comparisonConfirmed: false,
@@ -61,6 +62,7 @@ export function RiesterJourney({ ux, draft: d, step, preview, change, update, na
       <h2>Welchen Riester-Vertrag haben Sie und zahlen Sie derzeit ein?</h2>
       <p>Wir verschaffen uns einen Überblick und prüfen mögliche Wege. Angaben dürfen offen bleiben. Für den Fördervergleich brauchen Sie noch keinen Vertragsauszug.</p>
       <p>Bitte keine Namen, Vertragsnummern oder Dokumente eingeben. Verwenden Sie in dieser Modellvorschau nur synthetische Testangaben.</p>
+      <p data-testid="riester-contract-reset-notice">Wenn Sie Anbieter, Produkt oder Abschlussjahr ändern, setzen wir Ihre bisherigen Strategieauswahlen, die Variante 4A/4B und das Auszahlungsprüfinteresse zurück. Das gilt auch bei einer Korrektur dieser Angaben. Andere Eingaben bleiben erhalten. Betroffene Fördernachweise müssen erneut geprüft werden.</p>
       <label htmlFor={id("provider")}>Bei welchem Anbieter besteht Ihr Vertrag?</label><input id={id("provider")} value={ux.provider} maxLength={100} onChange={e => answer("provider", e.target.value)} placeholder="Anbieter oder offen lassen" />
       <label htmlFor={id("product")}>Wie heißt Ihr Riester-Produkt?</label><input id={id("product")} value={ux.product} maxLength={100} onChange={e => answer("product", e.target.value)} placeholder="Produkt oder noch unbekannt" />
       <label htmlFor={id("contractYear")}>In welchem Jahr wurde der Vertrag abgeschlossen?</label><input id={id("contractYear")} inputMode="numeric" value={ux.contractYear} onChange={e => answer("contractYear", e.target.value)} aria-invalid={invalidYear} aria-describedby={invalidYear ? id("year-error") : undefined} placeholder="Jahr oder offen lassen" />

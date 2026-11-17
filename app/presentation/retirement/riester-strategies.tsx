@@ -8,6 +8,9 @@ export interface RiesterSelection {
   variant: ParallelVariant;
   payout: PayoutInterest;
 }
+// § 52 Abs. 50a Sätze 6–9 EStG, Rechtsstand ab 01.01.2027.
+const parallelFundingRule = "Ein tatsächlicher Abschluss eines weiteren zertifizierten Altersvorsorgevertrags ab 2027 löst automatisch die neuen Förderregeln einheitlich für alle Altersvorsorgeverträge derselben zulageberechtigten Person aus.";
+const parallelRightsNotice = "Diese Förderumstellung überträgt kein bisheriges Vertragsvermögen und ändert bestehende Vertragsgarantien nicht automatisch.";
 const strategies = [
   { id: 1, title: "Bisherigen Vertrag unverändert weiterführen",
     purpose: "Sie sparen im bisherigen Vertrag weiter und prüfen den Bestandsschutz der bisherigen Förderung.",
@@ -41,20 +44,23 @@ const strategies = [
     documents: "Verbindlicher Übertragungswert mit Stichtag, Wechselkosten, neues Produktangebot, Garantieumfang und frühestmögliche Auszahlung." },
   { id: 4, title: "Altvertrag behalten und zusätzlich AVD starten",
     purpose: "Sie behalten den Altvertrag und prüfen zusätzlich ein Altersvorsorgedepot, kurz AVD.",
-    condition: "Beiträge je Vertrag, die für Sie geltenden Förderregeln, Kinderzuordnung und Folgen für weitere Altverträge gemeinsam prüfen.",
+    condition: "Beiträge je Vertrag und Kinderzuordnung gemeinsam prüfen. Auswirkungen auf weitere Altverträge und gegebenenfalls einen mittelbar zulageberechtigten Ehegatten bei dessen Zulagenantrag berücksichtigen.",
     opportunity: "Vorhandene Vertragsrechte können mit einer zusätzlichen Anlage verbunden werden.",
-    risk: "Ein neuer Vertrag kann auch die Förderung des Altvertrags auf das neue Regime umstellen. Zulagen dürfen nicht doppelt gerechnet werden. Zwei Verträge können zusätzliche Kosten verursachen.",
-    funding: "Beiträge je Vertrag getrennt betrachten. Kein gleichzeitiger voller Alt- und Neuanspruch und keine Verdopplung personenbezogener Zulagen. Steuerwirkung offen.",
-    value: "Kein Kapitalübertrag vorgesehen. Alte und neue Werte, Garantien und deren Termine getrennt prüfen.",
+    risk: `${parallelFundingRule} ${parallelRightsNotice} Zulagen dürfen nicht doppelt gerechnet werden. Zwei Verträge können zusätzliche Kosten verursachen.`,
+    funding: `${parallelFundingRule} Beiträge je Vertrag getrennt betrachten. Kein gleichzeitiger voller Alt- und Neuanspruch und keine Verdopplung personenbezogener Zulagen. Steuerwirkung offen.`,
+    value: `${parallelRightsNotice} Kein Kapitalübertrag vorgesehen. Alte und neue Werte, Garantien und deren Termine getrennt prüfen.`,
     market: "Altanlage und neue Anlage haben eigene Kosten und Risiken. Die Kombination erzeugt keine zusätzliche Garantie.",
     payout: "Beginn und Auszahlungsform beider Verträge getrennt klären. Die Queroption betrifft nur den geeigneten Altvertrag.",
-    documents: "Beitragspläne beider Verträge, Kosten, Förder-/Kinderzuordnung, Garantieumfang und Termine sowie neues Produktangebot." },
+    documents: "Beitragspläne beider Verträge, weitere Altverträge, gegebenenfalls mittelbare Ehegattenberechtigung und Zulagenantrag, Kosten, Förder-/Kinderzuordnung, Garantieumfang und Termine sowie neues Produktangebot." },
 ] as const;
-const variantText = (variant: ParallelVariant) => variant === "4a"
-  ? "4A: Altvertrag beitragsfrei, neuen Vertrag besparen. Ein Altgarantieanspruch kann bestehen bleiben. Höhe, Fälligkeit und laufende Kosten sind vertraglich zu prüfen."
-  : variant === "4b"
-    ? "4B: Altvertrag weiter besparen und neuen Vertrag besparen. Beide Beitragsströme und deren Finanzierung getrennt prüfen, Zulagen nicht verdoppeln."
-    : "Variante noch offen: 4A stellt den Altvertrag beitragsfrei, 4B bespart ihn weiter. In beiden Fällen wird zusätzlich der neue Vertrag bespart.";
+const variantText = (variant: ParallelVariant) => {
+  const plan = variant === "4a"
+    ? "4A: Altvertrag beitragsfrei, neuen Vertrag besparen. Vorhandenes Vertragsvermögen und bestehende vertragliche Rechte können erhalten bleiben. Ein Altgarantieanspruch kann bestehen bleiben. Höhe, Fälligkeit und laufende Kosten sind vertraglich zu prüfen."
+    : variant === "4b"
+      ? "4B: Altvertrag weiter besparen und neuen Vertrag besparen. Beide Beitragsströme und deren Finanzierung nach den neuen einheitlichen Förderregeln und den personenbezogenen Zulagengrenzen getrennt prüfen, Zulagen nicht verdoppeln."
+      : "Variante noch offen: 4A stellt den Altvertrag beitragsfrei, 4B bespart ihn weiter. In beiden Fällen wird zusätzlich der neue Vertrag bespart.";
+  return `${plan} ${parallelFundingRule} ${parallelRightsNotice}`;
+};
 
 export function RiesterStrategies({ selection, change }: {
   selection: RiesterSelection; change: (next: RiesterSelection) => void;
@@ -71,6 +77,7 @@ export function RiesterStrategies({ selection, change }: {
     <h2>Welche Möglichkeiten möchten Sie prüfen?</h2>
     <p>Vier Wege zur Orientierung. Keine Möglichkeit ist vorausgewählt oder empfohlen. Wählen Sie mindestens zwei für einen qualitativen Vergleich.</p>
     <p>Neue Förderregeln und neue Verträge kommen ab 2027 in Betracht. Die persönliche und vertragliche Verfügbarkeit ist noch zu prüfen.</p>
+    <p>Die Auswahl einer Strategie in dieser Anwendung schließt keinen Vertrag ab und bewirkt keine Förderumstellung.</p>
     <div className="retirement-riester-grid">
       {strategies.map(s => <article className="panel retirement-riester-card" key={s.id} aria-labelledby={`${prefix}-strategy-${s.id}`} data-testid={`riester-strategy-${s.id}`}>
         <p className="eyebrow">STRATEGIE {s.id}</p><h3 id={`${prefix}-strategy-${s.id}`}>{s.title}</h3>
@@ -121,6 +128,7 @@ export function RiesterStrategies({ selection, change }: {
     <details className="retirement-help"><summary>Quellen und Grenzen der Strategieübersicht</summary>
       <p>Orientierungsstand 17.11.2026. Keine individuelle Rechts-, Steuer- oder Produktfreigabe. Bedingungen für Person, Beitragsjahr und konkreten Vertrag prüfen.</p>
       <ul>
+        <li><a href="https://rvrecht.deutsche-rentenversicherung.de/SharedDocs/rvRecht/05_Normen_und_Vertraege/02_C-K/EStG/0052/0052_2027_01_01.html" target="_blank" rel="noreferrer">§ 52 Abs. 50a Sätze 6 bis 9 EStG: einheitliche Förderung ab 2027</a></li>
         <li><a href="https://www.deutsche-rentenversicherung.de/DRV/DE/Rente/Moeglichkeiten-der-Altersvorsorge/Altervorsorgereformgesetz" target="_blank" rel="noreferrer">Deutsche Rentenversicherung: Reform, Altverträge und Parallelverträge</a></li>
         <li><a href="https://www.bundesfinanzministerium.de/Content/DE/FAQ/reform-der-privaten-altersvorsorge.html" target="_blank" rel="noreferrer">Bundesfinanzministerium: Reform der privaten Altersvorsorge</a></li>
         <li><a href="https://www.union-investment.de/unsere-services/haeufige-fragen/haeufige-fragen/frage/Wie-funktioniert-die-Auszahlphase-bei-Union-Investment" target="_blank" rel="noreferrer">Union Investment: Auszahlphase und lebenslange Rentenkomponente</a></li>

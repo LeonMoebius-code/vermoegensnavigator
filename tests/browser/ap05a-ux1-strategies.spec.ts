@@ -140,18 +140,119 @@ for (const action of ["Neustart", "Verlassen", "Reload"]) test(`UXB-07: ${action
   expect(await storage(page)).toEqual(before);
 });
 
-for (const width of [375, 768, 1440]) test(`UXB-08: ${width}px, keyboard focus, comparison containment and 200 percent sizing`, async ({ page }, info) => {
+for (const width of [375, 768, 1280, 1440]) test(`UXB-08: ${width}px, keyboard focus, comparison containment and 200 percent CSS sizing`, async ({ page }, info) => {
   await page.setViewportSize({ width, height: 1000 }); await enter(page);
   const choose = btn(page, "Für mich prüfen: Strategie 1"); await choose.focus(); await page.keyboard.press("Enter"); await expect(choose).toHaveAttribute("aria-pressed", "true");
   await btn(page, "Mit anderer Möglichkeit vergleichen: Strategie 4").focus(); await page.keyboard.press("Enter");
   await expect(page.getByRole("region", { name: "Qualitative Gegenüberstellung", exact: true })).toBeFocused();
+  const comparison = page.getByRole("region", { name: "Qualitative Gegenüberstellung", exact: true });
+  await expect(comparison.getByRole("table")).toBeVisible();
+  await expect(comparison.getByRole("columnheader")).toHaveCount(3);
+  for (const id of [1, 2, 3, 4]) await expect(card(page, id)).toBeVisible();
   const overflow = () => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
   expect(await overflow()).toBe(true);
   await page.locator(".retirement-riester-grid").screenshot({ path: info.outputPath(`cards-${width}.png`) });
   await label(page, "In welchem Jahr wurde der Vertrag abgeschlossen?").fill("20"); await expect(page.getByRole("alert")).toContainText("vierstelliges Abschlussjahr");
+  // Automated CSS magnification checks reflow, not human browser zoom (AP-07c).
   await page.locator(".retirement-view").evaluate(el => { (el as HTMLElement).style.zoom = "2"; });
   const overflowing = await page.locator(".retirement-view").evaluate(root => Array.from(root.querySelectorAll<HTMLElement>("*"))
     .filter(el => !el.closest(".retirement-riester-table") && el.scrollWidth > el.clientWidth && el.clientWidth > 0)
     .slice(0, 12).map(el => ({ tag: el.tagName, className: el.className, width: el.clientWidth, scroll: el.scrollWidth })));
   expect(await overflow(), JSON.stringify(overflowing)).toBe(true);
+});
+
+
+test("UXB-R01: actual certified new contract mandates uniform funding, never transfer or guarantee change", async ({ page }) => {
+  await enter(page);
+  const rule = "Ein tatsächlicher Abschluss eines weiteren zertifizierten Altersvorsorgevertrags ab 2027 löst automatisch die neuen Förderregeln einheitlich für alle Altersvorsorgeverträge derselben zulageberechtigten Person aus.";
+  const rights = "Diese Förderumstellung überträgt kein bisheriges Vertragsvermögen und ändert bestehende Vertragsgarantien nicht automatisch.";
+  await expect(page.getByRole("region", { name: "Vier Vertragsstrategien", exact: true })).toContainText("Die Auswahl einer Strategie in dieser Anwendung schließt keinen Vertrag ab und bewirkt keine Förderumstellung.");
+  await card(page, 4).getByText("Vorteile/Nachteile", { exact: true }).click();
+  await expect(card(page, 4).locator("details p").last()).toContainText(rule);
+  await expect(card(page, 4).locator("details p").last()).toContainText(rights);
+  await expect(card(page, 4)).toContainText("mittelbar zulageberechtigten Ehegatten bei dessen Zulagenantrag");
+  await expect(card(page, 4)).not.toContainText("Ein neuer Vertrag kann auch die Förderung");
+  await btn(page, "Für mich prüfen: Strategie 1").click(); await btn(page, "Mit anderer Möglichkeit vergleichen: Strategie 4").click();
+  const comparison = page.getByRole("region", { name: "Qualitative Gegenüberstellung", exact: true });
+  const funding = comparison.getByRole("row", { name: /^Eigenaufwand, Zulage und Steuerwirkung/ }).locator("td").last();
+  const value = comparison.getByRole("row", { name: /^Vertragswert, Übertrag und Garantie mit Termin/ }).locator("td").last();
+  await expect(funding).toContainText(rule); await expect(value).toContainText(rights);
+  for (const variant of ["4a", "4b"]) {
+    await label(page, "Variante der Strategie 4").selectOption(variant);
+    await expect(page.getByTestId("riester-variant-explanation")).toContainText(rule);
+    await expect(page.getByTestId("riester-variant-explanation")).toContainText(rights);
+    await expect(comparison.getByRole("columnheader").last()).toContainText(rule);
+    if (variant === "4a") await expect(page.getByTestId("riester-variant-explanation")).toContainText("Vorhandenes Vertragsvermögen und bestehende vertragliche Rechte können erhalten bleiben");
+    else await expect(page.getByTestId("riester-variant-explanation")).toContainText("personenbezogenen Zulagengrenzen");
+  }
+  await expect(page.getByTestId("old-result")).toHaveCount(0); await expect(page.getByTestId("new-result")).toHaveCount(0);
+  await expect(page.getByTestId("comparison-delta")).toHaveCount(0);
+});
+
+for (const [field, fieldLabel, nextValue] of [
+  ["provider", "Bei welchem Anbieter besteht Ihr Vertrag?", "Testanbieter A korrigiert"],
+  ["product", "Wie heißt Ihr Riester-Produkt?", "Testprodukt korrigiert"],
+  ["contractYear", "In welchem Jahr wurde der Vertrag abgeschlossen?", "2011"],
+] as const) for (const variant of ["4a", "4b"]) test(`UXB-R02: ${field}/${variant} resets decisions, keeps other B/A data and invalidates evidence`, async ({ page }) => {
+  await enter(page); const before = await storage(page);
+  await label(page, "Bei welchem Anbieter besteht Ihr Vertrag?").fill("Testanbieter A");
+  await label(page, "Wie heißt Ihr Riester-Produkt?").fill("Testprodukt");
+  await label(page, "In welchem Jahr wurde der Vertrag abgeschlossen?").fill("2010");
+  await label(page, "Zahlen Sie derzeit regelmäßig in den Vertrag ein?").selectOption("yes");
+  await label(page, "Kommt Kinderzulage für Sie infrage?").selectOption("no");
+  await label(page, "Ist ein Ehe- oder Lebenspartner für Ihre Förderung relevant?").selectOption("no");
+  await btn(page, "A/B-Auswahl").click(); await btn(page, "A – Neue Altersvorsorge planen").click();
+  await label(page, "Unmittelbare Berechtigung").selectOption("direct_confirmed");
+  await btn(page, "A/B-Auswahl").click(); await btn(page, "B – Bestehende Riester-Rente prüfen").click();
+  await confirmOld(page);
+  await btn(page, "B2 Fördervergleich").click();
+  await label(page, "Neu-Szenario: unmittelbare Berechtigung").selectOption("direct_confirmed");
+  await label(page, "Neu-Szenario: Förderregime").selectOption("new_confirmed");
+  await label(page, "Neu-Szenario: Vertragskontext").selectOption("single_eligible_confirmed");
+  await page.getByLabel("Vertrags- und Übergangsannahme", { exact: false }).check();
+  await label(page, "Neu-Szenario: vollständige Kinderzuordnung").selectOption("none_confirmed");
+  await page.getByLabel("Derselbe angezeigte Jahres-Eigenbeitrag", { exact: false }).check();
+  await page.getByLabel("Alle Voraussetzungen der hypothetischen", { exact: false }).check();
+  await page.getByLabel("Vergleichsbasis bestätigt", { exact: false }).check();
+  await btn(page, "Getrennte Fördermodelle prüfen").click(); await expect(page.getByTestId("new-total")).toHaveText("180,00 €");
+  await btn(page, "B1 Bestandsaufnahme").click();
+  await btn(page, "Für mich prüfen: Strategie 1").click(); await btn(page, "Für mich prüfen: Strategie 4").click();
+  await label(page, "Variante der Strategie 4").selectOption(variant);
+  await label(page, "Was möchten Sie zur Auszahlung besprechen?").selectOption("check");
+  await expect(page.getByRole("region", { name: "Qualitative Gegenüberstellung", exact: true }).getByRole("table")).toBeVisible();
+  await label(page, fieldLabel).fill(nextValue);
+  for (const id of [1, 2, 3, 4]) await expect(btn(page, `Für mich prüfen: Strategie ${id}`)).toHaveAttribute("aria-pressed", "false");
+  await expect(label(page, "Variante der Strategie 4")).toHaveValue(""); await expect(label(page, "Was möchten Sie zur Auszahlung besprechen?")).toHaveValue("");
+  await expect(page.getByRole("region", { name: "Qualitative Gegenüberstellung", exact: true }).getByRole("table")).toHaveCount(0);
+  await expect(page.getByTestId("riester-contract-reset-notice")).toContainText("Das gilt auch bei einer Korrektur");
+  await expect(label(page, "Bei welchem Anbieter besteht Ihr Vertrag?")).toHaveValue(field === "provider" ? nextValue : "Testanbieter A");
+  await expect(label(page, "Wie heißt Ihr Riester-Produkt?")).toHaveValue(field === "product" ? nextValue : "Testprodukt");
+  await expect(label(page, "In welchem Jahr wurde der Vertrag abgeschlossen?")).toHaveValue(field === "contractYear" ? nextValue : "2010");
+  await expect(label(page, "Ihr eigener Jahresbeitrag in Euro")).toHaveValue("360");
+  await expect(label(page, "Maßgeblicher RV-Vorjahresbetrag in Euro")).toHaveValue("35000");
+  for (const [name, val] of [["Zahlen Sie derzeit regelmäßig in den Vertrag ein?", "yes"], ["Kommt Kinderzulage für Sie infrage?", "no"], ["Ist ein Ehe- oder Lebenspartner für Ihre Förderung relevant?", "no"]]) await expect(label(page, name)).toHaveValue(val);
+  await expect(label(page, "Alt-unmittelbare Berechtigung")).toHaveValue("direct_old_confirmed");
+  for (const name of ["Alt-Vertragskontext", "Alt-Regime und Bestandsschutz", "Vollständige Alt-Kinderliste", "Alt-Gesamtbestätigung der Nachweise"]) await expect(label(page, name)).toHaveValue("unconfirmed");
+  await expect(page.getByLabel("B: Jahres-Eigenbeitrag für Person", { exact: false })).not.toBeChecked();
+  page.once("dialog", async dialog => { expect(dialog.type()).toBe("confirm"); await dialog.dismiss(); });
+  await page.locator(".sidebar nav").getByRole("button", { name: /Übersicht/ }).click(); await expect(label(page, fieldLabel)).toHaveValue(nextValue);
+  await btn(page, "B2 Fördervergleich").click();
+  for (const name of ["Neu-Szenario: unmittelbare Berechtigung", "Neu-Szenario: Förderregime", "Neu-Szenario: Vertragskontext", "Neu-Szenario: vollständige Kinderzuordnung"]) await expect(label(page, name)).toHaveValue("unconfirmed");
+  await expect(page.getByTestId("old-result")).toHaveCount(0); await expect(page.getByTestId("new-result")).toHaveCount(0);
+  await btn(page, "A/B-Auswahl").click(); await btn(page, "A – Neue Altersvorsorge planen").click(); await expect(label(page, "Unmittelbare Berechtigung")).toHaveValue("direct_confirmed");
+  expect(await storage(page)).toEqual(before);
+});
+
+test("UXB-R03: contribution, children and partner answers preserve strategy decisions", async ({ page }) => {
+  await enter(page); await confirmOld(page);
+  await btn(page, "Für mich prüfen: Strategie 4").click(); await label(page, "Variante der Strategie 4").selectOption("4b");
+  await label(page, "Was möchten Sie zur Auszahlung besprechen?").selectOption("check");
+  await label(page, "Ihr eigener Jahresbeitrag in Euro").fill("480");
+  await label(page, "Kommt Kinderzulage für Sie infrage?").selectOption("yes");
+  await label(page, "Ist ein Ehe- oder Lebenspartner für Ihre Förderung relevant?").selectOption("yes");
+  await expect(btn(page, "Für mich prüfen: Strategie 4")).toHaveAttribute("aria-pressed", "true");
+  await expect(label(page, "Variante der Strategie 4")).toHaveValue("4b"); await expect(label(page, "Was möchten Sie zur Auszahlung besprechen?")).toHaveValue("check");
+  await expect(label(page, "Alt-Partnerstatus")).toHaveValue("unconfirmed"); await expect(label(page, "Vollständige Alt-Kinderliste")).toHaveValue("unconfirmed");
+  await expect(page.getByLabel("B: Jahres-Eigenbeitrag für Person", { exact: false })).not.toBeChecked();
+  await expect(page.getByTestId("old-result")).toHaveCount(0);
 });

@@ -38,7 +38,7 @@ Die vorhandenen Einzelgates für tatsächliche Förderzahlen bleiben unveränder
 
 | Änderung | Betroffene Evidenz / Ergebnisse |
 | --- | --- |
-| Anbieter, Produkt, Abschlussjahr | Altvertrag/Regime und Beitragsbestätigung offen, Kinderzuordnung erneut prüfen; neues Szenario zurücksetzen; Auszahlungsinteresse zurücksetzen |
+| Anbieter, Produkt, Abschlussjahr | Altvertrag/Regime und Beitragsbestätigung offen, Kinderzuordnung erneut prüfen; neues Szenario zurücksetzen; Strategieauswahlen, 4A/4B und Auszahlungsinteresse zurücksetzen, auch bei bloßer Eingabekorrektur |
 | Partner/Kinder-Selbstauskunft | Betroffene Alt-Partner-/Kinderbelege offen; neue Kinderzuordnung und Szenariobestätigung offen |
 | Regelmäßige Zahlung | Beitragsbestätigungen Alt/Neu offen; Beträge bleiben erhalten, Einmalzahlungen weiterhin möglich |
 | Beitrag, Modus, Monatsanzahl | Bestehender Beitragsinvalidierungsvertrag, keine neuen Rechtsannahmen |
@@ -91,7 +91,7 @@ Auszahloption ohne Ableitung des Auszahlungstermins aus dem Beitragsjahr, B2 ohn
 Invalidierung, A/B-Isolation, Verlustdialog, Neustart/Reload, Speicherneutralität,
 Tastatur/Fokus und schmale Ansichten. Bestehende AP05a-Fachtests öffnen lediglich
 die neu getrennte Beraterprüfung, ihre fachlichen Assertions bleiben erhalten.
-Reale menschliche Usability-Abnahme AP-07c und unabhängige Doppelabnahme offen.
+Reale menschliche Usability-Abnahme AP-07c und unabhängige Doppelabnahme offen. Automatisierte CSS-Vergrößerung ist kein menschlicher Browserzoomtest.
 
 
 ## Lokaler Prüfstand vor Draft-PR
@@ -136,3 +136,59 @@ Zwei verbliebene Befunde werden gezielt korrigiert:
 Auch der zweite Entwurf samt PR #80 bleibt als Original erhalten. Der erneute
 abschließende Snapshot liegt auf einem neuen Branch direkt auf der beauftragten
 Basis. Seine vollständigen regulären Push-/PR-Gates bleiben erforderlich.
+
+
+## Doppelreview-Nachbesserung AP05a-R1-01 / R2-01 · 17.11.2026
+
+Eng begrenzter Folgefix auf Feature-Head `ac85e2e3d2cc320773e4f322180517fc9f18bfb3`,
+Base `3027ef194fec4e15f75015d1b8030b1e58a91ec9`. main ist erneut unverändert
+bestätigt. Bestehender Branch und Draft-PR #82 werden ohne Rebase/Force-Push
+fortgeschrieben. Die früheren Originale bleiben erhalten. Aktuell gelten die
+über main übernommenen GOV-04-Gates: schnelle Push-CI, vollständige PR-CI mit
+verpflichtendem Abschlussjob. Frühere Preflight-/CI-Angaben oben sind historisch.
+
+### Verbindlicher Anzeigetext zu Strategie 4
+
+Ein tatsächlicher Abschluss eines weiteren zertifizierten Altersvorsorgevertrags
+ab 2027 löst die neue Förderung einheitlich für alle Altersvorsorgeverträge
+derselben zulageberechtigten Person aus. Das ist keine bloße Möglichkeit.
+Karte, Varianten 4A/4B und qualitative Gegenüberstellung verwenden dieselbe
+fachliche Aussage. Die bloße Strategieauswahl in der Anwendung schließt keinen
+Vertrag ab und ändert keine Förderung.
+
+Bei 4A kann das vorhandene Vertragsvermögen mit vertraglichen Rechten im
+beitragsfreien Altvertrag erhalten bleiben, während die Förderregeln umgestellt
+werden. Bei 4B sind beide Beitragsströme nach einheitlichem neuem Förderrecht
+und personenbezogenen Zulagengrenzen zu betrachten. Weitere Altverträge sowie
+gegebenenfalls ein mittelbar zulageberechtigter Ehegatte und dessen Zulagenantrag
+sind Prüfpunkt. Förderwechsel, Kapitalübertrag und vertragliche Garantie sind
+getrennte Sachverhalte. Keine individuelle Förder-/Steuer-/Wechselberechnung.
+
+Maßgeblich ist [§ 52 Abs. 50a Sätze 6–9 EStG ab 01.01.2027](https://rvrecht.deutsche-rentenversicherung.de/SharedDocs/rvRecht/05_Normen_und_Vertraege/02_C-K/EStG/0052/0052_2027_01_01.html).
+Erneuter amtlicher Abgleich am 17.11.2026: DRV-Jahresfassung Version 003.00 über
+die amtliche URL mit `?nn=1504386` erfolgreich gelesen, einschließlich Satz 8
+zum mittelbaren Ehegatten und Satz 9 zum Bestandsvertragsstatus. Der Direktaufruf
+ohne diesen Navigationsparameter war im Recherchewerkzeug gesperrt. Die
+[DRV-Reforminformation](https://www.deutsche-rentenversicherung.de/DRV/DE/Rente/Moeglichkeiten-der-Altersvorsorge/Altervorsorgereformgesetz)
+bestätigt die automatische Anwendung bei zusätzlichem Neuabschluss. BMF-FAQ
+weiterhin Direktabruf 503. Keine Änderung an den vorhandenen Rechenkernen.
+
+### Vertragsidentität und Reset
+
+Nur Änderungen von Anbieter, Produkt oder Abschlussjahr setzen `selected`,
+`variant` und `payout` zurück. Das umfasst jede echte Wertänderung einschließlich
+Korrektur/Leeren, ohne automatische Tippfehlererkennung. Der sichtbare Hinweis
+nennt Grund und Umfang. Gleicher Wert, andere B-Eingaben oder reine Navigation
+lösen keinen zusätzlichen Strategie-Reset aus. Bestehende Evidenzinvalidierung
+bleibt erhalten. Andere B-Angaben und der unabhängige A-Entwurf bleiben erhalten.
+Kein zusätzliches Vertragsmodell und keine Persistenz.
+
+### Gezielte Nachweise und Abnahmegrenze
+
+Bestehende Fälle bleiben bestehen. Ergänzt werden Rechtsfolgen 4A/4B in Karte
+und Vergleich, alle drei vertragsidentifizierenden Felder mit beiden Varianten,
+Erhalt anderer B-/A-Eingaben und Evidenzinvalidierung sowie ausdrücklich 1280
+CSS-Pixel zusätzlich zu 375/768/1440. CSS-Vergrößerung wird nur als automatisierte
+Layoutprüfung bezeichnet. Echter menschlicher Browserzoom und Usability bleiben
+AP-07c vorbehalten. Beide Reviewer müssen den vollständigen neuen Head erneut
+mit GO abnehmen. Work erteilt kein unabhängiges GO.
