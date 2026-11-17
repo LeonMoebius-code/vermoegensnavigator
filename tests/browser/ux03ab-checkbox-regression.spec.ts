@@ -108,6 +108,7 @@ test("P2 browser: remove confirmed own once, block grant, invalidate capital, re
   await page.getByText("Feineinstellungen und Modellannahmen", { exact: true }).click();
   for (const scenario of ["Zurückhaltend", "Mittlere Annahme", "Höhere Annahme"]) for (const asset of ["Aktienrendite", "Rentenrendite"])
     await input(page, `${scenario}: ${asset} in % p. a.`).fill("0");
+  await page.getByText("Eigene Einmalzahlung ergänzen", { exact: true }).click();
   const once = input(page, "Zusätzliche eigene Einmalzahlung einplanen");
   await once.check(); await input(page, "Einmalzahlung in Euro").fill("60"); await input(page, "Monat der Einmalzahlung").fill("2027-12");
   await input(page, "Geprüfte unmittelbare Berechtigung").selectOption("direct_confirmed");
