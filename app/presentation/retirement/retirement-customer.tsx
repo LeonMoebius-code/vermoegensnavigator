@@ -1,8 +1,9 @@
 import { useId, useRef, useState, type ReactNode } from "react";
 import { annualContribution, changeYear, euro, type GrantDraft } from "./direct-grant-adapter";
-import { customerGrant, editCustomerCapital, metricCents, plannedGrantDraft, runCustomerCapital, type CustomerPlan } from "./customer-plan-adapter";
+import { conditionalBaseGrant, customerPayments, customerGrant, editCustomerCapital, metricCents, plannedGrantDraft, runCustomerCapital, type CustomerPlan } from "./customer-plan-adapter";
 import { issueMessage, type CapitalDraft } from "./projection-adapter";
-import { projectionEuro, RetirementProjection } from "./retirement-projection";
+import { projectionEuro, RetirementProjectionResults } from "./retirement-projection";
+import { ContributionOptimizer } from "./contribution-optimizer";
 import { RetirementChart, customerScenarioNames } from "./retirement-chart";
 
 export function RetirementCustomer({ plan, change, back, review, orientation }: { plan: CustomerPlan; change: (p: CustomerPlan) => void; back: () => void; review?: () => void; orientation?: ReactNode }) {
@@ -10,10 +11,13 @@ export function RetirementCustomer({ plan, change, back, review, orientation }: 
   const [run, setRun] = useState<ReturnType<typeof runCustomerCapital> | null>(null);
   const id = (key: string) => `${prefix}-${key}`;
   const edit = (next: CustomerPlan) => {
-    if (run?.status === "invalid_input" || JSON.stringify(next.capital) !== JSON.stringify(plan.capital)) setRun(null);
+    if (run?.status === "invalid_input" || (JSON.stringify(next.capital) !== JSON.stringify(plan.capital) || JSON.stringify(next.contribution) !== JSON.stringify(plan.contribution))) setRun(null);
     change(next);
   };
-  const cap = (key: keyof CapitalDraft, value: CapitalDraft[keyof CapitalDraft]) => edit(editCustomerCapital(plan, { ...plan.capital, [key]: value }));
+  const cap = (key: keyof CapitalDraft, value: CapitalDraft[keyof CapitalDraft]) => {
+    const source = key === "monthly" && plan.contribution ? { ...plan, contribution: undefined, evidence: { ...plan.evidence, contributionConfirmed: false } } : plan;
+    edit(editCustomerCapital(source, { ...plan.capital, [key]: value }));
+  };
   const evidence = <K extends keyof GrantDraft>(key: K, value: GrantDraft[K]) => {
     if (plan.evidence[key] === value) return;
     const next = { ...plan.evidence, [key]: value };
@@ -26,6 +30,7 @@ export function RetirementCustomer({ plan, change, back, review, orientation }: 
   };
   const derived = plannedGrantDraft(plan), grant = customerGrant(plan);
   const own = "status" in derived ? derived : annualContribution(derived);
+  const possible = conditionalBaseGrant(plan), payments = customerPayments(plan);
   const error = run?.status === "invalid_input" ? run : null;
   const models = run?.status === "responses" ? customerScenarioNames.map((_, i) =>
     run.responses[run.mode === "comparison" ? 0 : i]?.projectionResults[run.mode === "comparison" ? i * 2 : 0]) : [];
@@ -52,7 +57,7 @@ export function RetirementCustomer({ plan, change, back, review, orientation }: 
     const next = runCustomerCapital(plan); setRun(next);
     requestAnimationFrame(() => {
       if (next.status === "invalid_input") {
-        const field = document.getElementById(id(next.field));
+        const field = next.field === "annual" ? document.querySelector<HTMLInputElement>('[data-testid="customer-annual-input"]') : document.getElementById(id(next.field));
         if (field) { let parent = field.parentElement; while (parent) { if (parent instanceof HTMLDetailsElement) parent.open = true; parent = parent.parentElement; } field.focus(); }
         else resultRef.current?.focus();
       } else resultRef.current?.focus();
@@ -82,11 +87,17 @@ export function RetirementCustomer({ plan, change, back, review, orientation }: 
               onChange={e => edit({ ...plan, birthYear: e.target.value, evidence: changeYear(plan.evidence, plan.evidence.year) })} />
             {error?.field === "birthYear" && <p id={id("birth-error")} role="alert">{error.message}</p>}
           </div>
+          <ContributionOptimizer plan={plan} change={edit} />
           {text("monthly", "Wie viel möchten Sie monatlich einzahlen?")}
           <p className="retirement-year-equivalent" data-testid="customer-annual">{"cents" in own ? <><strong>{euro(own.cents)}</strong> geplanter Eigenbeitrag {year} · {"status" in derived ? "" : `${derived.months} Monatsraten`}</> : "Der Jahresbeitrag erscheint, sobald Betrag und Zeitraum vollständig sind."}</p>
           {text("start", "Ab wann möchten Sie sparen?", true)}
           {text("end", "Bis wann möchten Sie sparen?", true)}
           <small>Modellziel, kein bestätigter Auszahlungsbeginn. Die tatsächliche Verfügbarkeit hängt vom Vertrag und den rechtlichen Voraussetzungen ab.</small>
+          <details><summary>Eigene Einmalzahlung ergänzen</summary>
+            <p>Zusätzlicher Eigenbeitrag zum gewählten Monatsende. Nur eine Zahlung im ersten Kalenderjahr zählt für dessen Jahresziel. Anfangskapital ist kein neuer förderfähiger Beitrag.</p>
+        {check("oneOffEnabled", "Zusätzliche eigene Einmalzahlung einplanen")}
+        {plan.capital.oneOffEnabled && <div className="retirement-capital-grid">{text("oneOff", "Einmalzahlung in Euro")}{text("oneOffMonth", "Monat der Einmalzahlung", true)}</div>}
+          </details>
           <button className="primary" type="submit">Modellrechnung anzeigen</button>
         </form>
       </section>
@@ -100,9 +111,18 @@ export function RetirementCustomer({ plan, change, back, review, orientation }: 
           </dl><p>Regelbasierte Modellrechnung unter den fachlich geprüften Angaben, keine Buchungszusage.</p></>
             : <><p className="retirement-state" data-testid="customer-grant-status">Gemeinsam prüfen</p><p>Ob die Förderung in Ihrem Fall möglich ist, prüfen wir gemeinsam.
               {plan.children !== "no" ? " Dazu gehört auch die Zuordnung möglicher Kinderzulagen." : ""}</p></>}
-          <small>Ein möglicher Einmalbonus ist noch zu prüfen und nicht als Betrag enthalten.</small>
+          {grant.status !== "calculated" && possible.status === "calculated" && payments.status === "valid" && <div data-testid="conditional-funding">
+            <h3>Mögliche Förderung, wenn die Voraussetzungen erfüllt sind</h3>
+            <p>Nur bedingtes Standardszenario: unmittelbare Berechtigung, neues Regime, genau ein zulässiger Vertrag und förderfähiger Eigenbeitrag vorausgesetzt. Die Annahmen bestätigen keine Ihrer Angaben.</p>
+            <dl className="retirement-customer-metrics"><div><dt>Eigenbeitrag ohne noch ungeprüfte Zulagen</dt><dd>{euro(payments.total)}</dd></div>
+              <div><dt>Mögliche Grundzulage · bedingt</dt><dd data-testid="conditional-base-grant">{euro(possible.result.baseGrantCents)}</dd></div>
+              <div><dt>Eigenbeitrag + mögliche Grundzulage · bedingt</dt><dd>{euro(payments.total + possible.result.baseGrantCents)}</dd></div></dl>
+            <p>Kinderzulagen bleiben gesondert offen und sind hier nicht enthalten. Das Kapitalmodell übernimmt dieses bedingte Szenario nicht automatisch.</p>
+          </div>}
+          {grant.status !== "calculated" && possible.status !== "calculated" && <p data-testid="conditional-funding-status">{possible.message}</p>}
+          <small>Ein möglicher Einmalbonus ist noch zu prüfen und nicht als Betrag enthalten. Eine zusätzliche Steuerentlastung wird nicht berechnet und ist kein Vertragszufluss.</small>
         </div>
-        <div className="panel retirement-capital-overview"><h2>Was aus Ihren Einzahlungen werden könnte</h2>
+        <div className="panel retirement-capital-overview"><h2>Was aus Ihren Einzahlungen werden könnte</h2><p>Der Sparverlauf enthält Ihre wirksamen Eigenzahlungen. Zulagen aus der Förderübersicht werden ohne bestätigten Buchungszeitpunkt nicht automatisch übernommen.</p>
           <p>Neutrale Modellrechnung ohne automatisch angerechnete Förderzulagen. Keine Produktprognose oder Garantie.</p>
           <p className="retirement-test-note">Annahmen: {plan.capital.equity} % Aktien; jährliche Aktien-/Rentenrenditen je Szenario {plan.capital.scenarios.map(s => `${s.equity} / ${s.bond} %`).join(" · ")}. Änderungen unter „Feineinstellungen“.</p>
           {plan.capital.grantEnabled && <p>Zusätzlich gewählt: eine einmalige hypothetische Zulage. Diese ist keine bestätigte Förderung und wird nicht wiederholt.</p>}
@@ -118,7 +138,7 @@ export function RetirementCustomer({ plan, change, back, review, orientation }: 
             <RetirementChart models={models} />
             {references.length > 0 && <><p>Vergleich mit ETF-/Fondssparplan bei gleichen Eigenzahlungen und Terminen. Steuern und unterschiedliche Verfügbarkeit sind nicht berücksichtigt; daraus folgt keine Wechsel- oder Produktempfehlung.</p><RetirementChart models={references} reference /></>}
           </> : <p role="status" data-testid="customer-capital-status">{error ? "Bitte korrigieren Sie die markierte Eingabe. Ihre übrigen Angaben bleiben erhalten." : "Mit Ihrer Sparrate und den sichtbaren Modellannahmen können Sie hier drei Szenarien anzeigen. Nach Änderungen ist eine neue Berechnung erforderlich."}</p>}
-          {error && !["birthYear", "start", "end", "monthly", "initial", "equity", "oneOff", "oneOffMonth", "stressMonth", "stressPercent", "costPercent", "referenceCostPercent", "referenceEquity", "grantYear", "grantMonth", "grantAmount", "grantConfirmed", "openYears"].includes(error.field) && !error.field.startsWith("scenarios.") && <p role="alert">{error.message}</p>}
+          {error && !["annual", "birthYear", "start", "end", "monthly", "initial", "equity", "oneOff", "oneOffMonth", "stressMonth", "stressPercent", "costPercent", "referenceCostPercent", "referenceEquity", "grantYear", "grantMonth", "grantAmount", "grantConfirmed", "openYears"].includes(error.field) && !error.field.startsWith("scenarios.") && <p role="alert">{error.message}</p>}
         </div>
       </section>
     </div>
@@ -133,8 +153,6 @@ export function RetirementCustomer({ plan, change, back, review, orientation }: 
             {error?.field === `scenarios.${i}.${asset}` && <p id={id("scenario-error")} role="alert">{error.message}</p>}
           </div>)}
         </fieldset>)}</div>
-        {check("oneOffEnabled", "Zusätzliche eigene Einmalzahlung einplanen")}
-        {plan.capital.oneOffEnabled && <div className="retirement-capital-grid">{text("oneOff", "Einmalzahlung in Euro")}{text("oneOffMonth", "Monat der Einmalzahlung", true)}</div>}
         {check("stressEnabled", "Einmaligen Aktienkursverlust modellieren")}
         {plan.capital.stressEnabled && <div className="retirement-capital-grid">{text("stressMonth", "Monat des Aktienkursverlusts", true)}{text("stressPercent", "Aktienkursverlust in %")}</div>}
         {cost(false)}{check("referenceEnabled", "Vergleich mit normalem ETF-/Fondssparplan anzeigen")}
@@ -177,7 +195,7 @@ export function RetirementCustomer({ plan, change, back, review, orientation }: 
         <label htmlFor={id("output")}>Ausgabeumfang</label><select id={id("output")} value={plan.capital.output} onChange={e => cap("output", e.target.value)}><option value="auto">Automatisch</option><option value="compact">Kompakte Originalblöcke</option><option value="detailed">Originalmonate (bei langen Laufzeiten begrenzt)</option></select>
         {run?.status === "responses" && <><p>Alle Werte stammen aus dem unveränderten Monatsrechenkern. Einzahlungen zum Monatsende; monatliche Zielquotengewichtung. Keine Steuer-, Renten- oder Herstellerrechnung.</p>
           {run.responses.map((r, i) => <div key={i}><p>Anfrage {i + 1}: <code>{r.requestHash}</code> · {r.supportedVersions.modelVersion}</p>{r.primaryIssue && <p>{issueMessage(r.primaryIssue)}</p>}</div>)}
-          <details><summary>Vollständige Ergebnis- und Quellenprüfung</summary><RetirementProjection draft={plan.capital} change={next => edit(editCustomerCapital(plan, next))} result={run} show={setRun} /></details>
+          <details><summary>Vollständige Ergebnis- und Quellenprüfung</summary><RetirementProjectionResults result={run} /></details>
         </>}
       </div>
     </details>

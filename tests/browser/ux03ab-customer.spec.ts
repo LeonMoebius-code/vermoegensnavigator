@@ -11,9 +11,9 @@ async function zero(p: Page) {
 }
 const calculate = (p: Page) => p.getByRole("button", { name: "Modellrechnung anzeigen", exact: true }).click();
 
-test("UX03 U1: four payment questions after guided entry, no checkboxes, open funding plus three actual curves", async ({ page }) => {
+test("UX03 U1: payment questions and annual optimizer after guided entry, no checkboxes, open funding plus three actual curves", async ({ page }) => {
   await enter(page);
-  await expect(page.locator(".retirement-customer-inputs input:visible, .retirement-customer-inputs select:visible")).toHaveCount(4);
+  await expect(page.locator(".retirement-customer-inputs input:visible, .retirement-customer-inputs select:visible")).toHaveCount(5);
   await expect(page.locator(".retirement-customer input[type=checkbox]:visible")).toHaveCount(0);
   await expect(page.getByTestId("customer-grant-status")).toHaveText("Gemeinsam prüfen");
   await calculate(page);
