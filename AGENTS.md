@@ -95,6 +95,14 @@ desselben finalen Stands und Leons gesonderte Integrationsentscheidung sind erfo
 Die neue Nachweisroutine ändert weder D-19 noch D-05, Originalschutz oder Befugnisse.
 [Übergang und Evidenz](docs/project/OPERATING_MODEL.md#gov-03-übergang-und-wirksamkeit).
 
+Für GOV-04 gilt die [Übergangsgrenze](docs/project/OPERATING_MODEL.md#gov-04-übergang-und-wirksamkeit):
+Erst nach zwei unabhängigen vollständigen GO, Leons gesonderter Entscheidung,
+Integration und wirksamem Merge-Schutz gelten schnelle Entwicklungs-Push-CI und
+vollständige PR-CI. Der bisherige Pflichtstatus gehört ausschließlich zur
+vollständigen PR-Prüfung. Bis dahin gilt auf main das bisherige Modell.
+Settings ausschließlich lesen, Änderungen gesondert freigeben lassen.
+[CI-Modell und Schutzprüfung](docs/project/GOV04_CI_MODELL.md).
+
 Optionaler **Audit/Monitoring-Agent** liest ausschließlich; er implementiert,
 priorisiert und autorisiert keine Folgearbeiten. Es gilt der
 [inkrementelle Auditvertrag](docs/project/OPERATING_MODEL.md#inkrementelle-deep-audits).

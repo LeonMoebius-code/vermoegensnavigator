@@ -1,6 +1,22 @@
 # Projektstatus und nächste Schritte
 
-## Aktueller Checkpoint · 13.11.2026
+## Seit diesem Checkpoint geändert · GOV-04 / 17.11.2026
+
+Eng begrenzter CI-/Governance-Preflight anhand GitHub-Ref-, Branch-, Ruleset- und
+PR-APIs sowie frischem isoliertem Clone. Live-main entspricht der beauftragten
+Basis `0edde578a9e3bc68b0132674dd3aa7e0809208a7`, Tree
+`86018066fddce2f18cd08c2bdfef00b4b6898f35`. #75 (GOV-02) und #76 (GOV-03)
+sind integriert. Die folgenden älteren Entwicklungs-/Governanceangaben sind
+insoweit überholt. Keine neue Prüfung der Veröffentlichungsebene.
+
+Aktives Paket: GOV-04 auf `work/gov-04-fast-development-ci`, kritisch,
+Draft-Vorbereitung für schnelle Push-CI und unverändert vollständige PR-CI.
+[Technischer Vertrag, Schutzstatus und Grenzen](GOV04_CI_MODELL.md).
+Noch keine unabhängige Abnahme, gesonderte Integration oder Wirksamkeit.
+Zwei vollständige unabhängige Reviews bleiben erforderlich. #43 und #60 sind
+weiter offen und unverändert. Kein Merge, Release, Deployment oder Settings-Eingriff.
+
+## Historischer Checkpoint · 13.11.2026
 
 READ-ONLY gegen Live-GitHub (Refs, Git-Objekte, PRs und Actions) sowie die
 öffentliche Build-Provenienz geprüft. Grundlage: bestätigter Nachführungsauftrag
