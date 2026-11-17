@@ -115,7 +115,9 @@ function bind(parameters: ProjectionSpec): BoundProjection {
   }
   return { parameters, bindings: paths.sort(ascii).map(path => ({ path, sourceIds: ["ui-assumption"] })) };
 }
-export function buildCapitalRequests(inputJson: unknown): CapitalError | CapitalRequests {
+/** Explicit extra own-payment event, used only for a disclosed annual-plan cent remainder. */
+export interface OwnPaymentAdjustment { month: string; cents: number }
+export function buildCapitalRequests(inputJson: unknown, adjustment?: OwnPaymentAdjustment): CapitalError | CapitalRequests {
   try {
     const d = readDraft(inputJson), start = month(d.start, "start"), end = month(d.end, "end");
     if (end < start) return fail("end", "Endmonat muss mindestens der Startmonat sein.");
@@ -126,6 +128,13 @@ export function buildCapitalRequests(inputJson: unknown): CapitalError | Capital
     if (years.some((y, i) => i > 0 && y <= years[i - 1])) return fail("openYears", "Offene Förderjahre eindeutig und aufsteigend eingeben.");
     const oneOff = d.oneOffEnabled ? [{ eventId: "own-once", month: month(d.oneOffMonth, "oneOffMonth"), cents: amount(d.oneOff, "oneOff") }] : [];
     if (oneOff.some(x => x.month < start || x.month > end)) return fail("oneOffMonth", "Einmalbeitrag muss innerhalb des Modellzeitraums liegen.");
+    if (adjustment) {
+      const at = month(adjustment.month, "oneOffMonth");
+      if (at < start || at > end || !Number.isSafeInteger(adjustment.cents) || adjustment.cents <= 0 || adjustment.cents > 11)
+        return fail("oneOff", "Ungültiger Centausgleich für das Jahresziel.");
+      oneOff.push({ eventId: "own-annual-remainder", month: at, cents: adjustment.cents });
+      oneOff.sort((a, b) => ascii(a.month, b.month) || ascii(a.eventId, b.eventId));
+    }
     const stress = d.stressEnabled ? { month: month(d.stressMonth, "stressMonth"), equityShock: known(percent(d.stressPercent, "stressPercent", -S, 0n)) } : null;
     if (stress && (stress.month < start || stress.month > end)) return fail("stressMonth", "Stressmonat muss innerhalb des Modellzeitraums liegen.");
     const grantEvents: ProjectionSpec["grantEvents"] = d.grantEnabled ? [{ eventId: "grant-once",
@@ -163,8 +172,8 @@ export function buildCapitalRequests(inputJson: unknown): CapitalError | Capital
     throw error;
   }
 }
-export function calculateCapital(inputJson: unknown): CapitalRun {
-  const built = buildCapitalRequests(inputJson);
+export function calculateCapital(inputJson: unknown, adjustment?: OwnPaymentAdjustment): CapitalRun {
+  const built = buildCapitalRequests(inputJson, adjustment);
   if (built.status !== "ready") return built;
   return { status: "responses", mode: built.mode, requests: built.requests,
     responses: built.requests.map(raw => built.mode === "comparison" ? compareRetirement(raw) : projectRetirement(raw)) };
