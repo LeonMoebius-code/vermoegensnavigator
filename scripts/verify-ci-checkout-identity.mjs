@@ -4,7 +4,6 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repository = 'LeonMoebius-code/vermoegensnavigator';
-const workflowPath = '.github/workflows/ci.yml';
 const shaPattern = /^[0-9a-f]{40}$/;
 function requireValue(condition, message) {
   if (!condition) throw new Error(message);
@@ -38,7 +37,11 @@ export function inspectCheckout(cwd) {
 export function verifyIdentity(env, event, actual) {
   requireValue(env.GITHUB_ACTIONS === 'true', 'GitHub Actions context required');
   requireValue(env.GITHUB_REPOSITORY === repository && event.repository?.full_name === repository, 'Unexpected repository');
-  requireValue(env.GITHUB_WORKFLOW === 'Feature CI' && env.GITHUB_JOB === 'verify', 'Unexpected workflow or job');
+  const development = env.GITHUB_WORKFLOW === 'Development CI' && env.GITHUB_JOB === 'fast';
+  const full = env.GITHUB_WORKFLOW === 'Feature CI' && env.GITHUB_JOB === 'verify';
+  requireValue(full || development, 'Unexpected workflow or job');
+  requireValue(!development || env.GITHUB_EVENT_NAME === 'push', 'Development CI supports pushes only');
+  const workflowPath = development ? '.github/workflows/development-ci.yml' : '.github/workflows/ci.yml';
   requireValue(env.GITHUB_WORKFLOW_REF === `${repository}/${workflowPath}@${env.GITHUB_REF}`, 'Unexpected workflow ref');
   const workflowSha = sha(env.GITHUB_WORKFLOW_SHA, 'workflow SHA');
   const runId = positive(env.GITHUB_RUN_ID, 'run ID');
@@ -84,6 +87,7 @@ export function verifyIdentity(env, event, actual) {
     pr_number: pr, expected_commit: expected, actual_checkout: actual.checkout,
     feature_head: featureHead, base, parents: actual.parents, tree: actual.tree,
     identity_check: 'passed', regular_evidence: classification !== 'manual_limited',
+    validation_scope: classification === 'manual_limited' ? 'manual_limited' : development ? 'development' : 'full',
   };
 }
 
