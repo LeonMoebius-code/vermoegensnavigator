@@ -64,8 +64,10 @@ Publikation bereit.
   Gesamtbetrag oder O/null dokumentieren, aber keine numerischen
   Vertragsereignisse auslösen. Es gibt keine automatische Verteilung.
 - Die frühere unveröffentlichte Version v1 wird am Formatrand abgelehnt.
-  Fall, Vergleich, Berechnung und Manifest verwenden v2. P1, Datenbankaufbau
-  und allgemeines Schema 11 bleiben unberührt.
+  Fall, Vergleich und Manifest verwenden v2 als Grundlage. Fallformat v3
+  ergänzt ein Register manueller Sperrentscheidungen. Ein v2-Fall bleibt
+  ohne Umschreiben lesbar. P1 und der Datenbankaufbau verwenden dieselben
+  Verträge. Das allgemeine Fallschema bleibt bei Version 11.
 
 ## Vergleich und Herkunft
 
@@ -116,13 +118,33 @@ Teilergebnis-ID enthalten. Der neue Vergleich erhält neue Teilergebnis-IDs.
 Die ursprüngliche calculation_id, das ursprüngliche Datum und die Einordnung
 im ursprünglichen Vergleich bleiben gespeichert.
 
-Fachlich nicht berechenbare Ergebnisse tragen einen Grund und keine
-Kapitalzahl. Technische Abbrüche sind keine Ergebnisvariante. Ausschließlich
-explizite synthetische Fälle auf synthetischem Katalog dürfen synthetische
-Zahlen enthalten. Arbeitsfälle können in P2 einen vollständigen Vergleich
-fachlicher Sperrzustände speichern. Alte Ergebnisse sind als historisch
-fixiert adressierbar. Ein veralteter aktueller Verweis gibt nur die Identität
-zurück, keine Ergebnisse als Ersatz.
+Fachlich nicht berechenbare Ergebnisse verwenden `avd.calculation.v3`.
+Der Sperrcode verweist auf die konkrete Ursache im geprüften Teilstand.
+Automatisch prüfbare Ursachen umfassen P1-Modell- oder Kostensperren, offene
+Szenariorenditen, offene Zahlungen und fehlende bedingte Förderannahmen. Eine
+optionale Erläuterung ergänzt diesen Nachweis. Technische Abbrüche haben
+keinen Ergebnisstatus.
+
+Eine manuelle Sperrentscheidung ist ein separater Eintrag im Fall. Sie
+identifiziert den betroffenen Teilergebnisschlüssel, die entscheidende Person,
+den Entscheidungstag, den fachlichen Grund und die Nachweisreferenz.
+Sie verlangt eigenständige, auf den konkreten Vertrag bezogene Evidenz mit
+Quellen und einer exakt gebundenen Evidenzfassung. Eine ungeklärte und eine
+nachweislich nicht erfüllte Vertragsanforderung bleiben unterschiedliche
+Entscheidungsgründe. Die Entscheidung bindet außerdem den gesamten
+maßgeblichen Teilstand. Ändert sich dieser Stand oder die Evidenz, braucht der
+neue Vergleich eine erneut geprüfte Entscheidung oder deren Rücknahme.
+Kopie und Restore übernehmen die historischen Eingaben. Manuelle
+Sperrentscheidungen müssen im neuen Arbeitsstand neu bestätigt werden.
+P2 prüft den gespeicherten Entscheidungsnachweis und seine Zuordnung.
+Die Identität im Nachweis ist eine Deklaration innerhalb des Falls.
+
+Ausschließlich explizite synthetische Fälle auf synthetischem Katalog dürfen
+synthetische Zahlen enthalten. Gültige historische Ergebnisse sind weiterhin
+adressierbar. Unveröffentlichte v2-Berechnungen mit bloßem Freitext bleiben
+als Originaldatensätze erhalten. Ihre Sperre kann erst mit einem neu
+verifizierten Vergleich wirksam werden. Ein veralteter aktueller Verweis
+gibt die Identität des Vergleichs zurück.
 
 Ein aktueller gelesener Vergleich ist validiert und vollständig. Zusätzlich
 leitet die Schnittstelle den Ergebnisfähigkeitsstatus aus den gespeicherten
@@ -166,7 +188,7 @@ Fixtures und verwendet die P1-Publikationsprüfung für export.
 Der Ausgabedienst muss zusätzlich den Zweck `capital_projection` oder
 `documented_blocks` ausdrücklich wählen. Die Kapitalprognose verlangt
 vollständig numerische Ergebnisse. Der Sperrfallbericht setzt mindestens
-einen dokumentierten Sperrpfad voraus und erhält dessen Ergebnisfähigkeit
+einen fachlich verifizierten Sperrpfad voraus und erhält dessen Ergebnisfähigkeit
 im Rückgabevertrag. Der spätere
 Ausgabedienst muss die Grenze vor tatsächlicher Ausgabe erneut prüfen. P2
 reserviert dabei keinen Export-ID-Wert und speichert keine Ausgabedatei.

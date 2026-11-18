@@ -3,7 +3,7 @@ import { assertSuccessor, parseAvdCase, caseRef } from "../../app/domain/retirem
 import { catalogRef, keyOf, planComparison, validateCaseCatalog, verifyComparison } from "../../app/domain/retirement/avd-comparison";
 import { MODEL_VERSIONS, reference } from "../../app/domain/retirement/identity-contract";
 import { record } from "./avd-catalog-fixture";
-import { candidate, fixture, mutable, nextCase, nextCatalog, productCostCatalog, seal } from "./avd-p2-fixture";
+import { candidate, fixture, manualBlockFixture, mutable, nextCase, nextCatalog, productCostCatalog, seal, unsupportedBlocks } from "./avd-p2-fixture";
 
 test("AVD-P2 A: immutable independent case with explicit O/null versus numerical zero", () => {
   const { input, catalog } = fixture();
@@ -126,29 +126,80 @@ test("AVD-P2 B: case, model, cost, funding and technical abort cannot masquerade
   expect(() => planComparison(wrongCostModel, catalog)).toThrow(/cost_model_mismatch/);
 });
 
-test("AVD-P2 B: documented fachlich blocked entry has no capital, productive fixture values are refused", () => {
+test("AVD-P2 R84-N2: reject one or twelve invented blocks even with freshly sealed hashes", () => {
   const { input, catalog } = fixture();
   const base = candidate(input, catalog);
-  const altered = mutable(base);
-  altered.subresults[0].calculation.result = { status: "nicht_berechenbar", reason: "Synthetic unresolved evidence" };
-  altered.subresults[0].calculation = seal(altered.subresults[0].calculation);
-  expect(verifyComparison(input, catalog, seal(altered)).comparison.subresults[0].calculation.result)
-    .toEqual({ status: "nicht_berechenbar", reason: "Synthetic unresolved evidence" });
-  expect(verifyComparison(input, catalog, seal(altered)).result_capability)
-    .toEqual({ status: "partially_numeric", numeric: 11, blocked: 1 });
-  expect(verifyComparison(input, catalog, candidate(input, catalog, { blocked: true })).result_capability)
-    .toEqual({ status: "documented_blocks", numeric: 0, blocked: 12 });
-  const missingStatus = mutable(altered);
-  Reflect.deleteProperty(missingStatus.subresults[0].calculation.result, "status");
-  expect(() => verifyComparison(input, catalog, seal(missingStatus))).toThrow(/unknown_or_missing_field|unknown_value/);
-  const contradictory = mutable(altered);
-  Object.assign(contradictory.subresults[0].calculation.result, { capital_cents: 1 });
+  for (const legacy of [true, false]) for (const count of [1, 12]) {
+    expect(() => verifyComparison(input, catalog, unsupportedBlocks(base, count, legacy))).toThrow(/block_proof_mismatch/);
+  }
+  const oldNumeric = seal({ ...base, subresults: base.subresults.map(item => ({
+    ...item, calculation: seal({ ...item.calculation, format: "avd.calculation.v2", result: item.calculation.result })
+  })) });
+  expect(verifyComparison(input, catalog, oldNumeric).result_capability.status).toBe("fully_numeric");
+});
+
+test("AVD-P2 R84-N2: verified manual block yields exactly one blocked result, without a capital number", () => {
+  const { input, catalog } = manualBlockFixture();
+  const mixed = candidate(input, catalog);
+  const verified = verifyComparison(input, catalog, mixed);
+  expect(verified.comparison.subresults[0].calculation.result).toEqual({
+    status: "nicht_berechenbar", block: { code: "manual_decision", reference_id: "decision-1" }, explanation: null
+  });
+  expect(verified.result_capability).toEqual({ status: "partially_numeric", numeric: 11, blocked: 1 });
+  const contradictory = mutable(mixed);
+  const calc = contradictory.subresults[0].calculation;
+  Object.assign(calc.result, { capital_cents: 1 });
+  contradictory.subresults[0].calculation = seal(calc);
   expect(() => verifyComparison(input, catalog, seal(contradictory))).toThrow(/unknown_or_missing_field/);
-  const working = seal({ ...input, mode: "working" as const });
-  expect(() => verifyComparison(working, catalog, candidate(working, catalog))).toThrow(/real_calculation_unavailable/);
-  expect(verifyComparison(working, catalog, candidate(working, catalog, { blocked: true })).comparison.subresults).toHaveLength(12);
-  const open = nextCase(input, c => { c.payments[0].amount = { class: "O", value: null, reason: "Synthetic open" }; });
-  expect(() => verifyComparison(open, catalog, candidate(open, catalog))).toThrow(/real_calculation_unavailable/);
+});
+
+test("AVD-P2 R84-N2: twelve open returns verify in a working case and closing them withdraws the blocks", () => {
+  const { input, catalog } = fixture();
+  const open = mutable(input);
+  open.mode = "working";
+  open.scenarios.forEach(scenario => { scenario.annual_return_bps = null; });
+  const working = seal(open);
+  const blocked = candidate(working, catalog);
+  expect(verifyComparison(working, catalog, blocked).result_capability)
+    .toEqual({ status: "documented_blocks", numeric: 0, blocked: 12 });
+  const wrong = mutable(blocked);
+  const calc = wrong.subresults[0].calculation;
+  if (!("block" in calc.result)) throw Error("Fixture proof missing");
+  calc.result.block.reference_id = "high";
+  wrong.subresults[0].calculation = seal(calc);
+  expect(() => verifyComparison(working, catalog, seal(wrong))).toThrow(/block_proof_mismatch/);
+
+  const settled = nextCase(working, draft => { draft.scenarios[0].annual_return_bps = 0; });
+  expect(() => verifyComparison(settled, catalog, blocked)).toThrow(/dependency_manifest_mismatch/);
+  expect(() => verifyComparison(settled, catalog, candidate(settled, catalog))).toThrow(/real_calculation_unavailable/);
+});
+
+test("AVD-P2 R84-N2: manual decision needs matching evidence, scope and a current basis", () => {
+  const { input, catalog } = manualBlockFixture();
+  const verified = candidate(input, catalog);
+  const invalid = mutable(input);
+  const decision = invalid.blocking_decisions[0];
+  for (const evidenceId of ["missing", "proof-1", "proof-2"]) {
+    decision.evidence_id = evidenceId;
+    expect(() => verifyComparison(seal(invalid), catalog, verified)).toThrow(/blocking_decision_evidence/);
+  }
+  decision.evidence_id = input.blocking_decisions[0].evidence_id;
+  decision.proof_id = "invented";
+  expect(() => verifyComparison(seal(invalid), catalog, verified)).toThrow(/blocking_decision_evidence/);
+
+  const wrongScope = mutable(input);
+  wrongScope.blocking_decisions[0].key.path_id = "path-2";
+  expect(() => verifyComparison(seal(wrongScope), catalog, verified)).toThrow(/blocking_decision_evidence/);
+  const revised = nextCase(input, draft => { draft.evidence[2].proof_id = "new-evidence-revision"; });
+  expect(() => verifyComparison(revised, catalog, verified)).toThrow(/blocking_decision_evidence/);
+  const changedBasis = nextCase(input, draft => { draft.scenarios[0].annual_return_bps = 1; });
+  expect(() => verifyComparison(changedBasis, catalog, verified)).toThrow(/blocking_decision_basis/);
+  const withdrawn = nextCase(input, draft => {
+    if (draft.format === "avd.case.v3") draft.blocking_decisions = [];
+  });
+  const replacement = candidate(withdrawn, catalog, { previous: verified });
+  expect(verifyComparison(withdrawn, catalog, replacement).result_capability.status).toBe("fully_numeric");
+  expect(verifyComparison(input, catalog, verified).result_capability.status).toBe("partially_numeric");
 });
 
 test("AVD-P2 B: exact dependencies permit reuse of unaffected product only", () => {

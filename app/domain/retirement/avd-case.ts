@@ -16,6 +16,12 @@ const year = integer(100, 9999);
 const phase = oneOf("savings", "payout");
 const evidenceStatus = oneOf("bestaetigt", "bedingt", "ungeklaert", "nicht_erfuellt");
 export const fundingVariant = oneOf("without_unconfirmed", "with_conditional");
+export const subresultKey = shape({ path_id: id, scenario_id: id, funding_variant: fundingVariant });
+const blockingDecision = shape({
+  id, key: subresultKey, basis_hash: digest, decided_on: day, decided_by: id,
+  reason: oneOf("contract_requirement_unmet", "contract_requirement_unresolved"),
+  evidence_id: id, evidence_hash: digest, proof_id: id
+});
 const model = oneOf("M1", "M2", "M3");
 const component = oneOf("fund_ter", "acquisition", "administration", "custody", "transaction", "payout");
 const sources = list(avdRef("source"), 48);
@@ -61,8 +67,8 @@ const path = shape({
     rent_offer: nullable(shape({ source: avdRef("source"), on: day, monthly_amount: amount }))
   }))
 });
-const caseShape = shape({
-  format: oneOf("avd.case.v2"), case_id: id, case_revision: revision, hash: digest,
+const caseFields = {
+  case_id: id, case_revision: revision, hash: digest,
   previous_hash: nullable(digest), origin: nullable(comparisonOrigin), catalog: catalogIdentity,
   mode: oneOf("working", "synthetic_fixture"), as_of: day, route,
   metadata: shape({ created_at: stamp, changed_at: stamp, changed_by: id, change_id: id }),
@@ -92,9 +98,12 @@ const caseShape = shape({
   scenarios: list(scenario, 6),
   funding_variants: list(fundingVariant, 2),
   paths: list(path, 8)
-});
+};
+const caseV2 = shape({ ...caseFields, format: oneOf("avd.case.v2") });
+const caseV3 = shape({ ...caseFields, format: oneOf("avd.case.v3"), blocking_decisions: list(blockingDecision, 96) });
 
-export type AvdCase = ReturnType<typeof caseShape>;
+export type AvdCase = ReturnType<typeof caseV2> | ReturnType<typeof caseV3>;
+export type BlockingDecision = ReturnType<typeof blockingDecision>;
 export type CaseIdentity = ReturnType<typeof caseIdentity>;
 export type CatalogIdentity = ReturnType<typeof catalogIdentity>;
 export type FundingVariant = ReturnType<typeof fundingVariant>;
@@ -108,7 +117,8 @@ export function sameData(left: unknown, right: unknown): boolean {
 }
 
 export function parseAvdCase(input: unknown): AvdCase {
-  const value = caseShape(copyAvd(input), "$");
+  const data = copyAvd(input);
+  const value = (data as { format?: unknown } | null)?.format === "avd.case.v3" ? caseV3(data, "$") : caseV2(data, "$");
   requireAvd(revisionHash(value) === value.hash, "content_hash_mismatch", "$");
   requireAvd((value.case_revision === 1) === (value.previous_hash === null), "invalid_predecessor", "$.previous_hash");
   requireAvd(value.metadata.created_at <= value.metadata.changed_at, "time_order", "$.metadata");
@@ -244,6 +254,16 @@ export function parseAvdCase(input: unknown): AvdCase {
       "payout_period", entry.id);
     requireAvd(entry.overrides.every(item => item.caseId === value.case_id && item.recordedOn === value.as_of), "override_scope", entry.id);
   }
+  if (value.format === "avd.case.v3") {
+    unique(value.blocking_decisions.map(item => item.id), "$.blocking_decisions");
+    unique(value.blocking_decisions.map(item => canonicalJson(item.key)), "$.blocking_decisions.keys");
+    for (const decision of value.blocking_decisions) {
+      const key = decision.key;
+      requireAvd(value.paths.some(item => item.id === key.path_id)
+        && value.scenarios.some(item => item.id === key.scenario_id)
+        && value.funding_variants.includes(key.funding_variant), "blocking_decision_scope", decision.id);
+    }
+  }
   return value;
 }
 
@@ -254,7 +274,8 @@ export function assertSuccessor(current: AvdCase, next: AvdCase) {
     && next.metadata.changed_at >= current.metadata.changed_at
     && next.metadata.change_id !== current.metadata.change_id && next.mode === current.mode, "revision_metadata", "$.metadata");
   if (next.route !== current.route && next.origin?.kind !== "restore") {
-    requireAvd(next.evidence.every(entry => entry.status === "ungeklaert" && entry.proof_id === null)
+    requireAvd((next.format !== "avd.case.v3" || next.blocking_decisions.length === 0)
+      && next.evidence.every(entry => entry.status === "ungeklaert" && entry.proof_id === null)
       && next.grants.every(entry => entry.treatment === "unresolved")
       && next.funding_pools.every(pool => pool.eligibility === "unresolved"
         && pool.claims.every(item => item.allocation === "open")), "route_evidence_reset", "$.evidence");
@@ -270,6 +291,7 @@ function seal(draft: Omit<AvdCase, "hash">): AvdCase {
 export function originateCase(source: AvdCase, current: AvdCase | null, newId: string, change: Change): AvdCase {
   const next = seal({
     ...source,
+    ...(source.format === "avd.case.v3" ? { blocking_decisions: [] } : {}),
     case_id: newId,
     case_revision: current ? current.case_revision + 1 : 1,
     previous_hash: current?.hash ?? null,

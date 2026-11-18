@@ -363,6 +363,55 @@ test("AVD-P2-IDB atomic ordering of a comparison publication and case write acro
   expect(result.status).toBe(publication === "published" ? "veraltet" : "missing");
 });
 
+test("AVD-P2-IDB rejects invented blocks under P1 release and leaves no current comparison", async ({ page, context }) => {
+  await install(context, page);
+  const result = await page.evaluate(async () => {
+    const a = window.AVDP2, { input, catalog } = a.exportBoundaryFixture(true, false), store = await a.openAvdStore();
+    async function issue(fn: () => Promise<unknown>) {
+      try { await fn(); return "accepted"; } catch (error) { return (error as {code: string}).code; }
+    }
+    try {
+      await store.registerCatalog(catalog, null);
+      await store.createCase(input);
+      const invalid = a.unsupportedBlocks(a.candidate(input, catalog));
+      return {
+        publish: await issue(() => store.publishComparison(invalid, a.caseRef(input), null)),
+        report: await issue(() => store.checkExport(a.caseRef(input), a.comparisonRef(invalid), false, "documented_blocks")),
+        state: (await store.readCurrentComparison(input.case_id)).status
+      };
+    } finally { store.close(); }
+  });
+  expect(result).toEqual({ publish: "block_proof_mismatch", report: "export_not_current", state: "missing" });
+});
+
+test("AVD-P2-IDB evidence change invalidates a verified mixed comparison without changing its original", async ({ page, context }) => {
+  await install(context, page);
+  const result = await page.evaluate(async () => {
+    const a = window.AVDP2, { input, catalog } = a.manualBlockFixture(), store = await a.openAvdStore();
+    async function issue(fn: () => Promise<unknown>) {
+      try { await fn(); return "accepted"; } catch (error) { return (error as {code: string}).code; }
+    }
+    try {
+      await store.registerCatalog(catalog, null);
+      await store.createCase(input);
+      const mixed = a.candidate(input, catalog), pointer = a.comparisonRef(mixed);
+      await store.publishComparison(mixed, a.caseRef(input), null);
+      const active = await store.readCurrentComparison(input.case_id);
+      const capital = await issue(() => store.checkExport(a.caseRef(input), pointer, false, "capital_projection"));
+      const changed = a.nextCase(input, draft => { draft.evidence[2].proof_id = "new-evidence-revision"; });
+      await store.appendCase(a.caseRef(input), changed);
+      return { active, capital, now: await store.readCurrentComparison(input.case_id),
+        report: await issue(() => store.checkExport(a.caseRef(changed), pointer, false, "documented_blocks")),
+        historical: await store.readHistoricalComparison(input.case_id, pointer), mixed };
+    } finally { store.close(); }
+  });
+  expect(result.active).toMatchObject({ status: "current", result_capability: { status: "partially_numeric", numeric: 11, blocked: 1 } });
+  expect(result.capital).toBe("synthetic_export_forbidden");
+  expect(result.now.status).toBe("veraltet");
+  expect(result.report).toBe("export_not_current");
+  expect(result.historical.comparison).toEqual(result.mixed);
+});
+
 for (const released of [false, true]) {
   test("AVD-P2-IDB export eligibility uses P1 release metadata: " + released, async ({ page, context }) => {
     await install(context, page);
@@ -371,7 +420,7 @@ for (const released of [false, true]) {
       try {
         await store.registerCatalog(catalog, null);
         await store.createCase(input);
-        const candidate = a.candidate(input, catalog, { blocked: true });
+        const candidate = a.candidate(input, catalog);
         await store.publishComparison(candidate, a.caseRef(input), null);
         async function check(purpose: "capital_projection" | "documented_blocks") {
           try { return await store.checkExport(a.caseRef(input), a.comparisonRef(candidate), false, purpose); }

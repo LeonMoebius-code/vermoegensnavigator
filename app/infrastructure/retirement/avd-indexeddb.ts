@@ -2,7 +2,7 @@ import { appendCatalogRevision } from "../../domain/retirement/catalog-validatio
 import type { ValidatedCatalog } from "../../domain/retirement/catalog-contract";
 import { assertSuccessor, caseIdentity, caseRef, catalogIdentity, originateCase, parseAvdCase, sameData,
   type AvdCase, type CaseIdentity, type CatalogIdentity } from "../../domain/retirement/avd-case";
-import { assertCatalogPublication, catalogRef, comparisonIdentity, comparisonRef, comparisonResultCapability, parseCalculation, parseComparison,
+import { assertCatalogPublication, catalogRef, comparisonIdentity, comparisonRef, parseCalculation, parseComparison,
   readCatalog, validateCaseCatalog, verifyComparison,
   type Calculation, type Comparison, type ComparisonIdentity, type ResultCapability } from "../../domain/retirement/avd-comparison";
 import { AvdError, copyAvd, id, nullable, oneOf, requireAvd, shape, stamp } from "../../domain/retirement/avd-data";
@@ -171,7 +171,7 @@ async function verifyStoredComparison(tx: Transaction, comparison: Comparison, i
   await checkComparisonPredecessor(tx, input.case_id, comparison);
   const result = verifyComparison(input, catalog, comparison);
   await ledger(tx, input.case_id, result.comparison, false);
-  return result.comparison;
+  return result;
 }
 
 class AvdStore {
@@ -327,9 +327,9 @@ class AvdStore {
     if (!sameData(comparison.dependency_manifest.case, head.case) || !sameData(authority, input.catalog)) {
       return { status: "veraltet", case: head.case, comparison: head.comparison };
     }
-    const validated = await verifyStoredComparison(tx, comparison, input, catalog);
-    return { status: "current", completeness: "complete", result_capability: comparisonResultCapability(validated),
-      case: head.case, comparison: validated };
+    const verified = await verifyStoredComparison(tx, comparison, input, catalog);
+    return { status: "current", completeness: "complete", result_capability: verified.result_capability,
+      case: head.case, comparison: verified.comparison };
   }
 
   readCurrentComparison(caseId: string): Promise<CurrentComparison> {
@@ -343,9 +343,9 @@ class AvdStore {
     return this.run("readonly", async tx => {
       const comparison = await readComparisonRecord(tx, key, pointer);
       const { input, catalog } = await readInput(tx, comparison.dependency_manifest.case);
-      const validated = await verifyStoredComparison(tx, comparison, input, catalog);
-      return { status: "historisch_fixiert", completeness: "complete", result_capability: comparisonResultCapability(validated),
-        input, catalog, comparison: validated };
+      const verified = await verifyStoredComparison(tx, comparison, input, catalog);
+      return { status: "historisch_fixiert", completeness: "complete", result_capability: verified.result_capability,
+        input, catalog, comparison: verified.comparison };
     });
   }
 

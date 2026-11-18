@@ -1,4 +1,5 @@
-import { caseRef, type AvdCase } from "../../app/domain/retirement/avd-case";
+import { jsonHash } from "../../app/domain/case/recovery-hash";
+import { caseRef, type AvdCase, type BlockingDecision } from "../../app/domain/retirement/avd-case";
 import { catalogRef, keyOf, planComparison, type Comparison, type Calculation } from "../../app/domain/retirement/avd-comparison";
 import { reference, revisionHash, MODEL_VERSIONS } from "../../app/domain/retirement/identity-contract";
 import type { Catalog, CatalogRecord } from "../../app/domain/retirement/catalog-contract";
@@ -25,7 +26,7 @@ export function fixture(addSharedSource = false) {
     reseal(catalog);
   }
   const source = reference(record(catalog, addSharedSource ? "synthetic-independent-rule-source" : "synthetic-source", "source"));
-  const value: Omit<AvdCase, "hash"> = {
+  const value: Omit<Extract<AvdCase, {format: "avd.case.v2"}>, "hash"> = {
     format: "avd.case.v2", case_id: "artificial-case", case_revision: 1, previous_hash: null, origin: null,
     catalog: catalogRef(catalog), mode: "synthetic_fixture", as_of: catalog.asOf, route: "A",
     metadata: { created_at: TIME, changed_at: TIME, changed_by: "artificial-agent", change_id: "change-1" },
@@ -98,7 +99,7 @@ export function nextCatalog(input: Catalog, updateSource = false): Catalog {
 }
 
 /** Artificial records exercising export approval without producing capital values. */
-export function exportBoundaryFixture(released: boolean) {
+export function exportBoundaryFixture(released: boolean, openInputs = true) {
   const { catalog, input } = fixture();
   catalog.origin = "working";
   if (released) for (const record of catalog.records) {
@@ -111,6 +112,7 @@ export function exportBoundaryFixture(released: boolean) {
   const working = mutable(input);
   working.mode = "working";
   working.catalog = catalogRef(catalog);
+  if (openInputs) for (const scenario of working.scenarios) scenario.annual_return_bps = null;
   // Publication metadata changes the record hashes. Rebind all references.
   function rebind(value: unknown): void {
     if (Array.isArray(value)) { value.forEach(rebind); return; }
@@ -124,6 +126,19 @@ export function exportBoundaryFixture(released: boolean) {
   }
   rebind(working);
   return { input: seal(working), catalog };
+}
+
+export function manualBlockFixture() {
+  const { input, catalog } = fixture();
+  const draft = mutable(input);
+  const evidence = { ...draft.evidence[0], id: "contract-evidence", axis: "contract" as const,
+    child_id: null, status: "nicht_erfuellt" as const, proof_id: "synthetic-contract-decision" };
+  draft.evidence.push(evidence);
+  const [entry] = planComparison(seal(draft), catalog).entries;
+  const decision: BlockingDecision = { id: "decision-1", key: entry.key, basis_hash: entry.basis_hash,
+    reason: "contract_requirement_unmet", evidence_id: evidence.id, evidence_hash: jsonHash(evidence),
+    proof_id: evidence.proof_id, decided_on: draft.as_of, decided_by: "synthetic-agent" };
+  return { input: seal({ ...draft, format: "avd.case.v3" as const, blocking_decisions: [decision] }), catalog };
 }
 
 export function productCostCatalog(input: Catalog): Catalog {
@@ -155,8 +170,21 @@ export function productCostCatalog(input: Catalog): Catalog {
   return reseal(next);
 }
 
+export function unsupportedBlocks(value: Comparison, count = value.subresults.length, legacy = false): Comparison {
+  const subresults = value.subresults.map((item, i) => i >= count ? item : {
+    ...item, calculation: legacy
+      ? seal({ ...item.calculation, format: "avd.calculation.v2" as const,
+          result: { status: "nicht_berechenbar" as const, reason: "Invented reason " + i } })
+      : seal({ ...item.calculation, format: "avd.calculation.v3" as const,
+          result: { status: "nicht_berechenbar" as const,
+            block: { code: "scenario_return_open" as const, reference_id: item.key.scenario_id },
+            explanation: "Invented reason " + i } })
+  });
+  return seal({ ...value, subresults });
+}
+
 export function candidate(input: AvdCase, catalog: Catalog, options: {
-  previous?: Comparison; reuse?: string; blocked?: boolean; run?: string; at?: string
+  previous?: Comparison; reuse?: string; run?: string; at?: string
 } = {}): Comparison {
   const plan = planComparison(input, catalog);
   const comparison_revision = (options.previous?.comparison_revision ?? 0) + 1;
@@ -165,11 +193,13 @@ export function candidate(input: AvdCase, catalog: Catalog, options: {
     const subresult_id = "sub-" + comparison_revision + "-" + i;
     const from = options.reuse === entry.key.path_id
       ? options.previous?.subresults.find(row => keyOf(row.key) === keyOf(entry.key)) : undefined;
-    const result: Calculation["result"] = options.blocked ? { status: "nicht_berechenbar", reason: "Synthetic missing evidence" } :
-      { status: entry.key.funding_variant === "with_conditional" ? "bedingt_berechnet" : "aktuell_berechnet",
+    const block = entry.blockers[0];
+    const result: Extract<Calculation, {format: "avd.calculation.v3"}>["result"] = block
+      ? { status: "nicht_berechenbar", block, explanation: null }
+      : { status: entry.key.funding_variant === "with_conditional" ? "bedingt_berechnet" : "aktuell_berechnet",
         capital_cents: 100000 + i };
     const calculation: Calculation = from?.calculation ?? seal({
-      format: "avd.calculation.v2" as const, calculation_id: "calc-" + (options.run ?? comparison_revision) + "-" + i,
+      format: "avd.calculation.v3" as const, calculation_id: "calc-" + (options.run ?? comparison_revision) + "-" + i,
       key: entry.key, dependency_hash: entry.dependency_hash, as_of: input.as_of, result,
       origin: { case: caseRef(input), subresult_id, comparison_revision, calculated_at: recorded_at }
     });

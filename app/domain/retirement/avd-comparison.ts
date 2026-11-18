@@ -3,8 +3,8 @@ import { applyCaseOverride, parseCatalog, publicCatalog, validateCostSelection }
 import { MODEL_VERSIONS, refKey, revisionHash, type Checked, type Kind, type Ref } from "./identity-contract";
 import type { ValidatedCatalog } from "./catalog-contract";
 import type { Channel } from "./source-contract";
-import { caseIdentity, caseRef, caseReferences, catalogIdentity, fundingVariant, parseAvdCase, pathReferences,
-  sameData, type AvdCase, type AvdPath, type AvdScenario, type CatalogIdentity, type FundingVariant } from "./avd-case";
+import { caseIdentity, caseRef, caseReferences, catalogIdentity, parseAvdCase, pathReferences, subresultKey,
+  sameData, type AvdCase, type AvdPath, type AvdScenario, type BlockingDecision, type CatalogIdentity, type FundingVariant } from "./avd-case";
 import { amountCents, copyAvd, day, description, digest, id, kind, list, nullable, oneOf, requireAvd, revision,
   shape, stamp, unique, type Rule } from "./avd-data";
 
@@ -123,8 +123,7 @@ export function validateCaseCatalog(caseInput: unknown, catalogInput: unknown): 
   return value;
 }
 
-const keyShape = shape({ path_id: id, scenario_id: id, funding_variant: fundingVariant });
-export type SubresultKey = ReturnType<typeof keyShape>;
+export type SubresultKey = ReturnType<typeof subresultKey>;
 export const keyOf = (key: SubresultKey) => JSON.stringify([key.path_id, key.scenario_id, key.funding_variant]);
 
 function dependencies(value: AvdCase, path: AvdPath, scenario: AvdScenario, funding: FundingVariant, roots: readonly Ref[],
@@ -166,10 +165,32 @@ function dependencies(value: AvdCase, path: AvdPath, scenario: AvdScenario, fund
     assumptions: value.assumptions, sources: value.sources, path, scenario, funding, catalog_refs };
 }
 
+const blockProof = shape({
+  code: oneOf("model_blocked", "K2_blocked", "payout_costs_open", "scenario_return_open",
+    "payment_open", "funding_contribution_open", "conditional_grant_missing", "manual_decision"),
+  reference_id: id
+});
+type BlockProof = ReturnType<typeof blockProof>;
+
+function checkManualBlock(decision: BlockingDecision, snapshot: ReturnType<typeof dependencies>, basisHash: string) {
+  const evidence = snapshot.evidence.find(item => item.id === decision.evidence_id);
+  requireAvd(evidence && evidence.axis === "contract"
+    && evidence.status === (decision.reason === "contract_requirement_unmet" ? "nicht_erfuellt" : "ungeklaert")
+    && evidence.proof_id === decision.proof_id && evidence.sources.length > 0
+    && evidence.checked_on <= decision.decided_on && decision.decided_on <= snapshot.as_of
+    && snapshot.path.people.includes(evidence.person_id) && snapshot.path.contracts.includes(evidence.contract_id)
+    && (evidence.child_id === null || snapshot.path.children.includes(evidence.child_id))
+    && !snapshot.funding_pools.some(item => item.assignments.some(grant => grant.evidence_id === evidence.id))
+    && jsonHash(evidence) === decision.evidence_hash, "blocking_decision_evidence", decision.id);
+  requireAvd(decision.basis_hash === basisHash, "blocking_decision_basis", decision.id);
+}
+
 function planFor(value: AvdCase, catalog: CurrentCatalog) {
   assertCaseCatalog(value, catalog);
   requireAvd(value.paths.length && value.scenarios.length && value.funding_variants.length, "empty_comparison", "$");
   const entries = [];
+  const decisions = new Map(value.format === "avd.case.v3"
+    ? value.blocking_decisions.map(decision => [keyOf(decision.key), decision]) : []);
   for (const path of value.paths) {
     const { savings, payout, rootRefs, available } = pathContext(value, path, catalog);
     const costChecks = new Map<string, ReturnType<typeof validateCostSelection>>();
@@ -188,21 +209,40 @@ function planFor(value: AvdCase, catalog: CurrentCatalog) {
       }
       const blocked = !available || [savings, payout].some(cost => cost.mode === "K2" && cost.status === "blocked")
         || payout.mode === "open";
+      const costBlocks: BlockProof[] = [];
       if (!selection.ok) {
-        requireAvd(blocked && ["model_blocked", "K2_blocked", "payout_costs_open"].includes(selection.issue.code),
-          selection.issue.code, selection.issue.path);
+        const { code, path: issuePath } = selection.issue;
+        requireAvd(blocked && (code === "model_blocked" || code === "K2_blocked" || code === "payout_costs_open"),
+          code, issuePath);
+        const reference_id = code === "model_blocked" ? path.product.id
+          : code === "K2_blocked" && savings.mode === "K2" && savings.status === "blocked"
+            ? path.savings_cost.id : path.payout_cost.id;
+        costBlocks.push({ code, reference_id });
       }
       for (const funding of value.funding_variants) {
         const key = { path_id: path.id, scenario_id: scenario.id, funding_variant: funding };
         const snapshot = dependencies(value, path, scenario, funding, rootRefs, catalog);
-        const dependency_hash = jsonHash({ format: "avd.dependencies.v2", snapshot, key,
+        const basis_hash = jsonHash({ format: "avd.dependencies.v2", snapshot, key,
           savings_mode: savings.mode, payout_mode: payout.mode });
         const modes = { savings: savings.mode, payout: payout.mode };
-        const hasConditionalGrant = snapshot.grants.some(item => item.treatment === "conditional");
-        entries.push({ key, dependency_hash, snapshot, modes, blocked: !selection.ok ||
-          scenario.annual_return_bps === null || snapshot.payments.some(item => item.amount.class === "O") ||
-          snapshot.funding_pools.some(item => item.contributions.some(payment => payment.amount.class === "O")) ||
-          (funding === "with_conditional" && !hasConditionalGrant) });
+        const blockers = [...costBlocks];
+        if (scenario.annual_return_bps === null) blockers.push({ code: "scenario_return_open", reference_id: scenario.id });
+        for (const payment of snapshot.payments) {
+          if (payment.amount.class === "O") blockers.push({ code: "payment_open", reference_id: payment.id });
+        }
+        const openContributions = new Set(snapshot.funding_pools.flatMap(item => item.contributions)
+          .filter(payment => payment.amount.class === "O").map(payment => payment.id));
+        for (const reference_id of openContributions) blockers.push({ code: "funding_contribution_open", reference_id });
+        if (funding === "with_conditional" && !snapshot.grants.some(item => item.treatment === "conditional")) {
+          blockers.push({ code: "conditional_grant_missing", reference_id: path.id });
+        }
+        const decision = decisions.get(keyOf(key));
+        if (decision) {
+          checkManualBlock(decision, snapshot, basis_hash);
+          blockers.push({ code: "manual_decision", reference_id: decision.id });
+        }
+        const dependency_hash = decision ? jsonHash({ basis_hash, decision }) : basis_hash;
+        entries.push({ key, dependency_hash, basis_hash, snapshot, modes, blockers });
       }
     }
   }
@@ -221,22 +261,30 @@ export type ComparisonPlan = ReturnType<typeof planComparison>;
 const calculationOrigin = shape({
   case: caseIdentity, comparison_revision: revision, subresult_id: id, calculated_at: stamp
 });
-const blockedResult = shape({ status: oneOf("nicht_berechenbar"), reason: description });
-const numericResult = shape({ status: oneOf("aktuell_berechnet", "bedingt_berechnet"), capital_cents: amountCents });
-const resultRule: Rule<ReturnType<typeof blockedResult> | ReturnType<typeof numericResult>> = (input, at) =>
-  (input as { status?: unknown } | null)?.status === "nicht_berechenbar"
-    ? blockedResult(input, at) : numericResult(input, at);
-const calculationShape = shape({
-  format: oneOf("avd.calculation.v2"), calculation_id: id, hash: digest, dependency_hash: digest,
-  key: keyShape, as_of: day,
-  origin: calculationOrigin, result: resultRule
+const blockedResult = shape({
+  status: oneOf("nicht_berechenbar"), block: blockProof, explanation: nullable(description)
 });
+// Read the legacy structure to keep original IDs and predecessor references. It cannot certify a block.
+const legacyBlockedResult = shape({ status: oneOf("nicht_berechenbar"), reason: description });
+const numericResult = shape({ status: oneOf("aktuell_berechnet", "bedingt_berechnet"), capital_cents: amountCents });
+function resultRule<T>(blocked: Rule<T>): Rule<T | ReturnType<typeof numericResult>> {
+  return (input, at) => (input as { status?: unknown } | null)?.status === "nicht_berechenbar"
+    ? blocked(input, at) : numericResult(input, at);
+}
+const calculationFields = {
+  calculation_id: id, hash: digest, dependency_hash: digest, key: subresultKey, as_of: day, origin: calculationOrigin
+};
+const calculationV2 = shape({ ...calculationFields, format: oneOf("avd.calculation.v2"), result: resultRule(legacyBlockedResult) });
+const calculationV3 = shape({ ...calculationFields, format: oneOf("avd.calculation.v3"), result: resultRule(blockedResult) });
+type CalculationRecord = ReturnType<typeof calculationV2> | ReturnType<typeof calculationV3>;
+const calculationShape: Rule<CalculationRecord> = (input, at) =>
+  (input as { format?: unknown } | null)?.format === "avd.calculation.v3" ? calculationV3(input, at) : calculationV2(input, at);
 const entryShape = shape({
-  subresult_id: id, key: keyShape, calculation: calculationShape
+  subresult_id: id, key: subresultKey, calculation: calculationShape
 });
 const manifestShape = shape({
   format: oneOf("avd.dependencies.v2"), case: caseIdentity, catalog: catalogIdentity,
-  entries: list(shape({ key: keyShape, dependency_hash: digest }), 96, 1)
+  entries: list(shape({ key: subresultKey, dependency_hash: digest }), 96, 1)
 });
 const comparisonShape = shape({
   format: oneOf("avd.comparison.v2"), comparison_revision: revision, previous_hash: nullable(digest), hash: digest,
@@ -251,7 +299,7 @@ export type ResultCapability = Readonly<{
 }>;
 
 /** Derive this only from a validated, complete comparison. */
-export function comparisonResultCapability(comparison: Comparison): ResultCapability {
+function comparisonResultCapability(comparison: Comparison): ResultCapability {
   const blocked = comparison.subresults.filter(item => item.calculation.result.status === "nicht_berechenbar").length;
   const numeric = comparison.subresults.length - blocked;
   return { status: blocked === 0 ? "fully_numeric" : numeric === 0 ? "documented_blocks" : "partially_numeric",
@@ -305,8 +353,11 @@ export function verifyComparison(caseInput: unknown, catalogInput: unknown, cand
       requireAvd(sameData(calculation.origin.case, caseRef(value)) && calculation.origin.subresult_id === item.subresult_id
         && calculation.origin.calculated_at >= value.metadata.changed_at, "calculation_origin", item.subresult_id);
     }
-    if (calculation.result.status !== "nicht_berechenbar") {
-      requireAvd(value.mode === "synthetic_fixture" && !entry.blocked, "real_calculation_unavailable", item.subresult_id);
+    if (calculation.result.status === "nicht_berechenbar") {
+      const proof = "block" in calculation.result ? calculation.result.block : null;
+      requireAvd(proof && entry.blockers.some(item => sameData(item, proof)), "block_proof_mismatch", item.subresult_id);
+    } else {
+      requireAvd(value.mode === "synthetic_fixture" && entry.blockers.length === 0, "real_calculation_unavailable", item.subresult_id);
       requireAvd(calculation.result.status === (item.key.funding_variant === "with_conditional" ? "bedingt_berechnet" : "aktuell_berechnet"),
         "result_funding_variant", item.subresult_id);
     }
