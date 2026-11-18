@@ -12,15 +12,16 @@ Publikation bereit.
 
 ## Fallvertrag
 
-- avd.case.v1 hat eine Fall-ID, eine fortlaufende Eingaberevision, den Hash des
+- avd.case.v2 hat eine Fall-ID, eine fortlaufende Eingaberevision, den Hash des
   direkten Vorgängers und einen Hash über den gesamten eigenen Inhalt. Ein
   technischer Verweis auf den allgemeinen Vermögensfall verbindet weder
   Speicher noch Vermögen.
 - Person, Parteirolle, Kind und Vertrag sind innerhalb der Fall-ID adressiert.
   Beiträge und Zahlungen besitzen eine eigene ID, Vertrags- und
   Personenbezug, einen Tag und eine explizite Einmal-/Monatsdeklaration.
-  Förderereignisse beziehen sich auf Beitragsjahr, Regimeversion, personelle
-  Zuordnung und eine gesonderte Evidenz-ID. Die Zahlbeträge sind Centbeträge.
+  Förderereignisse beziehen sich auf Beitragsjahr, Fördertopf und Anspruch,
+  konkrete Vertragszuweisung und eine gesonderte Evidenz-ID. Die Zahlbeträge
+  sind Centbeträge.
 - B/A/S/O klassifiziert Werte. O speichert null und einen Grund. Eine bewusst
   numerische Null benötigt eine Klasse mit Wert. Evidenz ist getrennt und
   trägt ihren Personen-, Vertrags-, Jahres- und Nachweisbezug. Eine als
@@ -43,9 +44,32 @@ Publikation bereit.
   gelesen werden. Für einen neuen aktuellen Vergleich muss der Fall den
   aktiven Katalogstand verwenden.
 
+## Personenbezogener Fördertopf
+
+- Pro Person und Beitragsjahr gibt es höchstens einen Fördertopf mit genau
+  einer Regime-ID und exakter Regelversion. Evidenz und Förderereignisse
+  weisen auf denselben Topf, einen beteiligten Vertrag und das passende
+  Regime. Ein Kind kann pro Beitragsjahr nur einem Anspruch zugeordnet sein.
+- Grundzulage, Berufseinsteigerbonus und Kinderzulage sind getrennte
+  Ansprüche. Je Komponente und gegebenenfalls Kind wird der Gesamtbetrag
+  einmal gespeichert. Eine geschlossene Zuweisung muss auf den Cent
+  vollständig sein, mit höchstens einer datierten Zuweisung je Anspruch
+  und Vertrag. Zwei volle Zuweisungen desselben Anspruchs überschreiten
+  den einmaligen Gesamtbetrag und werden abgewiesen.
+- Unmittelbare Berechtigung erlaubt höchstens zwei Empfängerverträge,
+  mittelbare höchstens einen und setzt den expliziten Bezug zum unmittelbar
+  berechtigten Partner-Topf desselben Jahres voraus. Das prüft den Vertrag,
+  keine gesetzliche Anspruchsentstehung. Ungeklärte Berechtigung hat keine
+  geschlossene Zuweisung. Offene Aufteilungen können einen bedingten
+  Gesamtbetrag oder O/null dokumentieren, aber keine numerischen
+  Vertragsereignisse auslösen. Es gibt keine automatische Verteilung.
+- Die frühere unveröffentlichte Version v1 wird am Formatrand abgelehnt.
+  Fall, Vergleich, Berechnung und Manifest verwenden v2. P1, Datenbankaufbau
+  und allgemeines Schema 11 bleiben unberührt.
+
 ## Vergleich und Herkunft
 
-avd.comparison.v1 fixiert genau eine Fallrevision und einen Katalogstand.
+avd.comparison.v2 fixiert genau eine Fallrevision und einen Katalogstand.
 Das erwartete Schlüsselfeld entsteht aus Pfad, Szenario und Fördervariante.
 Ein Pfad identifiziert Produkt, Tarif, Modell, die beiden Kostenstufen,
 Anlagegewichte und die betroffenen Personen, Kinder und Verträge.
@@ -65,14 +89,20 @@ in zwölf eindeutig gebundenen Teilergebnissen.
 Die Abhängigkeitsfunktion projiziert die für den jeweiligen Schlüssel
 deklarierten Fakten. Dazu gehören beteiligte Personen und Kinder, Verträge,
 Beitrags- und Förderereignisse, Evidenz, Riesterwerte, Regime, Annahmen,
-Rentenangebote, Szenario und Pfad. Regime und gemeinsame Quellen sind
-konservativ fallweit wirksam. Die ausgewählte Fördervariante schließt
+Rentenangebote, Szenario und Pfad. Ein Pfad übernimmt im gemeinsamen
+Förderanteil jeden seinen Verträgen zugeordneten Fördertopf und einen
+gegebenenfalls unmittelbar verknüpften Partner-Topf. Der Hash bindet die
+beteiligten Verträge, jahresrelevanten regelmäßigen und einmaligen
+Eigenbeiträge, die exakte Regimeversion mit Quellen, Evidenz, Ansprüche samt
+Kindidentitäten sowie alle Zuweisungen. Die gutschriftbezogene Sicht
+bleibt nach eigenem Vertrag und gewählter Fördervariante getrennt.
+Explizite Fallquellen bleiben fallweit wirksam. Die ausgewählte Fördervariante schließt
 unbestätigte Zulagen aus oder nimmt deklarierte bedingte Szenariowerte hinzu.
 Offene Ansprüche werden weiterhin durch Evidenz abgebildet.
 
 Die Projektion sammelt P1-Abhängigkeiten aus Datenreferenzen und Zitaten bis
 zum letzten aktiven Katalogdatensatz. Die gemeinsamen Katalogbilder und
-Kind-Revisionen bleiben referenzierbar. Historische Vorgänger werden als
+Eingaberevisionen bleiben referenzierbar. Historische Vorgänger werden als
 Historie aufbewahrt. Der Teilhash enthält nur die tatsächliche Projektion
 einschließlich der exakten Referenzen, ohne die neue Fall- oder
 Katalogrevisionsnummer pauschal einzumischen. Der vollständige Vergleich
@@ -93,6 +123,13 @@ Zahlen enthalten. Arbeitsfälle können in P2 einen vollständigen Vergleich
 fachlicher Sperrzustände speichern. Alte Ergebnisse sind als historisch
 fixiert adressierbar. Ein veralteter aktueller Verweis gibt nur die Identität
 zurück, keine Ergebnisse als Ersatz.
+
+Ein aktueller gelesener Vergleich ist validiert und vollständig. Zusätzlich
+leitet die Schnittstelle den Ergebnisfähigkeitsstatus aus den gespeicherten
+Teilergebnissen ab: `fully_numeric`, `partially_numeric` oder
+`documented_blocks`, jeweils mit Anzahl numerischer und gesperrter Ergebnisse.
+Veraltete Verweise liefern keinen Ergebnisfähigkeitsstatus. Vollständig
+dokumentiert und vollständig numerisch sind voneinander getrennte Aussagen.
 
 ## IndexedDB und Atomarität
 
@@ -122,10 +159,15 @@ gemeinsam. Dadurch sind sie auch zwischen zwei Tabs serialisiert. Diese
 bewusst einfache Version serialisiert auch Schreiboperationen auf
 verschiedenen Fällen. Rechenarbeit findet außerhalb der Transaktion statt.
 
-checkExport nimmt den erwarteten Fall, den konkreten Vergleich und die
-ausdrückliche Auskunft zu ungespeicherten Änderungen entgegen. Es prüft in
+checkExport verlangt den erwarteten Fall, den konkreten Vergleich, die
+Auskunft zu ungespeicherten Änderungen und den beabsichtigten Ausgabezweck. Es prüft in
 einer konsistenten Lesetransaktion Aktualität und Vollständigkeit, verbietet
-Fixtures und verwendet die P1-Publikationsprüfung für export. Der spätere
+Fixtures und verwendet die P1-Publikationsprüfung für export.
+Der Ausgabedienst muss zusätzlich den Zweck `capital_projection` oder
+`documented_blocks` ausdrücklich wählen. Die Kapitalprognose verlangt
+vollständig numerische Ergebnisse. Der Sperrfallbericht setzt mindestens
+einen dokumentierten Sperrpfad voraus und erhält dessen Ergebnisfähigkeit
+im Rückgabevertrag. Der spätere
 Ausgabedienst muss die Grenze vor tatsächlicher Ausgabe erneut prüfen. P2
 reserviert dabei keinen Export-ID-Wert und speichert keine Ausgabedatei.
 

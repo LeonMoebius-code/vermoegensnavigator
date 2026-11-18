@@ -131,18 +131,38 @@ function dependencies(value: AvdCase, path: AvdPath, scenario: AvdScenario, fund
   catalog: CurrentCatalog) {
   const subject = (item: {contract_id: string; child_id: string | null}) =>
     path.contracts.includes(item.contract_id) && (item.child_id === null || path.children.includes(item.child_id));
-  const people = value.people.filter(item => path.people.includes(item.id) || path.children.includes(item.id));
+  const pathPools = value.funding_pools.filter(pool => pool.contract_ids.some(contract => path.contracts.includes(contract)));
+  const poolIds = new Set(pathPools.flatMap(pool => pool.direct_pool_id === null ? [pool.id] : [pool.id, pool.direct_pool_id]));
+  const pools = value.funding_pools.filter(pool => poolIds.has(pool.id));
+  const poolPeople = new Set(pools.map(pool => pool.person_id));
+  const claimChildren = new Set(pools.flatMap(pool => pool.claims.map(item => item.child_id)));
+  const funding_pools = pools.map(pool => {
+    const year = String(pool.year).padStart(4, "0");
+    return {
+      pool,
+      contracts: value.contracts.filter(item => pool.contract_ids.includes(item.id)),
+      contributions: value.payments.filter(item => item.kind !== "payout" && pool.contract_ids.includes(item.contract_id)
+        && item.on <= year + "-12-31"
+        && (item.cadence === "once" ? item.on >= year + "-01-01"
+          : item.until === null || item.until >= year + "-01-01")),
+      // Even excluded conditional grants affect the identity of the shared allocation.
+      assignments: value.grants.filter(item => item.pool_id === pool.id)
+    };
+  });
+  const people = value.people.filter(item => path.people.includes(item.id)
+    || path.children.includes(item.id) || poolPeople.has(item.id) || claimChildren.has(item.id));
   const contracts = value.contracts.filter(item => path.contracts.includes(item.id));
-  const evidence = value.evidence.filter(subject);
+  const evidence = value.evidence.filter(item => poolIds.has(item.pool_id));
   const payments = value.payments.filter(subject);
   const riester = value.riester.filter(item => path.contracts.includes(item.contract_id));
-  const grants = value.grants.filter(item => subject(item) && (item.treatment === "confirmed" ||
+  const grants = value.grants.filter(item => path.contracts.includes(item.contract_id) && (item.treatment === "confirmed" ||
     (funding === "with_conditional" && item.treatment === "conditional")));
+  const regimes = value.regimes.filter(regime => pools.some(pool => pool.regime_id === regime.id));
   const catalog_refs = catalog.closure([...roots, ...value.assumptions, ...value.sources,
-    ...scenario.assumptions, ...scenario.sources, ...value.regimes.flatMap(item => item.sources),
+    ...scenario.assumptions, ...scenario.sources, ...regimes.flatMap(item => item.sources),
     ...evidence.flatMap(item => item.sources), ...riester.flatMap(item => [...item.parameters, ...item.sources])]);
   return { case_id: value.case_id, mode: value.mode, as_of: value.as_of, route: value.route,
-    people, contracts, evidence, payments, riester, grants, regimes: value.regimes,
+    people, contracts, evidence, payments, riester, grants, regimes, funding_pools,
     assumptions: value.assumptions, sources: value.sources, path, scenario, funding, catalog_refs };
 }
 
@@ -175,18 +195,19 @@ function planFor(value: AvdCase, catalog: CurrentCatalog) {
       for (const funding of value.funding_variants) {
         const key = { path_id: path.id, scenario_id: scenario.id, funding_variant: funding };
         const snapshot = dependencies(value, path, scenario, funding, rootRefs, catalog);
-        const dependency_hash = jsonHash({ format: "avd.dependencies.v1", snapshot, key,
+        const dependency_hash = jsonHash({ format: "avd.dependencies.v2", snapshot, key,
           savings_mode: savings.mode, payout_mode: payout.mode });
         const modes = { savings: savings.mode, payout: payout.mode };
         const hasConditionalGrant = snapshot.grants.some(item => item.treatment === "conditional");
         entries.push({ key, dependency_hash, snapshot, modes, blocked: !selection.ok ||
           scenario.annual_return_bps === null || snapshot.payments.some(item => item.amount.class === "O") ||
+          snapshot.funding_pools.some(item => item.contributions.some(payment => payment.amount.class === "O")) ||
           (funding === "with_conditional" && !hasConditionalGrant) });
       }
     }
   }
   const dependency_manifest = {
-    format: "avd.dependencies.v1" as const, case: caseRef(value), catalog: catalogRef(catalog.value),
+    format: "avd.dependencies.v2" as const, case: caseRef(value), catalog: catalogRef(catalog.value),
     entries: entries.map(({ key, dependency_hash }) => ({ key, dependency_hash }))
   };
   return { dependency_manifest, entries };
@@ -206,7 +227,7 @@ const resultRule: Rule<ReturnType<typeof blockedResult> | ReturnType<typeof nume
   (input as { status?: unknown } | null)?.status === "nicht_berechenbar"
     ? blockedResult(input, at) : numericResult(input, at);
 const calculationShape = shape({
-  format: oneOf("avd.calculation.v1"), calculation_id: id, hash: digest, dependency_hash: digest,
+  format: oneOf("avd.calculation.v2"), calculation_id: id, hash: digest, dependency_hash: digest,
   key: keyShape, as_of: day,
   origin: calculationOrigin, result: resultRule
 });
@@ -214,15 +235,28 @@ const entryShape = shape({
   subresult_id: id, key: keyShape, calculation: calculationShape
 });
 const manifestShape = shape({
-  format: oneOf("avd.dependencies.v1"), case: caseIdentity, catalog: catalogIdentity,
+  format: oneOf("avd.dependencies.v2"), case: caseIdentity, catalog: catalogIdentity,
   entries: list(shape({ key: keyShape, dependency_hash: digest }), 96, 1)
 });
 const comparisonShape = shape({
-  format: oneOf("avd.comparison.v1"), comparison_revision: revision, previous_hash: nullable(digest), hash: digest,
+  format: oneOf("avd.comparison.v2"), comparison_revision: revision, previous_hash: nullable(digest), hash: digest,
   recorded_at: stamp, dependency_manifest: manifestShape, subresults: list(entryShape, 96, 1)
 });
 export type Calculation = ReturnType<typeof calculationShape>;
 export type Comparison = ReturnType<typeof comparisonShape>;
+export type ResultCapability = Readonly<{
+  status: "fully_numeric" | "partially_numeric" | "documented_blocks";
+  numeric: number;
+  blocked: number;
+}>;
+
+/** Derive this only from a validated, complete comparison. */
+export function comparisonResultCapability(comparison: Comparison): ResultCapability {
+  const blocked = comparison.subresults.filter(item => item.calculation.result.status === "nicht_berechenbar").length;
+  const numeric = comparison.subresults.length - blocked;
+  return { status: blocked === 0 ? "fully_numeric" : numeric === 0 ? "documented_blocks" : "partially_numeric",
+    numeric, blocked };
+}
 export const comparisonIdentity = shape({ comparison_revision: revision, hash: digest });
 export type ComparisonIdentity = ReturnType<typeof comparisonIdentity>;
 export const comparisonRef = (comparison: Comparison): ComparisonIdentity =>
@@ -277,7 +311,7 @@ export function verifyComparison(caseInput: unknown, catalogInput: unknown, cand
         "result_funding_variant", item.subresult_id);
     }
   }
-  return { comparison, plan };
+  return { comparison, plan, result_capability: comparisonResultCapability(comparison) };
 }
 
 export function assertCatalogPublication(catalog: ValidatedCatalog, channel: Channel) {

@@ -22,7 +22,7 @@ test("AVD-P2 A: immutable independent case with explicit O/null versus numerical
 const invalidCases = [
   ["unknown fields", (c: ReturnType<typeof mutable<ReturnType<typeof fixture>["input"]>>) => Object.assign(c, { extra: 1 }), /unknown_or_missing_field/],
   ["incomplete record", c => Reflect.deleteProperty(c, "people"), /unknown_or_missing_field/],
-  ["unknown version", c => Object.assign(c, { format: "avd.case.v2" }), /unknown_value/],
+  ["previous draft version", c => Object.assign(c, { format: "avd.case.v1" }), /unknown_value/],
   ["duplicate identities", c => c.people.push(c.people[0]), /duplicate_identity/],
   ["wrong contract holder reference", c => { c.contracts[0].person_id = "absent"; }, /contract_holder/],
   ["wrong child reference", c => { c.evidence[0].child_id = "partner"; }, /subject_child/],
@@ -62,7 +62,7 @@ test("AVD-P2 A: direct predecessor and route transition clear previous entitleme
     c.evidence.forEach(entry => { entry.route = "B"; });
   });
   expect(() => assertSuccessor(input, parseAvdCase(badRoute))).toThrow(/route_evidence_reset/);
-  const validRoute = nextCase(input, c => { c.route = "B"; c.evidence = []; c.grants = []; });
+  const validRoute = nextCase(input, c => { c.route = "B"; c.evidence = []; c.grants = []; c.funding_pools = []; });
   assertSuccessor(input, parseAvdCase(validRoute));
   expect(validRoute.people).toEqual(input.people);
   expect(validRoute.contracts).toEqual(input.contracts);
@@ -72,6 +72,7 @@ test("AVD-P2 B: complete comparison has 12 stable keys and two distinct grant tr
   const { input, catalog } = fixture();
   const result = verifyComparison(input, catalog, candidate(input, catalog));
   expect(result.comparison.subresults).toHaveLength(12);
+  expect(result.result_capability).toEqual({ status: "fully_numeric", numeric: 12, blocked: 0 });
   const keys = result.comparison.subresults.map(item => keyOf(item.key));
   expect(new Set(keys).size).toBe(12);
   for (const path of ["path-1", "path-2"]) for (const scenario of ["low", "middle", "high"]) {
@@ -133,6 +134,16 @@ test("AVD-P2 B: documented fachlich blocked entry has no capital, productive fix
   altered.subresults[0].calculation = seal(altered.subresults[0].calculation);
   expect(verifyComparison(input, catalog, seal(altered)).comparison.subresults[0].calculation.result)
     .toEqual({ status: "nicht_berechenbar", reason: "Synthetic unresolved evidence" });
+  expect(verifyComparison(input, catalog, seal(altered)).result_capability)
+    .toEqual({ status: "partially_numeric", numeric: 11, blocked: 1 });
+  expect(verifyComparison(input, catalog, candidate(input, catalog, { blocked: true })).result_capability)
+    .toEqual({ status: "documented_blocks", numeric: 0, blocked: 12 });
+  const missingStatus = mutable(altered);
+  Reflect.deleteProperty(missingStatus.subresults[0].calculation.result, "status");
+  expect(() => verifyComparison(input, catalog, seal(missingStatus))).toThrow(/unknown_or_missing_field|unknown_value/);
+  const contradictory = mutable(altered);
+  Object.assign(contradictory.subresults[0].calculation.result, { capital_cents: 1 });
+  expect(() => verifyComparison(input, catalog, seal(contradictory))).toThrow(/unknown_or_missing_field/);
   const working = seal({ ...input, mode: "working" as const });
   expect(() => verifyComparison(working, catalog, candidate(working, catalog))).toThrow(/real_calculation_unavailable/);
   expect(verifyComparison(working, catalog, candidate(working, catalog, { blocked: true })).comparison.subresults).toHaveLength(12);
@@ -174,15 +185,25 @@ test("AVD-P2 B: changed independent rule source is bound to both paths", () => {
 });
 
 const changeInputs = [
-  ["legal revision", c => { c.regimes[0].version = "rule-v2"; }, 12],
+  ["legal revision", c => { c.regimes[0].version = "rule-v2"; c.funding_pools[0].regime_version = "rule-v2"; }, 12],
   ["contribution year", c => {
-    c.regimes[0].year = 2027; c.evidence.forEach(item => { item.year = 2027; }); c.grants.forEach(item => { item.year = 2027; });
+    c.regimes[0].year = 2027; c.funding_pools[0].year = 2027;
+    c.evidence.forEach(item => { item.year = 2027; }); c.grants.forEach(item => { item.year = 2027; });
   }, 12],
   ["partner", c => { c.people[1].born_on = "1980-05-01"; }, 12],
   ["child", c => { c.people[2].born_on = "2014-01-01"; }, 12],
-  ["contract start", c => { c.contracts[0].starts_on = "2026-11-02"; }, 6],
-  ["monthly payment", c => { c.payments[0].amount.value = 10001; }, 6],
-  ["extra payment", c => { c.payments.push({ ...c.payments[0], id: "extra", kind: "extra", cadence: "once" }); }, 6],
+  ["contract start in shared pool", c => { c.contracts[0].starts_on = "2026-11-02"; }, 12],
+  ["monthly payment in shared pool", c => { c.payments[0].amount.value = 10001; }, 12],
+  ["extra payment in shared pool", c => { c.payments.push({ ...c.payments[0], id: "extra", kind: "extra", cadence: "once" }); }, 12],
+  ["extra payment outside pool year", c => {
+    c.payments.push({ ...c.payments[0], id: "future-extra", on: "2027-01-02", kind: "extra", cadence: "once" });
+  }, 6],
+  ["shared assignment split", c => { c.grants[0].amount.value = 11000; c.grants[1].amount.value = 6500; }, 12],
+  ["shared child assignment even when path omits child", c => {
+    c.people.push({ id: "another-child", role: "child", born_on: "2016-02-02" });
+    c.funding_pools[0].claims[0].child_id = "another-child";
+    for (const item of [...c.grants, ...c.evidence]) item.child_id = "another-child";
+  }, 12],
   ["market scenario", c => { c.scenarios[0].annual_return_bps = 1; }, 4],
   ["Riester balance and strategy", c => { c.riester[0].balance.value = 500; c.riester[0].strategy = "pause"; }, 12],
   ["payout assumptions", c => { c.paths[0].payout = {
@@ -225,4 +246,84 @@ test("AVD-P2 B: exact product, fund allocation, model and cost mode change the s
     const after = planComparison(nextCase(input, edit), catalog);
     expect(after.entries.filter((item, i) => item.dependency_hash !== before.entries[i].dependency_hash)).toHaveLength(6);
   }
+});
+
+test("R84-N1: identical person and year cannot carry conflicting regimes across contracts", () => {
+  const c = mutable(fixture().input);
+  c.regimes.push({ ...c.regimes[0], id: "other-2026", version: "different" });
+  c.funding_pools.push({ ...c.funding_pools[0], id: "duplicate-pool", regime_id: "other-2026",
+    regime_version: "different", contract_ids: ["contract-2"], claims: [] });
+  c.funding_pools[0].contract_ids = ["contract-1"];
+  c.evidence[1].pool_id = c.grants[1].pool_id = "duplicate-pool";
+  c.evidence[1].regime_id = c.grants[1].regime_id = "other-2026";
+  expect(() => parseAvdCase(seal(c))).toThrow(/duplicate_identity: \$\.funding_pools/);
+  c.funding_pools.pop();
+  c.funding_pools[0].contract_ids.push("contract-2");
+  c.evidence[1].pool_id = c.grants[1].pool_id = c.funding_pools[0].id;
+  expect(() => parseAvdCase(seal(c))).toThrow(/funding_pool_scope/);
+});
+
+for (const component of ["base", "starter_bonus", "child"] as const) {
+  test("R84-N1: one nominal " + component + " supports splits and rejects two full awards", () => {
+    const c = mutable(fixture().input);
+    const claim = c.funding_pools[0].claims[0];
+    claim.component = component;
+    if (component !== "child") {
+      claim.child_id = null;
+      for (const item of [...c.evidence, ...c.grants]) item.child_id = null;
+    }
+    expect(parseAvdCase(seal(c)).grants.map(item => item.amount.value)).toEqual([10000, 7500]);
+    const duplicate = mutable(c);
+    duplicate.funding_pools[0].claims.push({ ...claim, id: "another-full-claim" });
+    expect(() => parseAvdCase(seal(duplicate))).toThrow(/duplicate_identity/);
+    for (const grant of c.grants) grant.amount.value = 17500;
+    expect(() => parseAvdCase(seal(c))).toThrow(/grant_overallocation/);
+  });
+}
+
+test("R84-N1: open assignments do not invent payment and incomplete closed assignments fail", () => {
+  const c = mutable(fixture().input);
+  const claim = c.funding_pools[0].claims[0];
+  c.grants.pop();
+  expect(() => parseAvdCase(seal(c))).toThrow(/grant_incomplete_allocation/);
+  claim.allocation = "open";
+  expect(() => parseAvdCase(seal(c))).toThrow(/open_grant_assignment/);
+  c.evidence[0].status = "ungeklaert";
+  c.grants[0].treatment = "unresolved";
+  c.grants[0].amount = { class: "O", value: null, reason: "Synthetic allocation is open" };
+  expect(parseAvdCase(seal(c)).grants[0].amount.value).toBeNull();
+  const { catalog } = fixture();
+  expect(planComparison(seal(c), catalog).entries.every(entry => entry.snapshot.grants.length === 0)).toBe(true);
+});
+
+test("R84-N1: person/year isolation, child uniqueness and indirect assignment limit", () => {
+  const c = mutable(fixture().input);
+  const shared = c.funding_pools[0];
+  c.regimes.push({ ...c.regimes[0], id: "independent-2027", year: 2027 });
+  c.funding_pools.push({ ...shared, id: "applicant-2027", year: 2027, regime_id: "independent-2027", claims: [] });
+  c.funding_pools.push({ ...shared, id: "partner-2026", person_id: "partner", contract_ids: [], claims: [] });
+  expect(parseAvdCase(seal(c)).funding_pools).toHaveLength(3);
+  c.funding_pools[2].claims.push({ ...shared.claims[0], allocation: "open" });
+  expect(() => parseAvdCase(seal(c))).toThrow(/duplicate_identity: \$\.funding_pools.children/);
+  c.funding_pools[2].claims = [];
+  shared.eligibility = "indirect";
+  expect(() => parseAvdCase(seal(c))).toThrow(/funding_direct_pool/);
+  shared.direct_pool_id = "partner-2026";
+  expect(() => parseAvdCase(seal(c))).toThrow(/grant_contract_limit/);
+  c.grants.pop();
+  c.grants[0].amount.value = 17500;
+  expect(parseAvdCase(seal(c)).grants).toHaveLength(1);
+});
+
+test("R84-N1: dependent contributions invalidate both paths, but a later one-time payment preserves B", () => {
+  const { input, catalog } = fixture();
+  const original = candidate(input, catalog);
+  const shared = nextCase(input, c => { c.payments[0].amount.value = 12000; });
+  expect(() => verifyComparison(shared, catalog, candidate(shared, catalog, { previous: original, reuse: "path-2" })))
+    .toThrow(/calculation_binding/);
+  const independent = nextCase(input, c => {
+    c.payments.push({ ...c.payments[0], id: "later-payment", on: "2027-01-01", cadence: "once", kind: "extra" });
+  });
+  const accepted = verifyComparison(independent, catalog, candidate(independent, catalog, { previous: original, reuse: "path-2" }));
+  expect(accepted.comparison.subresults[6].calculation).toEqual(original.subresults[6].calculation);
 });

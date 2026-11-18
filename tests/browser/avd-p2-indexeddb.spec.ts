@@ -135,7 +135,13 @@ test("AVD-P2-IDB concurrent publications, case updates and late calculation answ
   expect(first).toBeDefined();
   const newInput = await second.evaluate(async input => {
     const a = window.AVDP2, store = await a.openAvdStore();
-    try { return await store.appendCase(a.caseRef(input), a.nextCase(input, c => { c.payments[0].amount.value = 21000; })); }
+    try {
+      return await store.appendCase(a.caseRef(input), a.nextCase(input, c => {
+        c.payments[0].amount.value = 21000;
+        c.grants[0].amount.value = 9000;
+        c.grants[1].amount.value = 8500;
+      }));
+    }
     finally { store.close(); }
   }, input);
   const result = await page.evaluate(async ({ input, first, newInput }) => {
@@ -147,17 +153,21 @@ test("AVD-P2-IDB concurrent publications, case updates and late calculation answ
       const late = a.candidate(input, catalog, { previous: first });
       const conflict = await issue(() => store.publishComparison(late, a.caseRef(input), a.comparisonRef(first)));
       const current = await store.readCurrentComparison(input.case_id);
-      const exportError = await issue(() => store.checkExport(a.caseRef(newInput), a.comparisonRef(first), false));
-      const dirty = await issue(() => store.checkExport(a.caseRef(newInput), a.comparisonRef(first), true));
-      const next = a.candidate(newInput, catalog, { previous: first, reuse: "path-2" });
-      const forged = a.mutable(next);
+      const exportError = await issue(() => store.checkExport(a.caseRef(newInput), a.comparisonRef(first), false, "capital_projection"));
+      const dirty = await issue(() => store.checkExport(a.caseRef(newInput), a.comparisonRef(first), true, "capital_projection"));
+      const wrongReuse = a.candidate(newInput, catalog, { previous: first, reuse: "path-2" });
+      const reuseError = await issue(() => store.publishComparison(wrongReuse, a.caseRef(newInput), a.comparisonRef(first)));
+      const next = a.candidate(newInput, catalog, { previous: first });
+      const fresh = await store.publishComparison(next, a.caseRef(newInput), a.comparisonRef(first));
+      const unchanged = a.candidate(newInput, catalog, { previous: fresh, reuse: "path-2" });
+      const forged = a.mutable(unchanged);
       forged.subresults[7].calculation.calculation_id = "made-up-original";
       forged.subresults[7].calculation = a.seal(forged.subresults[7].calculation);
-      const missingOrigin = await issue(() => store.publishComparison(a.seal(forged), a.caseRef(newInput), a.comparisonRef(first)));
-      const fresh = await store.publishComparison(next, a.caseRef(newInput), a.comparisonRef(first));
+      const missingOrigin = await issue(() => store.publishComparison(a.seal(forged), a.caseRef(newInput), a.comparisonRef(fresh)));
+      const reused = await store.publishComparison(unchanged, a.caseRef(newInput), a.comparisonRef(fresh));
       const historical = await store.readHistoricalComparison(input.case_id, a.comparisonRef(first));
-      const synthetic = await issue(() => store.checkExport(a.caseRef(newInput), a.comparisonRef(fresh), false));
-      return { conflict, current, exportError, dirty, fresh, historical, synthetic, missingOrigin };
+      const synthetic = await issue(() => store.checkExport(a.caseRef(newInput), a.comparisonRef(reused), false, "capital_projection"));
+      return { conflict, current, exportError, dirty, fresh, reused, reuseError, historical, synthetic, missingOrigin };
     } finally { store.close(); }
   }, { input, first: first!, newInput });
   expect(result.conflict).toBe("case_conflict");
@@ -167,7 +177,9 @@ test("AVD-P2-IDB concurrent publications, case updates and late calculation answ
   expect(result.dirty).toBe("unsaved_changes");
   expect(result.synthetic).toBe("synthetic_export_forbidden");
   expect(result.missingOrigin).toBe("calculation_original_missing_or_changed");
-  expect(result.fresh.subresults[7].calculation).toEqual(first!.subresults[7].calculation);
+  expect(result.reuseError).toBe("calculation_binding");
+  expect(result.fresh.subresults[7].calculation.calculation_id).not.toBe(first!.subresults[7].calculation.calculation_id);
+  expect(result.reused.subresults[7].calculation).toEqual(result.fresh.subresults[7].calculation);
   expect(result.historical.comparison).toEqual(first);
 });
 
@@ -361,13 +373,22 @@ for (const released of [false, true]) {
         await store.createCase(input);
         const candidate = a.candidate(input, catalog, { blocked: true });
         await store.publishComparison(candidate, a.caseRef(input), null);
-        try { return await store.checkExport(a.caseRef(input), a.comparisonRef(candidate), false); }
-        catch (error) { return (error as {code: string}).code; }
+        async function check(purpose: "capital_projection" | "documented_blocks") {
+          try { return await store.checkExport(a.caseRef(input), a.comparisonRef(candidate), false, purpose); }
+          catch (error) { return (error as {code: string}).code; }
+        }
+        return { capital: await check("capital_projection"), blocked: await check("documented_blocks"),
+          current: await store.readCurrentComparison(input.case_id) };
       } finally { store.close(); }
     }, released);
     if (released) {
-      expect(result).toMatchObject({ case: { case_revision: 1 }, comparison: { comparison_revision: 1 } });
-      expect(result).not.toHaveProperty("export_id");
-    } else expect(result).toBe("publication_blocked");
+      expect(result.capital).toBe("export_result_not_eligible");
+      expect(result.blocked).toMatchObject({ purpose: "documented_blocks",
+        case: { case_revision: 1 }, comparison: { comparison_revision: 1 },
+        result_capability: { status: "documented_blocks", numeric: 0, blocked: 12 } });
+      expect(result.blocked).not.toHaveProperty("export_id");
+    } else expect(result).toMatchObject({ capital: "publication_blocked", blocked: "publication_blocked" });
+    expect(result.current).toMatchObject({ status: "current", completeness: "complete",
+      result_capability: { status: "documented_blocks", numeric: 0, blocked: 12 } });
   });
 }

@@ -2,10 +2,10 @@ import { appendCatalogRevision } from "../../domain/retirement/catalog-validatio
 import type { ValidatedCatalog } from "../../domain/retirement/catalog-contract";
 import { assertSuccessor, caseIdentity, caseRef, catalogIdentity, originateCase, parseAvdCase, sameData,
   type AvdCase, type CaseIdentity, type CatalogIdentity } from "../../domain/retirement/avd-case";
-import { assertCatalogPublication, catalogRef, comparisonIdentity, comparisonRef, parseCalculation, parseComparison,
+import { assertCatalogPublication, catalogRef, comparisonIdentity, comparisonRef, comparisonResultCapability, parseCalculation, parseComparison,
   readCatalog, validateCaseCatalog, verifyComparison,
-  type Calculation, type Comparison, type ComparisonIdentity } from "../../domain/retirement/avd-comparison";
-import { AvdError, copyAvd, id, nullable, requireAvd, shape, stamp } from "../../domain/retirement/avd-data";
+  type Calculation, type Comparison, type ComparisonIdentity, type ResultCapability } from "../../domain/retirement/avd-comparison";
+import { AvdError, copyAvd, id, nullable, oneOf, requireAvd, shape, stamp } from "../../domain/retirement/avd-data";
 
 export const AVD_DATABASE = "vermoegensnavigator-avd";
 const DATABASE_VERSION = 1;
@@ -13,14 +13,17 @@ const STORES = ["catalogs", "catalog_heads", "cases", "case_heads", "comparisons
 type StoreName = typeof STORES[number];
 const headShape = shape({ case: caseIdentity, comparison: nullable(comparisonIdentity) });
 const changeShape = shape({ changed_at: stamp, changed_by: id, change_id: id });
+const exportPurpose = oneOf("capital_projection", "documented_blocks");
 type Head = ReturnType<typeof headShape>;
 
 export type CurrentComparison =
   | { status: "missing"; case: CaseIdentity }
   | { status: "veraltet"; case: CaseIdentity; comparison: ComparisonIdentity }
-  | { status: "current"; case: CaseIdentity; comparison: Comparison };
+  | { status: "current"; completeness: "complete"; result_capability: ResultCapability;
+      case: CaseIdentity; comparison: Comparison };
 export type HistoricalComparison = {
-  status: "historisch_fixiert"; comparison: Comparison; input: AvdCase; catalog: ValidatedCatalog;
+  status: "historisch_fixiert"; completeness: "complete"; result_capability: ResultCapability;
+  comparison: Comparison; input: AvdCase; catalog: ValidatedCatalog;
 };
 
 function request<T>(value: IDBRequest<T>): Promise<T> {
@@ -325,7 +328,8 @@ class AvdStore {
       return { status: "veraltet", case: head.case, comparison: head.comparison };
     }
     const validated = await verifyStoredComparison(tx, comparison, input, catalog);
-    return { status: "current", case: head.case, comparison: validated };
+    return { status: "current", completeness: "complete", result_capability: comparisonResultCapability(validated),
+      case: head.case, comparison: validated };
   }
 
   readCurrentComparison(caseId: string): Promise<CurrentComparison> {
@@ -340,13 +344,16 @@ class AvdStore {
       const comparison = await readComparisonRecord(tx, key, pointer);
       const { input, catalog } = await readInput(tx, comparison.dependency_manifest.case);
       const validated = await verifyStoredComparison(tx, comparison, input, catalog);
-      return { status: "historisch_fixiert", input, catalog, comparison: validated };
+      return { status: "historisch_fixiert", completeness: "complete", result_capability: comparisonResultCapability(validated),
+        input, catalog, comparison: validated };
     });
   }
 
   /** Eligibility at the read transaction. The future producer must recheck before actual output. */
-  checkExport(caseInput: CaseIdentity, comparisonInput: ComparisonIdentity, dirty: boolean) {
+  checkExport(caseInput: CaseIdentity, comparisonInput: ComparisonIdentity, dirty: boolean,
+    requestedPurpose: ReturnType<typeof exportPurpose>) {
     requireAvd(dirty === false, "unsaved_changes", "$.case");
+    const purpose = exportPurpose(requestedPurpose, "$.export_purpose");
     const expected = caseIdentity(copyAvd(caseInput), "$.expected_case");
     const pointer = comparisonIdentity(copyAvd(comparisonInput), "$.expected_comparison");
     return this.run("readonly", async tx => {
@@ -356,7 +363,10 @@ class AvdStore {
       const { input, catalog } = await readInput(tx, expected);
       requireAvd(input.mode === "working" && catalog.origin === "working", "synthetic_export_forbidden", input.case_id);
       assertCatalogPublication(catalog, "export");
-      return { case: expected, comparison: pointer, catalog: input.catalog };
+      requireAvd(purpose === "capital_projection" ? current.result_capability.status === "fully_numeric"
+        : current.result_capability.blocked > 0, "export_result_not_eligible", input.case_id);
+      return { purpose, result_capability: current.result_capability,
+        case: expected, comparison: pointer, catalog: input.catalog };
     });
   }
 }

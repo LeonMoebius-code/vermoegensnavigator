@@ -13,7 +13,7 @@ export function seal<T extends object>(value: T): T & {hash: string} { return { 
 const declared = (value: number) => ({ class: "A" as const, value, reason: "Synthetic assumption" });
 const conditional = (value: number) => ({ class: "S" as const, value, reason: "Synthetic condition explicitly assumed" });
 const subject = { person_id: "applicant", contract_id: "contract-1", child_id: "child" };
-const law = { year: 2026, regime_id: "law-2026" };
+const law = { year: 2026, regime_id: "law-2026", pool_id: "applicant-2026" };
 
 export function fixture(addSharedSource = false) {
   const catalog = syntheticCatalog();
@@ -26,7 +26,7 @@ export function fixture(addSharedSource = false) {
   }
   const source = reference(record(catalog, addSharedSource ? "synthetic-independent-rule-source" : "synthetic-source", "source"));
   const value: Omit<AvdCase, "hash"> = {
-    format: "avd.case.v1", case_id: "artificial-case", case_revision: 1, previous_hash: null, origin: null,
+    format: "avd.case.v2", case_id: "artificial-case", case_revision: 1, previous_hash: null, origin: null,
     catalog: catalogRef(catalog), mode: "synthetic_fixture", as_of: catalog.asOf, route: "A",
     metadata: { created_at: TIME, changed_at: TIME, changed_by: "artificial-agent", change_id: "change-1" },
     advisory_case: { id: "general-case-link-only" },
@@ -40,12 +40,17 @@ export function fixture(addSharedSource = false) {
       { id: "existing-riester", person_id: "applicant", kind: "riester", starts_on: "2010-01-01" }
     ],
     regimes: [{ id: law.regime_id, year: law.year, version: "rule-v1", sources: [source] }],
+    funding_pools: [{ id: law.pool_id, person_id: subject.person_id, year: law.year, regime_id: law.regime_id,
+      regime_version: "rule-v1", eligibility: "direct", direct_pool_id: null, contract_ids: ["contract-1", "contract-2"],
+      claims: [{ id: "child-claim", component: "child", child_id: "child",
+        allocation: "allocated", total: conditional(17500) }] }],
     payments: [1, 2].map(n => ({ id: "pay-" + n, person_id: "applicant", contract_id: "contract-" + n,
       child_id: null, on: "2026-11-01", amount: declared(10000), cadence: "monthly", until: null, kind: "regular" })),
     evidence: [1, 2].map(n => ({ ...subject, contract_id: "contract-" + n, ...law, id: "proof-" + n,
       route: "A", axis: "person", status: "bedingt", checked_on: catalog.asOf, proof_id: "declaration-" + n, sources: [source] })),
     grants: [1, 2].map(n => ({ ...subject, contract_id: "contract-" + n, ...law, id: "grant-" + n,
-      on: "2027-05-01", treatment: "conditional", amount: conditional(17500), evidence_id: "proof-" + n })),
+      on: "2027-05-01", claim_id: "child-claim", treatment: "conditional",
+      amount: conditional(n === 1 ? 10000 : 7500), evidence_id: "proof-" + n })),
     riester: [{ contract_id: "existing-riester", as_of: catalog.asOf, balance: declared(12345), strategy: "continue",
       parameters: [], sources: [source] }],
     assumptions: [], sources: [source], funding_variants: ["without_unconfirmed", "with_conditional"],
@@ -164,14 +169,14 @@ export function candidate(input: AvdCase, catalog: Catalog, options: {
       { status: entry.key.funding_variant === "with_conditional" ? "bedingt_berechnet" : "aktuell_berechnet",
         capital_cents: 100000 + i };
     const calculation: Calculation = from?.calculation ?? seal({
-      format: "avd.calculation.v1" as const, calculation_id: "calc-" + (options.run ?? comparison_revision) + "-" + i,
+      format: "avd.calculation.v2" as const, calculation_id: "calc-" + (options.run ?? comparison_revision) + "-" + i,
       key: entry.key, dependency_hash: entry.dependency_hash, as_of: input.as_of, result,
       origin: { case: caseRef(input), subresult_id, comparison_revision, calculated_at: recorded_at }
     });
     return { key: entry.key, subresult_id, calculation };
   });
   return seal({
-    format: "avd.comparison.v1", comparison_revision, previous_hash: options.previous?.hash ?? null,
+    format: "avd.comparison.v2", comparison_revision, previous_hash: options.previous?.hash ?? null,
     recorded_at, dependency_manifest: plan.dependency_manifest, subresults
   });
 }

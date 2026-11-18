@@ -24,7 +24,16 @@ export const catalogIdentity = shape({ id, revision, hash: digest });
 export const caseIdentity = shape({ case_id: id, case_revision: revision, hash: digest });
 const comparisonOrigin = shape({ kind: oneOf("copy", "restore"), case: caseIdentity });
 const subject = { person_id: id, contract_id: id, child_id: nullable(id) };
-const legalContext = { year, regime_id: id };
+const legalContext = { year, regime_id: id, pool_id: id };
+const claim = shape({
+  id, component: oneOf("base", "starter_bonus", "child"), child_id: nullable(id),
+  allocation: oneOf("open", "allocated"), total: amount
+});
+const fundingPool = shape({
+  id, person_id: id, year, regime_id: id, regime_version: id,
+  eligibility: oneOf("direct", "indirect", "unresolved"), direct_pool_id: nullable(id), contract_ids: list(id, 24),
+  claims: list(claim, 32)
+});
 const scenarioValue: Rule<number | string> = (input, at) => {
   if (typeof input === "string") return day(input, at);
   requireAvd(typeof input === "number" && Number.isFinite(input), "invalid_assumption", at);
@@ -53,7 +62,7 @@ const path = shape({
   }))
 });
 const caseShape = shape({
-  format: oneOf("avd.case.v1"), case_id: id, case_revision: revision, hash: digest,
+  format: oneOf("avd.case.v2"), case_id: id, case_revision: revision, hash: digest,
   previous_hash: nullable(digest), origin: nullable(comparisonOrigin), catalog: catalogIdentity,
   mode: oneOf("working", "synthetic_fixture"), as_of: day, route,
   metadata: shape({ created_at: stamp, changed_at: stamp, changed_by: id, change_id: id }),
@@ -61,6 +70,7 @@ const caseShape = shape({
   people: list(shape({ id, role: oneOf("applicant", "partner", "child"), born_on: nullable(day) }), 32, 1),
   contracts: list(shape({ id, person_id: id, kind: oneOf("avd", "riester"), starts_on: nullable(day) }), 24),
   regimes: list(shape({ id, year, version: id, sources: list(avdRef("source"), 8, 1) }), 60),
+  funding_pools: list(fundingPool, 120),
   evidence: list(shape({
     id, ...subject, ...legalContext, route, axis: oneOf("person", "contract", "law"), status: evidenceStatus,
     checked_on: day, proof_id: nullable(id), sources
@@ -71,7 +81,7 @@ const caseShape = shape({
   }), 500),
   grants: list(shape({
     id, ...subject, ...legalContext, on: day, treatment: oneOf("confirmed", "conditional", "unresolved"),
-    evidence_id: id, amount
+    claim_id: id, evidence_id: id, amount
   }), 500),
   riester: list(shape({
     contract_id: id, as_of: day, balance: amount, strategy: oneOf("continue", "pause", "transfer", "terminate_4a", "terminate_4b", "unresolved"),
@@ -113,7 +123,8 @@ export function parseAvdCase(input: unknown): AvdCase {
   const contracts = new Map(value.contracts.map(contract => [contract.id, contract]));
   const regimes = new Map(value.regimes.map(regime => [regime.id, regime]));
   const evidence = new Map(value.evidence.map(entry => [entry.id, entry]));
-  for (const values of [value.people, value.contracts, value.regimes, value.evidence, value.payments, value.grants, value.scenarios, value.paths]) {
+  for (const values of [value.people, value.contracts, value.regimes, value.funding_pools,
+    value.evidence, value.payments, value.grants, value.scenarios, value.paths]) {
     unique(values.map(item => item.id), "$.identities");
   }
   unique(value.funding_variants, "$.funding_variants");
@@ -129,12 +140,45 @@ export function parseAvdCase(input: unknown): AvdCase {
     requireAvd(contracts.get(item.contract_id)?.person_id === item.person_id, "subject_contract", at);
     requireAvd(item.child_id === null || people.get(item.child_id)?.role === "child", "subject_child", at);
   }
-  function checkRegime(item: { year: number; regime_id: string }, at: string) {
+  const pools = new Map(value.funding_pools.map(pool => [pool.id, pool]));
+  const claims = new Map<string, ReturnType<typeof claim>>();
+  const claimTotals = new Map<string, number>();
+  const assignedContracts = new Map<string, Set<string>>();
+  unique(value.funding_pools.map(pool => JSON.stringify([pool.person_id, pool.year])), "$.funding_pools");
+  unique(value.funding_pools.flatMap(pool => pool.claims.filter(item => item.child_id !== null)
+    .map(item => JSON.stringify([item.child_id, pool.year]))), "$.funding_pools.children");
+  for (const pool of value.funding_pools) {
+    const regime = regimes.get(pool.regime_id);
+    requireAvd(regime?.year === pool.year && regime.version === pool.regime_version, "funding_regime", pool.id);
+    const person = people.get(pool.person_id);
+    requireAvd(person && person.role !== "child" && pool.contract_ids.every(contract =>
+      contracts.get(contract)?.person_id === pool.person_id), "funding_pool_subject", pool.id);
+    const direct = pool.direct_pool_id === null ? undefined : pools.get(pool.direct_pool_id);
+    requireAvd(pool.eligibility === "indirect"
+      ? direct?.eligibility === "direct" && direct.year === pool.year && direct.person_id !== pool.person_id
+      : pool.direct_pool_id === null, "funding_direct_pool", pool.id);
+    unique(pool.contract_ids, pool.id);
+    unique(pool.claims.map(item => item.id), pool.id);
+    unique(pool.claims.map(item => JSON.stringify([item.component, item.child_id])), pool.id);
+    for (const item of pool.claims) {
+      requireAvd(item.component === "child" ? item.child_id !== null && people.get(item.child_id)?.role === "child"
+        : item.child_id === null, "funding_claim_subject", item.id);
+      requireAvd(item.allocation === "allocated"
+        ? pool.eligibility !== "unresolved" && (item.total.class === "B" || item.total.class === "S")
+        : item.total.class === "O" || item.total.class === "S", "funding_claim_state", item.id);
+      claims.set(JSON.stringify([pool.id, item.id]), item);
+    }
+  }
+  function checkPool(item: { pool_id: string; person_id: string; contract_id: string; year: number; regime_id: string }, at: string) {
     requireAvd(regimes.get(item.regime_id)?.year === item.year, "funding_regime", at);
+    const pool = pools.get(item.pool_id);
+    requireAvd(pool && pool.person_id === item.person_id && pool.year === item.year
+      && pool.regime_id === item.regime_id && pool.contract_ids.includes(item.contract_id), "funding_pool_scope", at);
+    return pool;
   }
   for (const entry of value.evidence) {
     checkSubject(entry, entry.id);
-    checkRegime(entry, entry.id);
+    checkPool(entry, entry.id);
     requireAvd(entry.route === value.route && entry.checked_on <= value.as_of, "evidence_context", entry.id);
     requireAvd(entry.status === "ungeklaert" || entry.proof_id !== null, "evidence_missing_proof", entry.id);
   }
@@ -143,18 +187,44 @@ export function parseAvdCase(input: unknown): AvdCase {
     requireAvd(payment.cadence === "once" ? payment.until === null : payment.until === null || payment.on <= payment.until,
       "payment_period", payment.id);
   }
+  unique(value.grants.map(item => JSON.stringify([item.pool_id, item.claim_id, item.contract_id])), "$.grants");
   for (const grant of value.grants) {
     checkSubject(grant, grant.id);
-    checkRegime(grant, grant.id);
+    const pool = checkPool(grant, grant.id);
+    const key = JSON.stringify([pool.id, grant.claim_id]);
+    const entitlement = claims.get(key);
+    requireAvd(entitlement && entitlement.child_id === grant.child_id, "funding_claim_scope", grant.id);
     const proof = evidence.get(grant.evidence_id);
     requireAvd(proof && proof.person_id === grant.person_id && proof.contract_id === grant.contract_id
-      && proof.child_id === grant.child_id && proof.year === grant.year && proof.regime_id === grant.regime_id,
+      && proof.child_id === grant.child_id && proof.year === grant.year && proof.regime_id === grant.regime_id
+      && proof.pool_id === grant.pool_id,
       "grant_scope", grant.id);
     const treatment = { confirmed: "bestaetigt", conditional: "bedingt", unresolved: "ungeklaert" } as const;
     requireAvd(proof.status === treatment[grant.treatment]
       && (grant.treatment === "confirmed" ? grant.amount.class === "B" :
         grant.treatment === "conditional" ? grant.amount.class === "S" : grant.amount.class === "O"),
     "grant_evidence", grant.id);
+    if (entitlement.allocation === "open") {
+      requireAvd(grant.treatment === "unresolved", "open_grant_assignment", grant.id);
+    } else {
+      requireAvd(grant.amount.value !== null && grant.amount.class === entitlement.total.class,
+        "grant_assignment_class", grant.id);
+      const sum = (claimTotals.get(key) ?? 0) + grant.amount.value;
+      requireAvd(Number.isSafeInteger(sum) && entitlement.total.value !== null && sum <= entitlement.total.value,
+        "grant_overallocation", grant.id);
+      claimTotals.set(key, sum);
+      const targets = assignedContracts.get(pool.id) ?? new Set<string>();
+      targets.add(grant.contract_id);
+      assignedContracts.set(pool.id, targets);
+    }
+  }
+  for (const pool of value.funding_pools) {
+    const limit = pool.eligibility === "direct" ? 2 : pool.eligibility === "indirect" ? 1 : 0;
+    requireAvd((assignedContracts.get(pool.id)?.size ?? 0) <= limit, "grant_contract_limit", pool.id);
+    for (const item of pool.claims) if (item.allocation === "allocated") {
+      requireAvd(claimTotals.get(JSON.stringify([pool.id, item.id])) === item.total.value,
+        "grant_incomplete_allocation", item.id);
+    }
   }
   for (const item of value.riester) {
     requireAvd(contracts.get(item.contract_id)?.kind === "riester" && item.as_of <= value.as_of, "riester_context", item.contract_id);
@@ -185,7 +255,9 @@ export function assertSuccessor(current: AvdCase, next: AvdCase) {
     && next.metadata.change_id !== current.metadata.change_id && next.mode === current.mode, "revision_metadata", "$.metadata");
   if (next.route !== current.route && next.origin?.kind !== "restore") {
     requireAvd(next.evidence.every(entry => entry.status === "ungeklaert" && entry.proof_id === null)
-      && next.grants.every(entry => entry.treatment === "unresolved"), "route_evidence_reset", "$.evidence");
+      && next.grants.every(entry => entry.treatment === "unresolved")
+      && next.funding_pools.every(pool => pool.eligibility === "unresolved"
+        && pool.claims.every(item => item.allocation === "open")), "route_evidence_reset", "$.evidence");
   }
 }
 
