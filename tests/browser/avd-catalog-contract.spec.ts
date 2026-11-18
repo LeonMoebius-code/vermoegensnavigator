@@ -431,3 +431,163 @@ test("R83-N2: blocked incomplete cost declarations are preserved, never activate
   // A separately valid cost alternative remains selectable beside the blocked declaration.
   expect(validateCostSelection(c,selectedCosts(c,"fixed"))).toMatchObject({ok:true});
 });
+
+const n3EntryPoints = [
+  ["catalog", (c: Catalog) => parseCatalog(c)],
+  ["resolution", (c: Catalog, consumer: CatalogRecord) => resolveCurrent(c, reference(consumer), c.asOf)],
+] as const;
+
+function n3ParameterConsumer(kind: "features" | "accessRules" | "informationalTer", wrongPurpose: boolean, open = false) {
+  const c = kind !== "informationalTer" && wrongPurpose ? annuityFixture(open) : syntheticCatalog();
+  const parameterId = kind === "informationalTer" ? "synthetic-ter"
+    : wrongPurpose ? "synthetic-annuity-factor" : open ? "synthetic-ter" : "synthetic-fixed-fee";
+  const parameter = record(c, parameterId, "parameter");
+  if (kind === "informationalTer") {
+    if (wrongPurpose) {
+      parameter.data.purpose = "annuity_factor";
+      parameter.data.overridePolicy = "forbidden";
+    }
+    if (!open) {
+      parameter.data.value = { class: "A", value: 0.002, reason: "Artificial informative annual TER" };
+      parameter.data.approval = "approved";
+    }
+  }
+  let consumer: CatalogRecord;
+  if (kind === "features") {
+    const product = record(c, "synthetic-product-1", "product");
+    product.data.features = [reference(parameter)];
+    consumer = product;
+  } else if (kind === "accessRules") {
+    const tariff = record(c, "synthetic-tariff-1", "tariff");
+    tariff.data.accessRules = [reference(parameter)];
+    consumer = tariff;
+  } else {
+    const fund = record(c, "synthetic-fund-1", "fund");
+    fund.data.informationalTer = reference(parameter);
+    consumer = fund;
+  }
+  return { c: reseal(c), consumer, parameter };
+}
+
+for (const kind of ["features", "accessRules", "informationalTer"] as const) {
+  for (const [entry, checkConsumer] of n3EntryPoints) {
+    test(`R83-N3-01 repro: ${entry} rejects annuity purpose in ${kind}`, () => {
+      const { c, consumer } = n3ParameterConsumer(kind, true);
+      code<unknown>(checkConsumer(c, consumer), "parameter_purpose");
+    });
+  }
+  test(`R83-N3-01: general ${kind} accepts numeric and open parameters`, () => {
+    for (const open of [false, true]) {
+      const { c, consumer, parameter } = n3ParameterConsumer(kind, false, open);
+      valid(c);
+      expect(resolveCurrent(c, reference(consumer), c.asOf)).toMatchObject({ ok: true });
+      expect(resolveCurrent(c, reference(parameter), c.asOf)).toMatchObject({
+        ok: true, value: { data: { purpose: "general", value: parameter.data.value } }
+      });
+    }
+  });
+}
+
+test("R83-N3-01: open value does not waive purpose in any metadata consumer", () => {
+  for (const kind of ["features", "accessRules", "informationalTer"] as const) {
+    const { c, consumer } = n3ParameterConsumer(kind, true, true);
+    code(parseCatalog(c), "parameter_purpose");
+    code(resolveCurrent(c, reference(consumer), c.asOf), "parameter_purpose");
+  }
+});
+
+test("R83-N3-01: documented guarantee needs general purpose even with valid ratio and evidence", () => {
+  const c = syntheticCatalog();
+  const product = record(c, "synthetic-product-1", "product");
+  const guarantee = structuredClone(record(c, "synthetic-fixed-fee", "parameter"));
+  (guarantee as { id: string }).id = "synthetic-n3-guarantee";
+  const evidence = reference(record(c, "synthetic-schedule", "source"));
+  guarantee.data.unit = "ratio";
+  guarantee.data.value = { class: "B", value: 0.08, reason: "Artificial documented ratio" };
+  product.citations.push({ source: evidence, locator: "Artificial guarantee" });
+  product.data.guarantee = {
+    kind: "contribution_guarantee", rate: reference(guarantee), basis: "own_and_grants",
+    appliesAt: "contract_maturity", referenceDate: null, evidence
+  };
+  c.records.push(guarantee);
+  c.current.push(reference(guarantee));
+  reseal(c);
+  valid(c);
+  expect(resolveCurrent(c, reference(product), c.asOf)).toMatchObject({ ok: true });
+  guarantee.data.purpose = "annuity_factor";
+  reseal(c);
+  code(parseCatalog(c), "parameter_purpose");
+  code(resolveCurrent(c, reference(product), c.asOf), "parameter_purpose");
+});
+
+test("R83-N3-01: case override accepts general scenario and refuses either factor status", () => {
+  for (const open of [false, true]) {
+    const c = annuityFixture(open);
+    valid(c);
+    const base = reference(record(c, "synthetic-cost-1", "parameter"));
+    const override = { format: "avd.override.v1", id: "synthetic-n3-override", caseId: "synthetic-case",
+      base, recordedOn: c.asOf, value: { class: "S", value: 0.02, reason: "Artificial scenario" } };
+    expect(applyCaseOverride(c, override)).toMatchObject({ ok: true, value: { base } });
+    code(applyCaseOverride(c, { ...override, base: reference(record(c, "synthetic-annuity-factor", "parameter")) }),
+      "override_forbidden");
+  }
+});
+
+for (const model of ["M1", "M2"] as const) {
+  for (const component of ["fund_ter", "acquisition", "administration"] as const) {
+    test(`R83-N3-02 repro: ${model} rejects missing ${component} at both catalog entry points`, () => {
+      const c = syntheticCatalog();
+      const cost = record(c, `synthetic-k1-${model.toLowerCase()}-1`, "cost");
+      if (cost.data.mode !== "K1") throw new Error("Fixture K1");
+      cost.data.components = cost.data.components.filter(value => value !== component);
+      reseal(c);
+      code(parseCatalog(c), "K1_coverage_incomplete");
+      code(resolveCurrent(c, reference(cost), c.asOf), "K1_coverage_incomplete");
+    });
+
+    test(`R83-N3-02 repro: ${model} rejects net ${component} even when omitted from K1`, () => {
+      const c = syntheticCatalog();
+      const cost = record(c, `synthetic-k1-${model.toLowerCase()}-1`, "cost");
+      if (cost.data.mode !== "K1") throw new Error("Fixture K1");
+      const returns = { basis: "net", deducted: [{ phase: "savings", component }] } as const;
+      const net = { basis: returns.basis, deducted: [...returns.deducted] };
+      code(validateCostSelection(c, { ...selectedCosts(c, "fixed", model), returns: net }), "duplicate_cost_component");
+      cost.data.components = cost.data.components.filter(value => value !== component);
+      reseal(c);
+      code(validateCostSelection(c, { ...selectedCosts(c, "fixed", model), returns: net }), "K1_coverage_incomplete");
+    });
+  }
+}
+
+test("R83-N3-02: six K1 paths in both conventions accept gross returns", () => {
+  const c = syntheticCatalog();
+  valid(c);
+  for (const cost of c.records) {
+    if (cost.kind !== "cost" || cost.data.mode !== "K1") continue;
+    const { model, modelVersion, product, tariff, convention } = cost.data;
+    const payout = reference(record(c, cost.id.replace(/^synthetic-k1-m[12]/, "synthetic-payout"), "cost"));
+    expect(convention).toBe(model === "M1" ? "M1_additive_v1" : "M2_balance_factor_v1");
+    expect(validateCostSelection(c, {
+      model, modelVersion, product, tariff, costs: [reference(cost), payout], returns: { basis: "gross", deducted: [] }
+    })).toMatchObject({ ok: true });
+  }
+  expect(c.records.filter(r => r.kind === "cost" && r.data.mode === "K1")).toHaveLength(12);
+});
+
+test("R83-N3-02: additional fees count only when explicitly declared", () => {
+  const c = syntheticCatalog();
+  const returns = { basis: "net", deducted: [{ phase: "savings", component: "transaction" }] };
+  expect(validateCostSelection(c, { ...selectedCosts(c, "fixed"), returns })).toMatchObject({ ok: true });
+  const k2 = record(c, "synthetic-k2", "cost");
+  if (k2.data.mode !== "K2") throw new Error("Fixture K2");
+  k2.data.components = ["transaction"];
+  k2.data.charges[0].component = "transaction";
+  reseal(c);
+  expect(validateCostSelection(c, selectedCosts(c, "K2"))).toMatchObject({ ok: true });
+  code(validateCostSelection(c, { ...selectedCosts(c, "K2"), returns }), "duplicate_cost_component");
+  const k1 = record(c, "synthetic-k1-m1-1", "cost");
+  if (k1.data.mode !== "K1") throw new Error("Fixture K1");
+  k1.data.components.push("transaction");
+  reseal(c);
+  code(validateCostSelection(c, { ...selectedCosts(c, "fixed"), returns }), "duplicate_cost_component");
+});

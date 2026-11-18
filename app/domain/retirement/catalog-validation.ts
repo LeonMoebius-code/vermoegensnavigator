@@ -1,11 +1,12 @@
 import type { Catalog, CatalogRecord, CaseOverride, ValidatedCatalog, ParameterData } from "./catalog-contract";
-import type { CostData, CostSelection } from "./cost-contract";
+import type { CostComponent, CostData, CostSelection } from "./cost-contract";
 import { CATALOG_FORMAT, MODEL_VERSIONS, CatalogError, refKey, revisionHash, type Checked, type DeepReadonly, type Kind, type Ref, type Model } from "./identity-contract";
 import { canonicalJson } from "../case/recovery-hash";
 import type { Channel } from "./source-contract";
 
 const KINDS = ["source","product","tariff","fund","portfolio","parameter","cost"] as const;
 const COMPONENTS = ["fund_ter","acquisition","administration","custody","transaction","payout"] as const;
+const K1_REQUIRED_COMPONENTS = ["fund_ter", "acquisition", "administration"] as const;
 const CHANNELS = ["source","asset","display","export"] as const;
 const fail = (code: string, path: string): never => { throw new CatalogError(code,path); };
 function check(ok: unknown, code: string, p: string): asserts ok { if (!ok) fail(code,p); }
@@ -298,14 +299,21 @@ function links(r:CatalogRecord):Ref[] {
   visit(r.data);visit(r.citations);return found;
 }
 const active=(r:CatalogRecord,on:string)=>r.validFrom<=on && (r.validTo===null || on<=r.validTo);
-function parameter(ctx:Context,r:Ref<"parameter">,unit:string,purpose:ParameterData["purpose"],owner?:{product:Ref<"product">;tariff:Ref<"tariff">;phase:"savings"|"payout"},use?:{model:Model;version:string}) {
-  const p=ctx.get(r,"parameter").data;
-  check(p.purpose===purpose,"parameter_purpose",refKey(r));
+function parameterForPurpose(ctx: Context, ref: Ref<"parameter">, purpose: ParameterData["purpose"]) {
+  const data = ctx.get(ref, "parameter").data;
+  check(data.purpose === purpose, "parameter_purpose", refKey(ref));
+  return data;
+}
+function parameter(ctx:Context,r:Ref<"parameter">,unit:ParameterData["unit"],purpose:ParameterData["purpose"],owner?:{product:Ref<"product">;tariff:Ref<"tariff">;phase:"savings"|"payout"},use?:{model:Model;version:string}) {
+  const p=parameterForPurpose(ctx,r,purpose);
   check(p.unit===unit,"parameter_unit",refKey(r));
   check(p.value.class!=="O" && p.approval==="approved","parameter_not_approved",refKey(r));
   if(owner)check(p.phase===owner.phase && (p.productId===null || p.productId===owner.product.id) && (p.tariffId===null || p.tariffId===owner.tariff.id),"parameter_scope",refKey(r));
   if(use)check(p.models.some(m=>m.model===use.model && m.version===use.version),"parameter_model_mismatch",refKey(r));
   return p;
+}
+function requireK1Coverage(components: readonly CostComponent[], path: string) {
+  check(K1_REQUIRED_COMPONENTS.every(component => components.includes(component)), "K1_coverage_incomplete", path);
 }
 function semantic(ctx:Context,r:CatalogRecord) {
   const p=refKey(r);
@@ -322,7 +330,10 @@ function semantic(ctx:Context,r:CatalogRecord) {
     if(r.data.value.class==="B")check(r.citations.some(c=>["legislation","manufacturer_final","manufacturer_provisional"].includes(ctx.get(c.source,"source").data.authority)),"missing_B_evidence",p);
   }
   if(r.kind==="product") {
-    for(const f of r.data.features){const v=ctx.get(f,"parameter").data;check(v.productId===null || v.productId===r.id,"parameter_scope",p);}
+    for (const feature of r.data.features) {
+      const data = parameterForPurpose(ctx, feature, "general");
+      check(data.productId === null || data.productId === r.id, "parameter_scope", p);
+    }
     const g=r.data.guarantee;
     if(g.kind==="contribution_guarantee" || g.kind==="value_protection_target"){
       const v=parameter(ctx,g.rate,"ratio","general");check(v.productId===null || v.productId===r.id,"parameter_scope",p);
@@ -337,7 +348,11 @@ function semantic(ctx:Context,r:CatalogRecord) {
     }
   }
   if(r.kind==="tariff"){
-    for(const a of r.data.accessRules){const v=ctx.get(a,"parameter").data;check((v.productId===null || v.productId===r.data.product.id) && (v.tariffId===null || v.tariffId===r.id),"parameter_scope",p);}
+    for (const rule of r.data.accessRules) {
+      const data = parameterForPurpose(ctx, rule, "general");
+      check((data.productId === null || data.productId === r.data.product.id)
+        && (data.tariffId === null || data.tariffId === r.id), "parameter_scope", p);
+    }
     for(const port of r.data.portfolios)for(const w of ctx.get(port,"portfolio").data.weights)check(r.data.fundOptions.some(f=>canonicalJson(f)===canonicalJson(w.fund)),"portfolio_fund_unavailable",p);
     if(r.data.annuityFactor!==null) {
       const v=ctx.get(r.data.annuityFactor,"parameter").data;
@@ -353,11 +368,15 @@ function semantic(ctx:Context,r:CatalogRecord) {
     }
   }
   if(r.kind==="fund" && r.data.isin!==null)check(r.citations.some(c=>["manufacturer_final","manufacturer_provisional"].includes(ctx.get(c.source,"source").data.authority)),"missing_isin_evidence",p);
-  if(r.kind==="fund" && r.data.informationalTer!==null){const v=ctx.get(r.data.informationalTer,"parameter").data;check(v.unit==="annual_ratio","parameter_unit",p);}
+  if (r.kind === "fund" && r.data.informationalTer !== null) {
+    const data = parameterForPurpose(ctx, r.data.informationalTer, "general");
+    check(data.unit === "annual_ratio", "parameter_unit", p);
+  }
   if(r.kind==="cost") {
     const d=r.data;
     check(canonicalJson(ctx.get(d.tariff,"tariff").data.product)===canonicalJson(d.product),"cost_tariff_product",p);
     if(d.mode==="K1"){
+      requireK1Coverage(d.components, p);
       const v=parameter(ctx,d.parameter,"annual_ratio","general",d);
       check(v.value.class==="A" && v.models.some(m=>m.model===d.model && m.version===d.modelVersion),"K1_working_parameter_required",p);
       check(r.citations.length>0,"missing_cost_evidence",p);
@@ -423,7 +442,7 @@ export function applyCaseOverride(catalog:unknown,input:unknown):Checked<{ base:
     id(o.id,"$.id");id(o.caseId,"$.caseId");ref(o.base,"$.base","parameter");date(o.recordedOn,"$.recordedOn");
     check(o.recordedOn===ctx.catalog.asOf && ctx.current(o.base),"not_current","$.base");
     const p=ctx.get(o.base as Ref<"parameter">,"parameter").data;
-    check(p.overridePolicy==="scenario" && p.value.class!=="B","override_forbidden","$");
+    check(p.purpose === "general" && p.overridePolicy === "scenario" && p.value.class !== "B", "override_forbidden", "$");
     value(o.value,p.unit,"$.value");check((o.value as {class:string}).class==="S","override_must_be_scenario","$");
     return {base:o.base as Ref<"parameter">,effective:o as unknown as CaseOverride,unit:p.unit};
   });
@@ -454,7 +473,10 @@ export function validateCostSelection(catalog:unknown,input:unknown):Checked<Cos
       check(canonicalJson(d.product)===canonicalJson(selection.product) && canonicalJson(d.tariff)===canonicalJson(selection.tariff),"cost_scope","$");
       check(!phases.has(d.phase),"conflicting_cost_modes","$");phases.add(d.phase);
       check(d.mode!=="open","payout_costs_open","$");if(d.mode==="K2")check(d.status==="verified" && d.coverage==="complete","K2_blocked","$");
-      if(d.mode==="K1")check(d.model===selection.model && d.modelVersion===selection.modelVersion,"cost_model_mismatch","$");
+      if (d.mode === "K1") {
+        requireK1Coverage(d.components, refKey(r));
+        check(d.model === selection.model && d.modelVersion === selection.modelVersion, "cost_model_mismatch", "$");
+      }
       const use={model:selection.model,version:selection.modelVersion};
       if(d.mode==="K1" || d.mode==="annual_balance_ratio")parameter(ctx,d.parameter,"annual_ratio","general",d,use);
       else if(d.mode==="monthly_fixed_eur")parameter(ctx,d.parameter,"eur","general",d,use);

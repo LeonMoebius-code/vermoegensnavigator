@@ -144,6 +144,15 @@ K1/K2 oder einem Proxy belastet werden. K2-Komponenten dürfen sich zeitlich nic
 überlappen. Unterschiedliche Gebühren derselben Komponente müssen vorab zu einem
 belegten nicht überlappenden Komponentenvertrag aufbereitet werden.
 
+K1 umfasst in beiden Modellkonventionen mindestens `fund_ter`, `acquisition`
+und `administration`. Die semantische Katalogprüfung und die Kostenauswahl
+weisen jede K1-Deklaration mit einer fehlenden Pflichtkomponente als
+`K1_coverage_incomplete` zurück. Bei vollständiger Deklaration sperrt die
+Auswahl jede Überschneidung mit `returns.deducted` in der Ansparphase.
+Weitere Komponenten zählen nur bei ausdrücklicher Deklaration. K2 behält
+seine gesonderte Prüfung von Tarifkostenbeleg, Komponenten, Gebühren und
+Zeitpunkten.
+
 Die Deklaration eines K2- oder Proxy-Kostenvertrags aktiviert ihn noch nicht
 für ein Modell. `validateCostSelection` prüft für jede tatsächlich verwendete
 K1-/K2-/Monatsfix-/Jahresquoten-Parameterref zusätzlich das ausgewählte Modell
@@ -178,6 +187,34 @@ Grund, Stichtag und ausdrücklich Klasse S. Nur mit `overridePolicy:scenario`
 freigegebene Parameter können überschrieben werden. B bleibt geschützt.
 Der Rückgabewert enthält Originalreferenz und effektiven Override getrennt.
 Es wird kein zentraler Datensatz geändert, gespeichert oder neu berechnet.
+
+## Prüfmatrix R83-N3
+
+Alle Referenzen im Katalog behalten die bestehende Prüfung auf Revision und
+Gültigkeit. Die folgende Matrix beschreibt die zusätzliche fachliche Verwendung.
+Bei Merkmalen, Zugangsregeln und informativem TER ist der Zweck auch für O/null
+verbindlich. Diese Verweise aktivieren keinen Zahlenwert.
+
+| Parameterverbraucher | Zweck und Einheit | Produkt, Tarif und Phase | Freigabe und Offenheit | Modell | Positiv- und Negativtests |
+| --- | --- | --- | --- | --- | --- |
+| Produktmerkmale | `general`, alle Katalogeinheiten | Produkt-ID passend oder global | Deklaration einschließlich O/null | Keine zusätzliche Bindung | N3-01 `features`, numerisch und offen, falscher Zweck bei Parsing und Auflösung |
+| Produktgarantie oder Wertsicherungsziel | `general`, `ratio` | Produkt-ID passend oder global | B, genehmigt und belegt. Offene Garantie als eigene Variante | Keine zusätzliche Bindung | P1-16, N3-01 `documented guarantee` |
+| Tarifzugangsregeln | `general`, alle Katalogeinheiten | Produkt- und Tarif-ID passend, soweit angegeben | Deklaration einschließlich O/null | Keine zusätzliche Bindung | N3-01 `accessRules`, numerisch und offen, falscher Zweck bei Parsing und Auflösung |
+| Tarifrentenfaktor | `annuity_factor`, `eur` | Exaktes Produkt und Tarif, `payout` | Genehmigter B-Wert mit finalem Faktorbeleg oder O/null. Override gesperrt | Keine zusätzliche Bindung | N1-01, N2 `factor and O/null`, N3-01 `case override` |
+| Informativer Fonds-TER | `general`, `annual_ratio` | Keine zusätzliche Eigentümer- oder Phasenbindung | Deklaration einschließlich O/null | Keine zusätzliche Bindung | P1-13, N3-01 `informationalTer`, numerisch und offen, falscher Zweck bei Parsing und Auflösung |
+| K1-Arbeitskosten | `general`, `annual_ratio` | Kostenpfad und Ansparphase. Parameter-Eigentümer passend, soweit angegeben | A, genehmigt, Quellenbeleg am Kostenvertrag | M1/M2 und exakte Version bei Deklaration und Auswahl | P1-09/10, N2 `K1`, N3-02 je Modell und Pflichtkomponente |
+| Verifizierte K2-Gebühr | `general`, `eur` fix oder `ratio` proportional | Kostenpfad und jeweilige Phase. Parameter-Eigentümer passend, soweit angegeben | B und genehmigt, finaler Tarifkostenbeleg. Gesperrte Deklaration nicht aktivierbar | Exakte Version bei Auswahl | P1-09/10/12, N1-02 `K2`, N2 `K2-admin`, `K2-payout` und `K2-rate`, N3-02 `additional fees` |
+| Monatliche fixe Auszahlungskosten | `general`, `eur` | Kostenpfad und `payout`. Parameter-Eigentümer passend, soweit angegeben | Genehmigt, numerisch | Exakte Version bei Auswahl | P1-09/11, N1-02 `fixed`, N2 `monthly` |
+| Jährliche Bestandskostenquote | `general`, `annual_ratio` | Kostenpfad und `payout`. Parameter-Eigentümer passend, soweit angegeben | Genehmigt, numerisch | Exakte Version bei Auswahl | N1-02 und N2 `annual` |
+| Fallbezogener Override | `general`, Einheit der Basis | Exakte aktuelle Basis und Fall-ID. Eigentümer und Phase verbleiben an der Basis | Szenario-Policy, Basis außerhalb B, einschließlich O/null. Ergebnis S | Keine zusätzliche Bindung | P1-08/13, N3-01 `case override` |
+
+| Kosteninvariante | Positivtest | Negativtest |
+| --- | --- | --- |
+| Dieselbe K1-Mindestabdeckung in M1/M2 | N3-02 `six K1 paths`: sechs Produktpfade je Modell mit Bruttorendite | N3-02 je drei Einzelweglassungen und drei bereits abgezogene Komponenten pro Modell |
+| Gebühren nur in der zugeordneten Phase und nur einmal | P1-09/11: getrennte zulässige Auszahlungskosten | P1-10: K1/K2 zugleich in der Ansparphase. N3-02: Abzüge in derselben Phase |
+| Zusätzliche explizite Gebührenbestandteile | N3-02 `additional fees`: Transaktionsabzug bei K1 ohne Transaktionsangabe, separat belegter K2 | Derselbe Test sperrt erneuten Abzug bei ausdrücklicher Angabe in K1 oder K2 |
+| Belegte und gesperrte K2-Stände | P1-09/12 und N2: verifizierte Verwendung und Deklaration unvollständiger Daten | P1-12 und N2: Sperre der Aktivierung unvollständiger Daten |
+| Revisionskette und Fallbezug | P1-06/08: Kostenhistorie und isolierter Override | P1-07/08 sowie N3-01: Historienmutation oder unzulässiger Override |
 
 ## Abnahme und Folgepflichten
 
