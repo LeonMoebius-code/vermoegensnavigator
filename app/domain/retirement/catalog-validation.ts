@@ -1,6 +1,6 @@
 import type { Catalog, CatalogRecord, CaseOverride, ValidatedCatalog } from "./catalog-contract";
 import type { CostData, CostSelection } from "./cost-contract";
-import { CATALOG_FORMAT, MODEL_VERSIONS, CatalogError, refKey, revisionHash, type Checked, type DeepReadonly, type Kind, type Ref } from "./identity-contract";
+import { CATALOG_FORMAT, MODEL_VERSIONS, CatalogError, refKey, revisionHash, type Checked, type DeepReadonly, type Kind, type Ref, type Model } from "./identity-contract";
 import { canonicalJson } from "../case/recovery-hash";
 import type { Channel } from "./source-contract";
 
@@ -9,14 +9,17 @@ const COMPONENTS = ["fund_ter","acquisition","administration","custody","transac
 const CHANNELS = ["source","asset","display","export"] as const;
 const fail = (code: string, path: string): never => { throw new CatalogError(code,path); };
 function check(ok: unknown, code: string, p: string): asserts ok { if (!ok) fail(code,p); }
-/** Inspect own data descriptors before reading. No getters, sparse arrays, cycles or coercion.
+/** Boundary for inert JSON data, not a sandbox for executable objects or Proxies.
+ * Own accessors, sparse arrays and cycles are rejected without invoking those accessors.
+ * Reflection on a Proxy can execute traps; callers must not submit executable objects.
  * Limits protect this synchronous catalog boundary, not the financial projection horizon. */
 function copyPlain(input: unknown): unknown {
   let count = 0;
   const seen = new Set<object>();
   function copy(v: unknown, depth: number): unknown {
     check(++count <= 100000 && depth <= 40,"resource_limit","$");
-    if (v === null || typeof v === "string" || typeof v === "boolean") return v;
+    if (typeof v === "string") { check(wellFormed(v),"invalid_unicode","$"); return v; }
+    if (v === null || typeof v === "boolean") return v;
     if (typeof v === "number") { check(Number.isFinite(v) && !Object.is(v,-0),"invalid_number","$"); return v; }
     check(typeof v === "object" && v !== null,"invalid_shape","$");
     check(!seen.has(v),"cyclic_data","$");
@@ -42,6 +45,7 @@ function copyPlain(input: unknown): unknown {
       const o: Record<string,unknown> = Object.create(null);
       for (const k of keys) {
         check(typeof k === "string","invalid_shape","$");
+        check(wellFormed(k),"invalid_unicode","$");
         const d=ds[k];
         check("value" in d && d.enumerable,"invalid_shape","$");
         o[k]=copy(d.value,depth+1);
@@ -52,6 +56,15 @@ function copyPlain(input: unknown): unknown {
     return out;
   }
   return copy(input,0);
+}
+/** Require well-formed Unicode in inert external data, including object keys. */
+function wellFormed(s:string):boolean {
+  for(let i=0;i<s.length;i++) {
+    const code=s.charCodeAt(i);
+    if(code>=0xd800 && code<=0xdbff){const next=s.charCodeAt(++i);if(!(next>=0xdc00 && next<=0xdfff))return false;}
+    else if(code>=0xdc00 && code<=0xdfff)return false;
+  }
+  return true;
 }
 function object(v: unknown, keys: readonly string[], p: string): asserts v is Record<string,unknown> {
   check(v!==null && typeof v==="object" && !Array.isArray(v),"invalid_shape",p);
@@ -165,7 +178,7 @@ function recordShape(v:unknown,p:string): asserts v is CatalogRecord {
       object(d,["title","documentVersion","documentHash","issuedOn","authority","purpose"],p);
       text(d.title,p);text(d.documentVersion,p);hash(d.documentHash,p);date(d.issuedOn,p);check(d.issuedOn<=v.reviewedOn,"source_after_review",p);
       member(d.authority,["legislation","manufacturer_final","manufacturer_provisional","project","scenario"],p);
-      member(d.purpose,["property","parameter","cost_schedule","algorithm","reference_cases","publication"],p);
+      member(d.purpose,["property","parameter","cost_schedule","algorithm","reference_cases","publication","annuity_factor"],p);
       check(v.citations.length===0,"source_citation_cycle",p);break;
     case "product":
       object(d,["name","manufacturerId","features","manufacturer","bank","guarantee","capabilities"],p);
@@ -211,7 +224,8 @@ function recordShape(v:unknown,p:string): asserts v is CatalogRecord {
         sum+=w.basisPoints;
       }check(sum===10000,"portfolio_total",p);}break;
     case "parameter":
-      object(d,["name","productId","tariffId","phase","unit","value","models","approval","overridePolicy"],p);
+      object(d,["name","purpose","productId","tariffId","phase","unit","value","models","approval","overridePolicy"],p);
+      member(d.purpose,["general","annuity_factor"],p);
       text(d.name,p);if(d.productId!==null)id(d.productId,p);if(d.tariffId!==null){id(d.tariffId,p);check(d.productId!==null,"missing_product_owner",p);}
       if(d.phase!==null)member(d.phase,["savings","payout"],p);
       member(d.unit,["annual_ratio","ratio","eur","years","months","date"],p);value(d.value,d.unit,p);
@@ -284,11 +298,12 @@ function links(r:CatalogRecord):Ref[] {
   visit(r.data);visit(r.citations);return found;
 }
 const active=(r:CatalogRecord,on:string)=>r.validFrom<=on && (r.validTo===null || on<=r.validTo);
-function parameter(ctx:Context,r:Ref<"parameter">,unit:string,owner?:{product:Ref<"product">;tariff:Ref<"tariff">;phase:"savings"|"payout"}) {
+function parameter(ctx:Context,r:Ref<"parameter">,unit:string,owner?:{product:Ref<"product">;tariff:Ref<"tariff">;phase:"savings"|"payout"},use?:{model:Model;version:string}) {
   const p=ctx.get(r,"parameter").data;
   check(p.unit===unit,"parameter_unit",refKey(r));
   check(p.value.class!=="O" && p.approval==="approved","parameter_not_approved",refKey(r));
   if(owner)check(p.phase===owner.phase && (p.productId===null || p.productId===owner.product.id) && (p.tariffId===null || p.tariffId===owner.tariff.id),"parameter_scope",refKey(r));
+  if(use)check(p.models.some(m=>m.model===use.model && m.version===use.version),"parameter_model_mismatch",refKey(r));
   return p;
 }
 function semantic(ctx:Context,r:CatalogRecord) {
@@ -300,6 +315,7 @@ function semantic(ctx:Context,r:CatalogRecord) {
   }
   if(r.publication.state==="released")check(r.publication.approval.approvedOn<=r.changedOn,"future_publication_approval",p);
   if(r.kind==="parameter"){
+    if(r.data.purpose==="annuity_factor")check(r.data.overridePolicy==="forbidden","annuity_override_forbidden",p);
     if(r.data.productId!==null)check(ctx.catalog.records.some(x=>x.kind==="product" && x.id===r.data.productId),"missing_product_owner",p);
     if(r.data.tariffId!==null)check(ctx.catalog.records.some(x=>x.kind==="tariff" && x.id===r.data.tariffId && x.data.product.id===r.data.productId),"missing_tariff_owner",p);
     if(r.data.value.class==="B")check(r.citations.some(c=>["legislation","manufacturer_final","manufacturer_provisional"].includes(ctx.get(c.source,"source").data.authority)),"missing_B_evidence",p);
@@ -324,7 +340,15 @@ function semantic(ctx:Context,r:CatalogRecord) {
     for(const port of r.data.portfolios)for(const w of ctx.get(port,"portfolio").data.weights)check(r.data.fundOptions.some(f=>canonicalJson(f)===canonicalJson(w.fund)),"portfolio_fund_unavailable",p);
     if(r.data.annuityFactor!==null) {
       const v=ctx.get(r.data.annuityFactor,"parameter").data;
-      check(v.unit==="eur" && (v.value.class==="O" || v.value.class==="B"),"invalid_annuity_factor",p);
+      check(v.unit==="eur" && v.purpose==="annuity_factor" && v.phase==="payout"
+        && v.productId===r.data.product.id && v.tariffId===r.id,"invalid_annuity_factor",p);
+      if(v.value.class!=="O") {
+        parameter(ctx,r.data.annuityFactor,"eur",{product:r.data.product,tariff:r,phase:"payout"});
+        check(v.value.class==="B" && ctx.get(r.data.annuityFactor,"parameter").citations.some(c=>{
+          const source=ctx.get(c.source,"source").data;
+          return source.authority==="manufacturer_final" && source.purpose==="annuity_factor";
+        }),"annuity_evidence_unverified",p);
+      }
     }
   }
   if(r.kind==="fund" && r.data.isin!==null)check(r.citations.some(c=>["manufacturer_final","manufacturer_provisional"].includes(ctx.get(c.source,"source").data.authority)),"missing_isin_evidence",p);
@@ -422,17 +446,21 @@ export function validateCostSelection(catalog:unknown,input:unknown):Checked<Cos
     const selection=s as unknown as CostSelection;const phases=new Set<string>(),charged=new Set<string>();
     for(const r of [selection.product,selection.tariff,...selection.costs])check(ctx.current(r),"not_current",refKey(r));
     check(canonicalJson(ctx.get(selection.tariff,"tariff").data.product)===canonicalJson(selection.product),"cost_tariff_product","$");
+    const product=ctx.get(selection.product,"product").data;
+    check(product.capabilities.some(c=>c.model===selection.model && c.version===selection.modelVersion && c.status==="available"),"model_blocked","$");
     for(const r of selection.costs){
       const d=ctx.get(r,"cost").data;
       check(canonicalJson(d.product)===canonicalJson(selection.product) && canonicalJson(d.tariff)===canonicalJson(selection.tariff),"cost_scope","$");
       check(!phases.has(d.phase),"conflicting_cost_modes","$");phases.add(d.phase);
       check(d.mode!=="open","payout_costs_open","$");if(d.mode==="K2")check(d.status==="verified" && d.coverage==="complete","K2_blocked","$");
       if(d.mode==="K1")check(d.model===selection.model && d.modelVersion===selection.modelVersion,"cost_model_mismatch","$");
+      const use={model:selection.model,version:selection.modelVersion};
+      if(d.mode==="K1" || d.mode==="annual_balance_ratio")parameter(ctx,d.parameter,"annual_ratio",d,use);
+      else if(d.mode==="monthly_fixed_eur")parameter(ctx,d.parameter,"eur",d,use);
+      else if(d.mode==="K2")for(const charge of d.charges)parameter(ctx,charge.parameter,charge.type==="fixed"?"eur":"ratio",d,use);
       if("components" in d)for(const comp of d.components){const key=d.phase+":"+comp;check(!charged.has(key) && !deducted.has(key),"duplicate_cost_component","$");charged.add(key);}
     }
     check(phases.has("savings") && phases.has("payout"),"missing_cost_phase","$");
-    const product=ctx.get(selection.product,"product").data;
-    check(product.capabilities.some(c=>c.model===selection.model && c.version===selection.modelVersion && c.status==="available"),"model_blocked","$");
     return selection;
   });
 }

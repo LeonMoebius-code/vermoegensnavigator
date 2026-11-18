@@ -274,3 +274,92 @@ test("P1-26: savings cost assumptions cannot silently become payout assumptions"
     parameter:reference(record(c,"synthetic-cost-1","parameter")),convention:"payout_balance_factor_v1",components:["payout"]};
   reseal(c);code(parseCatalog(c),"parameter_scope");
 });
+
+function annuityFixture(open=false):Catalog {
+  const c=syntheticCatalog();
+  const source=structuredClone(record(c,"synthetic-schedule","source"));
+  (source as {id:string}).id="synthetic-annuity-evidence";source.data.purpose="annuity_factor";
+  const factor=structuredClone(record(c,"synthetic-payout-fee","parameter"));
+  (factor as {id:string}).id="synthetic-annuity-factor";
+  factor.data.name="Artificial documented annuity factor";factor.data.purpose="annuity_factor";
+  factor.data.value=open?{class:"O",value:null,reason:"No individual factor known"}:{class:"B",value:27.5,reason:"Artificial final factor evidence"};
+  factor.data.approval=open?"open":"approved";
+  factor.citations=[{source:reference(source),locator:"Artificial individual annuity offer"}];
+  c.records.push(source,factor);c.current.push(reference(source),reference(factor));
+  record(c,"synthetic-tariff-1","tariff").data.annuityFactor=reference(factor);
+  return reseal(c);
+}
+test("R83-N1-01: exact approved final factor and open O/null factor stay distinct",()=>{
+  for(const open of [false,true]){
+    const c=annuityFixture(open);valid(c);
+    const result=resolveCurrent(c,reference(record(c,"synthetic-annuity-factor","parameter")),c.asOf);
+    expect(result).toMatchObject({ok:true,value:{data:{value:{class:open?"O":"B",value:open?null:27.5},approval:open?"open":"approved"}}});
+  }
+});
+const factorFailures:[string,string,(c:Catalog)=>void][]=[
+  ["foreign product","invalid_annuity_factor",c=>{const p=record(c,"synthetic-annuity-factor","parameter");p.data.productId="synthetic-product-2";p.data.tariffId="synthetic-tariff-2";}],
+  ["foreign tariff","invalid_annuity_factor",c=>{const t=structuredClone(record(c,"synthetic-tariff-1","tariff"));(t as {id:string}).id="synthetic-other-tariff";t.data.annuityFactor=null;c.records.push(t);c.current.push(reference(t));record(c,"synthetic-annuity-factor","parameter").data.tariffId=t.id;}],
+  ["missing exact owner","invalid_annuity_factor",c=>{const p=record(c,"synthetic-annuity-factor","parameter");p.data.productId=null;p.data.tariffId=null;}],
+  ["savings factor","invalid_annuity_factor",c=>{record(c,"synthetic-annuity-factor","parameter").data.phase="savings";}],
+  ["proposed factor","parameter_not_approved",c=>{record(c,"synthetic-annuity-factor","parameter").data.approval="proposed";}],
+  ["ordinary administrative EUR fee","invalid_annuity_factor",c=>{record(c,"synthetic-tariff-1","tariff").data.annuityFactor=reference(record(c,"synthetic-payout-fee","parameter"));}],
+  ["wrong evidence purpose","annuity_evidence_unverified",c=>{record(c,"synthetic-annuity-evidence","source").data.purpose="cost_schedule";}],
+  ["provisional evidence","annuity_evidence_unverified",c=>{record(c,"synthetic-annuity-evidence","source").data.authority="manufacturer_provisional";}],
+  ["scenario factor","annuity_evidence_unverified",c=>{record(c,"synthetic-annuity-factor","parameter").data.value={class:"S",value:27.5,reason:"Unconfirmed scenario"};}],
+  ["open factor as numeric zero","open_value_must_be_null",c=>{const p=record(c,"synthetic-annuity-factor","parameter");Object.assign(p.data.value,{class:"O",value:0});p.data.approval="open";}]
+];
+for(const [name,expected,mutate] of factorFailures)test("R83-N1-01 rejects "+name,()=>{
+  const c=annuityFixture();mutate(c);reseal(c);code(parseCatalog(c),expected);
+  code(resolveCurrent(c,reference(record(c,"synthetic-tariff-1","tariff")),c.asOf),expected);
+});
+function scopedCosts(kind:"K2"|"fixed"|"annual"): {c:Catalog;parameterId:string} {
+  const c=syntheticCatalog();
+  if(kind==="K2")return {c,parameterId:"synthetic-fixed-fee"};
+  if(kind==="fixed")return {c,parameterId:"synthetic-payout-fee"};
+  const rate=structuredClone(record(c,"synthetic-cost-1","parameter"));
+  (rate as {id:string}).id="synthetic-n1-payout-rate";rate.data.phase="payout";
+  c.records.push(rate);c.current.push(reference(rate));
+  const s=costSelection(c);
+  record(c,"synthetic-payout-1","cost").data={product:s.product,tariff:s.tariff,phase:"payout",mode:"annual_balance_ratio",parameter:reference(rate),convention:"payout_balance_factor_v1",components:["payout"]};
+  return {c:reseal(c),parameterId:rate.id};
+}
+function selectedCosts(c:Catalog,kind:"K2"|"fixed"|"annual",model:"M1"|"M2"="M1") {
+  const s=costSelection(c);s.model=model;s.modelVersion=MODEL_VERSIONS[model];
+  s.costs[0]=reference(record(c,kind==="K2"?"synthetic-k2":model==="M1"?"synthetic-k1-m1-1":"synthetic-k1-m2-1","cost"));
+  if(kind==="fixed")s.costs[1]=reference(record(c,"synthetic-payout-fixed","cost"));
+  return s;
+}
+for(const kind of ["K2","fixed","annual"] as const){
+  for(const selected of ["M1","M2"] as const)test("R83-N1-02: "+kind+" M3-only parameter rejected in "+selected,()=>{
+    const {c,parameterId}=scopedCosts(kind);
+    record(c,parameterId,"parameter").data.models=[{model:"M3",version:MODEL_VERSIONS.M3}];reseal(c);
+    valid(c); // Declaring the structure does not activate it for any selected model.
+    code(validateCostSelection(c,selectedCosts(c,kind,selected)),"parameter_model_mismatch");
+  });
+  for(const selected of ["M1","M2"] as const)test("R83-N1-02: "+kind+" exact "+selected+" model/version accepted",()=>{
+    const {c,parameterId}=scopedCosts(kind);
+    record(c,parameterId,"parameter").data.models=[{model:selected,version:MODEL_VERSIONS[selected]}];reseal(c);
+    expect(validateCostSelection(c,selectedCosts(c,kind,selected))).toMatchObject({ok:true});
+  });
+  test("R83-N1-02: "+kind+" empty applicability is not a wildcard",()=>{
+    const {c,parameterId}=scopedCosts(kind);record(c,parameterId,"parameter").data.models=[];reseal(c);valid(c);
+    code(validateCostSelection(c,selectedCosts(c,kind)),"parameter_model_mismatch");
+  });
+  test("R83-N1-02: "+kind+" correct model with wrong version rejected at both boundaries",()=>{
+    const {c,parameterId}=scopedCosts(kind);record(c,parameterId,"parameter").data.models=[{model:"M1",version:MODEL_VERSIONS.M2}];reseal(c);
+    code(parseCatalog(c),"unknown_version");code(validateCostSelection(c,selectedCosts(c,kind)),"unknown_version");
+  });
+}
+test("R83-N1 security: reject lone Unicode surrogates in values and keys, preserve valid pairs",()=>{
+  for(const surrogate of ["\ud800","\udfff"]){
+    const c=syntheticCatalog();record(c,"synthetic-product-1","product").data.name=surrogate;
+    code(parseCatalog(c),"invalid_unicode");
+    const k=syntheticCatalog();Object.assign(k,{[surrogate]:true});code(parseCatalog(k),"invalid_unicode");
+  }
+  const c=syntheticCatalog();record(c,"synthetic-product-1","product").data.name="Synthetic \ud83d\ude80";reseal(c);valid(c);
+});
+test("R83-N1 security: executable Proxy reflection is outside the inert-data boundary",()=>{
+  let traps=0;
+  const proxy=new Proxy(syntheticCatalog(),{getPrototypeOf(){traps++;throw new Error("Executable Proxy outside contract");}});
+  code(parseCatalog(proxy),"invalid_shape");expect(traps).toBe(1);
+});

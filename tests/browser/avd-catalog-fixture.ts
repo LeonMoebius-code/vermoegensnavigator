@@ -25,7 +25,7 @@ export function syntheticCatalog():Catalog {
     issuedOn:"2026-01-01",authority:"manufacturer_final",purpose:"cost_schedule"
   }));
   const ter=reference(add("parameter","synthetic-ter",{
-    name:"Open informational TER",productId:null,tariffId:null,phase:null,unit:"annual_ratio",
+    name:"Open informational TER",purpose:"general",productId:null,tariffId:null,phase:null,unit:"annual_ratio",
     value:{class:"O",value:null,reason:"No synthetic TER assumed"},models:[],approval:"open",overridePolicy:"scenario"
   },src));
   const funds=Array.from({length:11},(_,i)=>reference(add("fund","synthetic-fund-"+(i+1),{
@@ -41,7 +41,7 @@ export function syntheticCatalog():Catalog {
   const emptyRequirements=()=>({investment:[],costs:[],guarantee:[],payout:[],referenceCases:[]});
   for(let i=1;i<=6;i++) {
     const costParam=reference(add("parameter","synthetic-cost-"+i,{
-      name:"Artificial annual working cost "+i,productId:"synthetic-product-"+i,tariffId:"synthetic-tariff-"+i,
+      name:"Artificial annual working cost "+i,purpose:"general",productId:"synthetic-product-"+i,tariffId:"synthetic-tariff-"+i,
       phase:"savings",unit:"annual_ratio",value:{class:"A",value:0.0123+(i-1)/10000,reason:"Artificial test value"},
       models:[{model:"M1",version:MODEL_VERSIONS.M1},{model:"M2",version:MODEL_VERSIONS.M2}],approval:"approved",overridePolicy:"scenario"
     },src));
@@ -66,15 +66,15 @@ export function syntheticCatalog():Catalog {
     add("cost","synthetic-payout-"+i,{product,tariff,phase:"payout",mode:"before_payout_costs",label:"scenario_before_payout_costs"},src);
     if(i===1) {
       const fee=reference(add("parameter","synthetic-fixed-fee",{
-        name:"Artificial fee",productId:product.id,tariffId:tariff.id,phase:"savings",unit:"eur",
-        value:{class:"B",value:2.25,reason:"Artificial schedule"},models:[],approval:"approved",overridePolicy:"forbidden"
+        name:"Artificial fee",purpose:"general",productId:product.id,tariffId:tariff.id,phase:"savings",unit:"eur",
+        value:{class:"B",value:2.25,reason:"Artificial schedule"},models:[{model:"M1",version:MODEL_VERSIONS.M1},{model:"M2",version:MODEL_VERSIONS.M2}],approval:"approved",overridePolicy:"forbidden"
       },schedule));
       add("cost","synthetic-k2",{product,tariff,phase:"savings",mode:"K2",tariffEvidence:schedule,coverage:"complete",status:"verified",
         reason:"Artificial complete test schedule",components:["administration"],charges:[{component:"administration",type:"fixed",
           parameter:fee,basis:"contract",timing:{frequency:"monthly",at:"month_end",from:"2026-01-01",until:null}}]},schedule);
       const payoutFee=reference(add("parameter","synthetic-payout-fee",{
-        name:"Artificial separate payout fee",productId:product.id,tariffId:tariff.id,phase:"payout",unit:"eur",
-        value:{class:"B",value:2.25,reason:"Artificial payout schedule"},models:[],approval:"approved",overridePolicy:"forbidden"
+        name:"Artificial separate payout fee",purpose:"general",productId:product.id,tariffId:tariff.id,phase:"payout",unit:"eur",
+        value:{class:"B",value:2.25,reason:"Artificial payout schedule"},models:[{model:"M1",version:MODEL_VERSIONS.M1},{model:"M2",version:MODEL_VERSIONS.M2}],approval:"approved",overridePolicy:"forbidden"
       },schedule));
       add("cost","synthetic-payout-fixed",{product,tariff,phase:"payout",mode:"monthly_fixed_eur",parameter:payoutFee,
         convention:"capped_at_available_balance_v1",components:["administration"]},src);

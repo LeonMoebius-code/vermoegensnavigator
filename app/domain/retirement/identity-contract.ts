@@ -13,12 +13,14 @@ export type Checked<T> = { ok: true; value: DeepReadonly<T> } | { ok: false; iss
 export class CatalogError extends Error {
   constructor(readonly code: string, readonly path: string) { super(code + ": " + path); }
 }
+/** Trusted internal helper; not an external input validator or Proxy sandbox. */
 export const refKey = (r: Pick<Ref, "kind" | "id" | "revision">) => JSON.stringify([r.kind, r.id, r.revision]);
-/** SHA-256 content binding, not authentication or an authorization decision. */
+/** Trusted inert data only. SHA-256 content binding, not authentication or input validation. */
 export function revisionHash(record: object): string {
   const { hash: _hash, ...body } = record as Record<string, unknown>;
   return sha256(canonicalJson(body));
 }
+/** Trusted internal helper; external data must pass the catalog boundary first. */
 export function reference<K extends Kind>(record: Ref<K>): Ref<K> {
   return Object.freeze({ kind: record.kind, id: record.id, revision: record.revision, hash: record.hash });
 }

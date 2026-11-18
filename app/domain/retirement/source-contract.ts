@@ -15,7 +15,7 @@ export type SourceData = {
   documentHash: string;
   issuedOn: string;
   authority: "legislation" | "manufacturer_final" | "manufacturer_provisional" | "project" | "scenario";
-  purpose: "property" | "parameter" | "cost_schedule" | "algorithm" | "reference_cases" | "publication";
+  purpose: "property" | "parameter" | "cost_schedule" | "algorithm" | "reference_cases" | "publication" | "annuity_factor";
 };
 export type ParameterValue =
   | { class: "B" | "A" | "S"; value: number | string; reason: string }

@@ -30,7 +30,8 @@ Nutzungsrechte und bietet keine Zugriffskontrolle für geheime Daten.
 
 `Ref` besteht aus `kind`, stabiler `id`, positiver ganzzahliger `revision`
 und SHA-256-`hash`. Produkt, Tarif, Fonds, Portfolio, Parameter, Quelle und
-Kostenvertrag haben getrennte Identitätsräume. Kostenparameter tragen selbst
+Kostenvertrag haben getrennte Identitätsräume. Parameter besitzen einen expliziten
+Verwendungszweck `general` oder `annuity_factor`. Kostenparameter tragen selbst
 zusätzlich eine eindeutige Phase. Eine Ansparannahme kann nicht als
 Auszahlparameter wiederverwendet werden. Ein Tarif referenziert genau
 eine Produktrevision. Parameter-Eigentümer sind stabile Produkt-/Tarif-IDs.
@@ -64,7 +65,17 @@ rekursiv ein. Unbekannte Felder, Accessoren, Symbolfelder, nicht aufzählbare
 Eigenschaften, fremde Prototypen, Löcher in Arrays, Zyklen, NaN/Infinity und
 Minusnull werden abgelehnt. Technische Grenzen: 40 Ebenen, 100.000 Datenknoten,
 10.000 Elemente je Array. Diese Grenzen betreffen die Katalogeingabe, keine
-finanzielle Laufzeit. Alle externen Funktionen liefern `Checked<T>` mit einem
+finanzielle Laufzeit. Ungepaarte Unicode-Surrogate in Schlüsseln und Werten
+werden abgelehnt, gültige Unicode-Paare bleiben erhalten.
+
+Die Eingabegrenze gilt für passive JSON-Daten, etwa aus `JSON.parse`, und ist
+keine Sandbox für ausführbare JavaScript-Objekte. Die Reflection eines Proxy
+kann JavaScript-Traps ausführen. Eine nebenwirkungsfreie Prüfung beliebiger
+Proxies wird ausdrücklich nicht zugesichert. Eigene Daten-Accessoren passiver
+Objekte werden weiterhin ohne ihren Aufruf zurückgewiesen. `reference`, `refKey`
+und `revisionHash` sind interne Helfer für bereits vertrauenswürdige passive
+Daten, keine externen Eingangsvalidatoren. Sie dürfen die Laufzeitprüfung nicht
+ersetzen. Alle externen Funktionen liefern `Checked<T>` mit einem
 eindeutigen Fehlercode und Pfad statt Teilwerten.
 
 ## Status, Quellen und Modelle
@@ -90,8 +101,13 @@ Garantie und Wertsicherungsziel sind eigene Varianten. Ein datiertes
 Wertsicherungsziel ist keine Beitragsgarantie. Der Garantiezustand gilt nur
 zum Vertragsablauf. Es gibt keinen Auffüllmechanismus und keinen laufenden
 Kapitalboden. Fehlender Rentenfaktor bleibt offen, die Rentenoption bleibt
-darstellbar. Ein bestätigter Faktor ist eine dokumentierte EUR-Parameterreferenz,
-keine automatisch berechnete Rentenzusage.
+darstellbar. Eine Faktorref muss genau dem Produkt und Tarif zugeordnet sein,
+die Phase `payout`, die Einheit EUR und `purpose:annuity_factor` tragen.
+Ein numerischer Faktor verlangt Klasse B, `approval:approved`, verbotene
+Szenario-Overrides sowie einen finalen Herstellerbeleg mit dem Zweck
+`annuity_factor`. Eine gewöhnliche EUR-Verwaltungsgebühr reicht nicht aus.
+Ein offener Faktor bleibt O/null mit `approval:open`, ohne nutzbaren Zahlenwert.
+Diese Referenz ist keine automatisch berechnete Rentenzusage.
 
 ## Fonds und Portfolios
 
@@ -127,6 +143,14 @@ sind phasenbezogen zu registrieren. Identische Kosten dürfen nicht erneut in
 K1/K2 oder einem Proxy belastet werden. K2-Komponenten dürfen sich zeitlich nicht
 überlappen. Unterschiedliche Gebühren derselben Komponente müssen vorab zu einem
 belegten nicht überlappenden Komponentenvertrag aufbereitet werden.
+
+Die Deklaration eines K2- oder Proxy-Kostenvertrags aktiviert ihn noch nicht
+für ein Modell. `validateCostSelection` prüft für jede tatsächlich verwendete
+K1-/K2-/Monatsfix-/Jahresquoten-Parameterref zusätzlich das ausgewählte Modell
+und dessen exakte Version. Eine leere Modellliste ist kein Platzhalter für
+alle Modelle. Die synthetischen K2-/Fixkostenbeispiele deklarieren M1/M2
+ausdrücklich. Katalogparsing darf einen nur für M3 vorgesehenen Parameter
+darstellen, seine Verwendung in M1 oder M2 bleibt gesperrt.
 
 Kein mathematischer Abzug wird ausgeführt. Die tatsächliche M1-/M2-Wirkung,
 Reihenfolge von Marktrendite und Kosten sowie Fixkostendeckelung sind spätere

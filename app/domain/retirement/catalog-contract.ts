@@ -66,6 +66,8 @@ export type PortfolioData = {
 };
 export type ParameterData = {
   name: string;
+  /** Explicit use; a generic EUR amount is never an annuity factor. */
+  purpose: "general" | "annuity_factor";
   productId: string | null;
   tariffId: string | null;
   phase: "savings" | "payout" | null;
