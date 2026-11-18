@@ -1,4 +1,4 @@
-import type { Catalog, CatalogRecord, CaseOverride, ValidatedCatalog } from "./catalog-contract";
+import type { Catalog, CatalogRecord, CaseOverride, ValidatedCatalog, ParameterData } from "./catalog-contract";
 import type { CostData, CostSelection } from "./cost-contract";
 import { CATALOG_FORMAT, MODEL_VERSIONS, CatalogError, refKey, revisionHash, type Checked, type DeepReadonly, type Kind, type Ref, type Model } from "./identity-contract";
 import { canonicalJson } from "../case/recovery-hash";
@@ -298,8 +298,9 @@ function links(r:CatalogRecord):Ref[] {
   visit(r.data);visit(r.citations);return found;
 }
 const active=(r:CatalogRecord,on:string)=>r.validFrom<=on && (r.validTo===null || on<=r.validTo);
-function parameter(ctx:Context,r:Ref<"parameter">,unit:string,owner?:{product:Ref<"product">;tariff:Ref<"tariff">;phase:"savings"|"payout"},use?:{model:Model;version:string}) {
+function parameter(ctx:Context,r:Ref<"parameter">,unit:string,purpose:ParameterData["purpose"],owner?:{product:Ref<"product">;tariff:Ref<"tariff">;phase:"savings"|"payout"},use?:{model:Model;version:string}) {
   const p=ctx.get(r,"parameter").data;
+  check(p.purpose===purpose,"parameter_purpose",refKey(r));
   check(p.unit===unit,"parameter_unit",refKey(r));
   check(p.value.class!=="O" && p.approval==="approved","parameter_not_approved",refKey(r));
   if(owner)check(p.phase===owner.phase && (p.productId===null || p.productId===owner.product.id) && (p.tariffId===null || p.tariffId===owner.tariff.id),"parameter_scope",refKey(r));
@@ -324,7 +325,7 @@ function semantic(ctx:Context,r:CatalogRecord) {
     for(const f of r.data.features){const v=ctx.get(f,"parameter").data;check(v.productId===null || v.productId===r.id,"parameter_scope",p);}
     const g=r.data.guarantee;
     if(g.kind==="contribution_guarantee" || g.kind==="value_protection_target"){
-      const v=parameter(ctx,g.rate,"ratio");check(v.productId===null || v.productId===r.id,"parameter_scope",p);
+      const v=parameter(ctx,g.rate,"ratio","general");check(v.productId===null || v.productId===r.id,"parameter_scope",p);
       check(v.value.class==="B" && r.citations.some(c=>refKey(c.source)===refKey(g.evidence)),"missing_guarantee_evidence",p);
     }
     for(const cap of r.data.capabilities)if(cap.status==="available" && cap.model==="M3"){
@@ -343,7 +344,7 @@ function semantic(ctx:Context,r:CatalogRecord) {
       check(v.unit==="eur" && v.purpose==="annuity_factor" && v.phase==="payout"
         && v.productId===r.data.product.id && v.tariffId===r.id,"invalid_annuity_factor",p);
       if(v.value.class!=="O") {
-        parameter(ctx,r.data.annuityFactor,"eur",{product:r.data.product,tariff:r,phase:"payout"});
+        parameter(ctx,r.data.annuityFactor,"eur","annuity_factor",{product:r.data.product,tariff:r,phase:"payout"});
         check(v.value.class==="B" && ctx.get(r.data.annuityFactor,"parameter").citations.some(c=>{
           const source=ctx.get(c.source,"source").data;
           return source.authority==="manufacturer_final" && source.purpose==="annuity_factor";
@@ -357,18 +358,18 @@ function semantic(ctx:Context,r:CatalogRecord) {
     const d=r.data;
     check(canonicalJson(ctx.get(d.tariff,"tariff").data.product)===canonicalJson(d.product),"cost_tariff_product",p);
     if(d.mode==="K1"){
-      const v=parameter(ctx,d.parameter,"annual_ratio",d);
+      const v=parameter(ctx,d.parameter,"annual_ratio","general",d);
       check(v.value.class==="A" && v.models.some(m=>m.model===d.model && m.version===d.modelVersion),"K1_working_parameter_required",p);
       check(r.citations.length>0,"missing_cost_evidence",p);
     } else if(d.mode==="monthly_fixed_eur" || d.mode==="annual_balance_ratio"){
-      parameter(ctx,d.parameter,d.mode==="monthly_fixed_eur"?"eur":"annual_ratio",d);
+      parameter(ctx,d.parameter,d.mode==="monthly_fixed_eur"?"eur":"annual_ratio","general",d);
     } else if(d.mode==="K2" && d.status==="verified"){
       const source=ctx.get(d.tariffEvidence,"source").data;
       check(d.coverage==="complete" && source.authority==="manufacturer_final" && source.purpose==="cost_schedule" && r.citations.some(c=>canonicalJson(c.source)===canonicalJson(d.tariffEvidence)),"K2_evidence_unverified",p);
       check(d.charges.length>0,"K2_missing_charges",p);
       for(const charge of d.charges) {
         check(d.components.includes(charge.component),"K2_coverage_mismatch",p);
-        const par=parameter(ctx,charge.parameter,charge.type==="fixed"?"eur":"ratio",d);
+        const par=parameter(ctx,charge.parameter,charge.type==="fixed"?"eur":"ratio","general",d);
         check(par.value.class==="B" && ctx.get(charge.parameter,"parameter").citations.some(c=>canonicalJson(c.source)===canonicalJson(d.tariffEvidence)),"K2_parameter_unverified",p);
         check(charge.timing.from>=r.validFrom && (r.validTo===null || charge.timing.until!==null && charge.timing.until<=r.validTo),"K2_charge_period",p);
         check(charge.type!=="fixed" || charge.basis==="contract","K2_fixed_basis",p);
@@ -455,9 +456,9 @@ export function validateCostSelection(catalog:unknown,input:unknown):Checked<Cos
       check(d.mode!=="open","payout_costs_open","$");if(d.mode==="K2")check(d.status==="verified" && d.coverage==="complete","K2_blocked","$");
       if(d.mode==="K1")check(d.model===selection.model && d.modelVersion===selection.modelVersion,"cost_model_mismatch","$");
       const use={model:selection.model,version:selection.modelVersion};
-      if(d.mode==="K1" || d.mode==="annual_balance_ratio")parameter(ctx,d.parameter,"annual_ratio",d,use);
-      else if(d.mode==="monthly_fixed_eur")parameter(ctx,d.parameter,"eur",d,use);
-      else if(d.mode==="K2")for(const charge of d.charges)parameter(ctx,charge.parameter,charge.type==="fixed"?"eur":"ratio",d,use);
+      if(d.mode==="K1" || d.mode==="annual_balance_ratio")parameter(ctx,d.parameter,"annual_ratio","general",d,use);
+      else if(d.mode==="monthly_fixed_eur")parameter(ctx,d.parameter,"eur","general",d,use);
+      else if(d.mode==="K2")for(const charge of d.charges)parameter(ctx,charge.parameter,charge.type==="fixed"?"eur":"ratio","general",d,use);
       if("components" in d)for(const comp of d.components){const key=d.phase+":"+comp;check(!charged.has(key) && !deducted.has(key),"duplicate_cost_component","$");charged.add(key);}
     }
     check(phases.has("savings") && phases.has("payout"),"missing_cost_phase","$");

@@ -363,3 +363,71 @@ test("R83-N1 security: executable Proxy reflection is outside the inert-data bou
   const proxy=new Proxy(syntheticCatalog(),{getPrototypeOf(){traps++;throw new Error("Executable Proxy outside contract");}});
   code(parseCatalog(proxy),"invalid_shape");expect(traps).toBe(1);
 });
+
+/** Fully valid annuity factor, also falsely referenced as an otherwise valid payout fee. */
+function factorUsedAsCost(mode:"monthly"|"K2-admin"|"K2-payout"):Catalog {
+  const c=annuityFixture(),factor=record(c,"synthetic-annuity-factor","parameter");
+  factor.citations.push({source:reference(record(c,"synthetic-schedule","source")),locator:"Artificial schedule reference"});
+  const cost=record(c,"synthetic-payout-1","cost"),s=costSelection(c);
+  if(mode==="monthly")cost.data={product:s.product,tariff:s.tariff,phase:"payout",mode:"monthly_fixed_eur",
+    parameter:reference(factor),convention:"capped_at_available_balance_v1",components:["administration"]};
+  else {
+    const component=mode==="K2-admin"?"administration":"payout";
+    cost.citations.push({source:reference(record(c,"synthetic-schedule","source")),locator:"Artificial complete cost schedule"});
+    cost.data={product:s.product,tariff:s.tariff,phase:"payout",mode:"K2",tariffEvidence:reference(record(c,"synthetic-schedule","source")),
+      status:"verified",coverage:"complete",reason:"Artificial complete schedule",components:[component],charges:[{
+        component,type:"fixed",parameter:reference(factor),basis:"contract",
+        timing:{frequency:"monthly",at:"after_return_before_payment",from:"2026-01-01",until:null}
+      }]};
+  }
+  return reseal(c);
+}
+for(const mode of ["monthly","K2-admin","K2-payout"] as const)test("R83-N2: valid factor cannot simultaneously be used as "+mode+" costs",()=>{
+  const c=factorUsedAsCost(mode),factor=record(c,"synthetic-annuity-factor","parameter");
+  expect(factor.data).toMatchObject({purpose:"annuity_factor",unit:"eur",phase:"payout",approval:"approved",
+    productId:"synthetic-product-1",tariffId:"synthetic-tariff-1",value:{class:"B",value:27.5},
+    models:[{model:"M1",version:MODEL_VERSIONS.M1},{model:"M2",version:MODEL_VERSIONS.M2}]});
+  code(parseCatalog(c),"parameter_purpose");
+  code(resolveCurrent(c,reference(record(c,"synthetic-payout-1","cost")),c.asOf),"parameter_purpose");
+  code(validateCostSelection(c,costSelection(c)),"parameter_purpose");
+});
+for(const kind of ["K1","K2-rate","annual"] as const)test("R83-N2: purpose is independently enforced for "+kind,()=>{
+  const c=kind==="annual"?scopedCosts("annual").c:syntheticCatalog();
+  const id=kind==="K1"?"synthetic-cost-1":kind==="annual"?"synthetic-n1-payout-rate":"synthetic-fixed-fee";
+  const p=record(c,id,"parameter");p.data.purpose="annuity_factor";p.data.overridePolicy="forbidden";
+  if(kind==="K2-rate"){
+    p.data.unit="ratio";p.data.value={class:"B",value:0.0275,reason:"Artificial proportional fee"};
+    const k=record(c,"synthetic-k2","cost");if(k.data.mode!=="K2")throw new Error("Expected K2");
+    k.data.charges[0].type="rate";k.data.charges[0].basis="balance";
+  }
+  reseal(c);const selected=kind==="K2-rate"?selectedCosts(c,"K2"):costSelection(c);
+  code(parseCatalog(c),"parameter_purpose");
+  code(resolveCurrent(c,reference(p),c.asOf),"parameter_purpose");
+  code(validateCostSelection(c,selected),"parameter_purpose");
+  // Only the purpose changes back. Units, owners, phase, model and approval already fit.
+  p.data.purpose="general";reseal(c);valid(c);
+  expect(validateCostSelection(c,kind==="K2-rate"?selectedCosts(c,"K2"):costSelection(c))).toMatchObject({ok:true});
+});
+for(const kind of ["K2","fixed","annual"] as const)test("R83-N2: valid general "+kind+" costs remain usable",()=>{
+  const {c}=scopedCosts(kind);valid(c);
+  expect(resolveCurrent(c,selectedCosts(c,kind).costs[1],c.asOf)).toMatchObject({ok:true});
+  expect(validateCostSelection(c,selectedCosts(c,kind))).toMatchObject({ok:true});
+});
+test("R83-N2: factor and O/null factor stay valid in their intended context",()=>{
+  for(const open of [false,true]){
+    const c=annuityFixture(open);valid(c);
+    expect(resolveCurrent(c,reference(record(c,"synthetic-annuity-factor","parameter")),c.asOf))
+      .toMatchObject({ok:true,value:{data:{purpose:"annuity_factor",value:{class:open?"O":"B",value:open?null:27.5}}}});
+    expect(validateCostSelection(c,costSelection(c))).toMatchObject({ok:true});
+  }
+});
+test("R83-N2: blocked incomplete cost declarations are preserved, never activated",()=>{
+  const c=factorUsedAsCost("K2-admin"),cost=record(c,"synthetic-payout-1","cost");
+  if(cost.data.mode!=="K2")throw new Error("Expected K2");
+  cost.data.status="blocked";cost.data.coverage="incomplete";cost.data.reason="Unresolved parameter purpose, activation forbidden";
+  reseal(c);valid(c);
+  expect(resolveCurrent(c,reference(cost),c.asOf)).toMatchObject({ok:true,value:{data:{status:"blocked",coverage:"incomplete"}}});
+  code(validateCostSelection(c,costSelection(c)),"K2_blocked");
+  // A separately valid cost alternative remains selectable beside the blocked declaration.
+  expect(validateCostSelection(c,selectedCosts(c,"fixed"))).toMatchObject({ok:true});
+});

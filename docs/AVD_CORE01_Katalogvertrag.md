@@ -152,6 +152,21 @@ alle Modelle. Die synthetischen K2-/Fixkostenbeispiele deklarieren M1/M2
 ausdrücklich. Katalogparsing darf einen nur für M3 vorgesehenen Parameter
 darstellen, seine Verwendung in M1 oder M2 bleibt gesperrt.
 
+**R83-N2: beidseitige Zweckbindung.** Die zentrale Parameterprüfung verlangt
+den erwarteten Zweck ausdrücklich. K1, verifizierte K2-Komponenten sowie fixe
+und jährliche Auszahlkosten verwenden ausschließlich `purpose:general`.
+Das gilt bereits bei der Katalogsemantik und erneut bei der konkreten
+Kostenauswahl. Ein als `annuity_factor` deklarierter Parameter wird nicht durch
+passende Einheit, Eigentümer, Phase, Freigabe oder Modellversion zum zulässigen
+Kostenparameter. Der Rentenfaktor-Kontext verlangt umgekehrt weiterhin
+ausdrücklich `annuity_factor`.
+
+Gesperrte unvollständige K2-Deklarationen bleiben als nicht aktive Daten
+darstellbar. Ihre Erfassung ist keine Bestätigung der Kostenverwendbarkeit.
+Eine Auswahl bleibt bis zur fachlichen Korrektur gesperrt. Offene Kosten und
+O/null-Faktoren erhalten ihre bisherigen Zustände. Es entsteht keine neue
+Zweckklasse oder Parametertaxonomie.
+
 Kein mathematischer Abzug wird ausgeführt. Die tatsächliche M1-/M2-Wirkung,
 Reihenfolge von Marktrendite und Kosten sowie Fixkostendeckelung sind spätere
 Integrationspflichten. Die sechs echten Arbeitswerte werden nicht verändert.
