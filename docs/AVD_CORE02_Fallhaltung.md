@@ -1,0 +1,235 @@
+# AVD-CORE-02 / P2: Fallhaltung und Vergleichsrevisionen
+
+P2 ergänzt die versionierten Verträge von P1. Die technische Grundlage arbeitet
+mit dem bestehenden Katalog und prüft vollständige Vergleichskandidaten. Das
+Anlegen eines AVD-Falls aktiviert keine bestehende oder neue Kapitalberechnung.
+
+Fachlicher Bezugsstand ist das am 17.11.2026 festgestellte N2-K1-Konzept,
+insbesondere §§ 1.3–1.5, 7.2a und 11.4, ergänzt durch V0.5.2 und die
+konsolidierten P0-Entscheidungen A und D. Die Originale bleiben in der privaten
+Projektakte. P1 stellt weiterhin die Regeln für Katalog, Modelle, Kosten und
+Publikation bereit.
+
+## Fallvertrag
+
+- avd.case.v2 hat eine Fall-ID, eine fortlaufende Eingaberevision, den Hash des
+  direkten Vorgängers und einen Hash über den gesamten eigenen Inhalt. Ein
+  technischer Verweis auf den allgemeinen Vermögensfall verbindet weder
+  Speicher noch Vermögen.
+- Person, Parteirolle, Kind und Vertrag sind innerhalb der Fall-ID adressiert.
+  Beiträge und Zahlungen besitzen eine eigene ID, Vertrags- und
+  Personenbezug, einen Tag und eine explizite Einmal-/Monatsdeklaration.
+  Förderereignisse beziehen sich auf Beitragsjahr, Fördertopf und Anspruch,
+  konkrete Vertragszuweisung und eine gesonderte Evidenz-ID. Die Zahlbeträge
+  sind Centbeträge.
+- B/A/S/O klassifiziert Werte. O speichert null und einen Grund. Eine bewusst
+  numerische Null benötigt eine Klasse mit Wert. Evidenz ist getrennt und
+  trägt ihren Personen-, Vertrags-, Jahres- und Nachweisbezug. Eine als
+  bestätigt gespeicherte Evidenz verlangt einen eigenen Nachweisverweis.
+  P2 prüft die Zuordnung, nicht die rechtliche Richtigkeit des Nachweises.
+  Der erste Stand nach A/B-Wechsel enthält nur offene oder entfernte
+  Fördernachweise. Riester-Bestand, Strategie, Annahmen und Rentenangebote
+  bleiben explizite Eingaben.
+- Katalog, Quellen, Kosten, Parameter und Fonds werden ausschließlich über
+  exakte Revisionen mit Hash referenziert. Produktpfade deklarieren Modell,
+  Anspar- und Auszahlkosten. Ein Pfad ohne Auszahlannahmen bezeichnet die
+  P1-Variante vor Auszahlkosten. Eigene Gewichte folgen der P1-Schrittregel.
+  Tarifgebundene Portfolios übernehmen exakt ihre gebundenen Gewichte.
+  Overrides verwenden P1 und die jeweilige AVD-Fallidentität.
+- Kopie und Restore erhalten die Originalrevision. Die Kopie erhält eine
+  eigene äußere ID. Die inneren IDs gelten in diesem neuen Fallnamensraum
+  und Override-Fallverweise werden umgebunden. Restore schreibt die Daten
+  der gewählten alten Revision als neuen aktuellen Arbeitsstand. Ein
+  kopierter oder restaurierter alter Katalogstand kann als Arbeitsstand
+  gelesen werden. Für einen neuen aktuellen Vergleich muss der Fall den
+  aktiven Katalogstand verwenden.
+
+## Personenbezogener Fördertopf
+
+- Pro Person und Beitragsjahr gibt es höchstens einen Fördertopf mit genau
+  einer Regime-ID und exakter Regelversion. Evidenz und Förderereignisse
+  weisen auf denselben Topf, einen beteiligten Vertrag und das passende
+  Regime. Ein Kind kann pro Beitragsjahr nur einem Anspruch zugeordnet sein.
+- Grundzulage, Berufseinsteigerbonus und Kinderzulage sind getrennte
+  Ansprüche. Je Komponente und gegebenenfalls Kind wird der Gesamtbetrag
+  einmal gespeichert. Eine geschlossene Zuweisung muss auf den Cent
+  vollständig sein, mit höchstens einer datierten Zuweisung je Anspruch
+  und Vertrag. Zwei volle Zuweisungen desselben Anspruchs überschreiten
+  den einmaligen Gesamtbetrag und werden abgewiesen.
+- Unmittelbare Berechtigung erlaubt höchstens zwei Empfängerverträge,
+  mittelbare höchstens einen und setzt den expliziten Bezug zum unmittelbar
+  berechtigten Partner-Topf desselben Jahres voraus. Das prüft den Vertrag,
+  keine gesetzliche Anspruchsentstehung. Ungeklärte Berechtigung hat keine
+  geschlossene Zuweisung. Offene Aufteilungen können einen bedingten
+  Gesamtbetrag oder O/null dokumentieren, aber keine numerischen
+  Vertragsereignisse auslösen. Es gibt keine automatische Verteilung.
+- Die frühere unveröffentlichte Version v1 wird am Formatrand abgelehnt.
+  Fall, Vergleich und Manifest verwenden v2 als Grundlage. Fallformat v3
+  enthält ältere manuelle Vermerke. Fallformat v4 unterstützt eine
+  Entscheidungsbindung an eine auswertbare Anforderung. v2 und v3 bleiben
+  ohne Umschreiben lesbar. P1 und der Datenbankaufbau bleiben unverändert.
+  Das allgemeine Fallschema bleibt bei Version 11.
+
+## Vergleich und Herkunft
+
+avd.comparison.v2 fixiert genau eine Fallrevision und einen Katalogstand.
+Das erwartete Schlüsselfeld entsteht aus Pfad, Szenario und Fördervariante.
+Ein Pfad identifiziert Produkt, Tarif, Modell, die beiden Kostenstufen,
+Anlagegewichte und die betroffenen Personen, Kinder und Verträge.
+Die vollständige Menge muss genau einmal vorhanden sein. Das zentrale
+Fixture verarbeitet zwei Produkte, drei Szenarien und zwei Fördervarianten
+in zwölf eindeutig gebundenen Teilergebnissen.
+
+| Identität | Geltungsbereich |
+| --- | --- |
+| case_id, case_revision | Ein Eingabesnapshot im Fall |
+| comparison_revision | Vollständiger Vergleich im selben Fall |
+| subresult_id | Teilergebnis innerhalb dieser Vergleichsrevision |
+| calculation_id | Unveränderliche Originalausführung im selben Fall |
+| dependency_manifest | Fall- und Katalogidentität sowie berechnete Bindungen aller erwarteten Schlüssel |
+| export_id | Typ für eine spätere tatsächliche Ausgabe. P2 legt keine Exportinstanzen an |
+
+Die Abhängigkeitsfunktion projiziert die für den jeweiligen Schlüssel
+deklarierten Fakten. Dazu gehören beteiligte Personen und Kinder, Verträge,
+Beitrags- und Förderereignisse, Evidenz, Riesterwerte, Regime, Annahmen,
+Rentenangebote, Szenario und Pfad. Ein Pfad übernimmt im gemeinsamen
+Förderanteil jeden seinen Verträgen zugeordneten Fördertopf und einen
+gegebenenfalls unmittelbar verknüpften Partner-Topf. Der Hash bindet die
+beteiligten Verträge, jahresrelevanten regelmäßigen und einmaligen
+Eigenbeiträge, die exakte Regimeversion mit Quellen, Evidenz, Ansprüche samt
+Kindidentitäten sowie alle Zuweisungen. Die gutschriftbezogene Sicht
+bleibt nach eigenem Vertrag und gewählter Fördervariante getrennt.
+Explizite Fallquellen bleiben fallweit wirksam. Die ausgewählte Fördervariante schließt
+unbestätigte Zulagen aus oder nimmt deklarierte bedingte Szenariowerte hinzu.
+Offene Ansprüche werden weiterhin durch Evidenz abgebildet.
+
+Die Projektion sammelt P1-Abhängigkeiten aus Datenreferenzen und Zitaten bis
+zum letzten aktiven Katalogdatensatz. Die gemeinsamen Katalogbilder und
+Eingaberevisionen bleiben referenzierbar. Historische Vorgänger werden als
+Historie aufbewahrt. Der Teilhash enthält nur die tatsächliche Projektion
+einschließlich der exakten Referenzen, ohne die neue Fall- oder
+Katalogrevisionsnummer pauschal einzumischen. Der vollständige Vergleich
+bindet beide Nummern trotzdem zwingend. So kann bei ausschließlich
+geänderter Produktkostenannahme ein anderer Pfad unverändert bleiben.
+
+Eine Wiederverwendung verlangt denselben Teilhash, denselben Schlüssel und
+den unveränderten Datensatz aus dem Berechnungsregister. Zusätzlich muss der
+ursprüngliche Vergleich diesen Datensatz unter der ursprünglichen
+Teilergebnis-ID enthalten. Der neue Vergleich erhält neue Teilergebnis-IDs.
+Die ursprüngliche calculation_id, das ursprüngliche Datum und die Einordnung
+im ursprünglichen Vergleich bleiben gespeichert.
+
+Fachlich nicht berechenbare Ergebnisse verwenden `avd.calculation.v3`.
+Der Sperrcode verweist auf die konkrete Ursache im geprüften Teilstand.
+Automatisch prüfbare Ursachen umfassen P1-Modell- oder Kostensperren, offene
+Szenariorenditen, offene Zahlungen und fehlende bedingte Förderannahmen. Eine
+optionale Erläuterung ergänzt diesen Nachweis. Technische Abbrüche haben
+keinen Ergebnisstatus.
+
+Ein v4-Entscheidungsnachweis bindet Teilergebnisschlüssel, Entscheidungstag,
+entscheidende Person und Begründung. Er fixiert die Fallrevision mit einem
+Hash über die Eingaben ohne Entscheidungsregister und bindet den Hash des
+maßgeblichen Teilstands. Die Evidenz hat eine eigene ID, einen separaten Hash,
+einen Personen- und Vertragsbezug, einen Prüftag sowie exakte Anforderungs-
+und Quellenrevisionen. Eine Kopie oder Wiederherstellung übernimmt keine
+Entscheidungen in den neuen Arbeitsstand.
+
+P2 ermittelt die anwendbare Anforderung und ihren Zustand aus dem geprüften
+Fachmodell. Die Entscheidung muss auf genau diese Anforderung und eine
+ihrer aktuellen Katalogquellen verweisen. `ungeklaert` und `nicht_erfuellt`
+folgen getrennt aus fehlendem Szenariowert und unterschrittenem Grenzwert.
+Ein neuer Fallstand, ein anderer Pfad oder eine geänderte Anforderungs- oder
+Evidenzfassung verlangt eine neue passende Entscheidung.
+
+Der öffentliche P1-Vertrag enthält keine fachlich auswertbaren externen
+Tarifzugangsregeln. Deshalb können manuelle Vertragsvermerke im Arbeitsmodus
+keine Ergebnisblockade oder Ausgabeberechtigung legitimieren. Der v3-Vermerk
+bleibt als prüfbedürftige Information lesbar. Ein bereits gespeicherter
+Vergleich mit solcher Entscheidungsbindung ist historisch unverifiziert.
+Historie erhält die Originale und ihre Nachweiskette. Ein neuer aktueller
+Vergleich muss die geltenden Regeln erfüllen.
+
+Die positive v4-Bindung verwendet ausschließlich im Fixture-Modus einen
+künstlichen Mindestwert für die modellierte Szenariorendite. Der Tarif muss
+die Regel für die gewählte Fördervariante deklarieren. Produkt, Tarif,
+Modellversion und der einzige AVD-Vertrag des Pfads bilden den
+Geltungsbereich. Die Regel ist ein nicht überschreibbarer, zitierter
+P1-Testparameter in einem synthetischen Katalog. Die Anwendung prüft den
+Vergleich der Szenariorendite mit dem Grenzwert auch ohne manuelle
+Entscheidung. Die Regel beschreibt eine künstliche Modellvoraussetzung.
+Die Prüfung bestätigt gespeicherte Datenbindungen und die Auswertung dieser
+Regel. Die externe Wahrheit von Hersteller- oder Rechtsnachweisen erfordert
+eine gesonderte fachliche Prüfung.
+
+Ausschließlich explizite synthetische Fälle auf synthetischem Katalog dürfen
+synthetische Zahlen enthalten. Gültige historische Ergebnisse sind weiterhin
+adressierbar. Unveröffentlichte v2-Berechnungen mit bloßem Freitext bleiben
+als Originaldatensätze erhalten. Ihre Sperre kann erst mit einem neu
+verifizierten Vergleich wirksam werden. Ein veralteter aktueller Verweis
+gibt die Identität des Vergleichs zurück.
+
+Ein aktueller gelesener Vergleich ist validiert und vollständig. Zusätzlich
+leitet die Schnittstelle den Ergebnisfähigkeitsstatus aus den gespeicherten
+Teilergebnissen ab: `fully_numeric`, `partially_numeric` oder
+`documented_blocks`, jeweils mit Anzahl numerischer und gesperrter Ergebnisse.
+Veraltete Verweise liefern keinen Ergebnisfähigkeitsstatus. Vollständig
+dokumentiert und vollständig numerisch sind voneinander getrennte Aussagen.
+
+## IndexedDB und Atomarität
+
+Datenbank vermoegensnavigator-avd, IndexedDB-Version 1. Die sechs Stores
+haben explizite Schlüssel und gehören zu derselben Transaktionsdomäne.
+
+| Store | Schlüssel | Schreibregel |
+| --- | --- | --- |
+| catalogs | [Katalog-ID, Revision] | Originalbild mit add |
+| catalog_heads | Katalog-ID | Aktuelles Bild einer Linie, mit erwartetem Vorgänger |
+| cases | [Fall-ID, Revision] | Originalbild mit add |
+| case_heads | Fall-ID | Aktueller Fall und Vergleichsverweis |
+| comparisons | [Fall-ID, Vergleichsrevision] | Originalbild und Teilergebnisse mit add |
+| calculations | [Fall-ID, Berechnungs-ID] | Erstveröffentlichter Originaldatensatz mit add |
+
+Ein Katalogwechsel verwendet P1 appendCatalogRevision. Seine Autorität wird
+pro Kataloglinie in der Datenbank gespeichert, damit ein zweiter Tab die
+Quelle auch während eines extern vorbereiteten Laufs aktualisieren kann.
+Jeder Schreibvorgang überprüft die erwarteten Identitäten nach Beginn der
+nativen readwrite-Transaktion. Ein Vorabtest mit checkCandidate ist nur
+eine Lesevalidierung. publishComparison prüft im Schreibvorgang erneut
+Fallrevision, aktives Katalogbild, Vergleichsvorgänger, Vollständigkeit und
+Originalberechnungen. Erst dann speichert es neue Berechnungen, den Vergleich
+und den Verweis. Die API meldet Erfolg nach dem vollständigen Commit und
+wartet bei einem Fehler auf Abbruch. Schreibtransaktionen umfassen die Stores
+gemeinsam. Dadurch sind sie auch zwischen zwei Tabs serialisiert. Diese
+bewusst einfache Version serialisiert auch Schreiboperationen auf
+verschiedenen Fällen. Rechenarbeit findet außerhalb der Transaktion statt.
+
+checkExport verlangt den erwarteten Fall, den konkreten Vergleich, die
+Auskunft zu ungespeicherten Änderungen und den beabsichtigten Ausgabezweck. Es prüft in
+einer konsistenten Lesetransaktion Aktualität und Vollständigkeit, verbietet
+Fixtures und verwendet die P1-Publikationsprüfung für export.
+Der Ausgabedienst muss zusätzlich den Zweck `capital_projection` oder
+`documented_blocks` ausdrücklich wählen. Die Kapitalprognose verlangt
+vollständig numerische Ergebnisse. Der Sperrfallbericht setzt mindestens
+einen fachlich verifizierten Sperrpfad voraus und erhält dessen Ergebnisfähigkeit
+im Rückgabevertrag. Der spätere
+Ausgabedienst muss die Grenze vor tatsächlicher Ausgabe erneut prüfen. P2
+reserviert dabei keinen Export-ID-Wert und speichert keine Ausgabedatei.
+
+## Nachweis und Grenzen
+
+- Das reguläre Browser- und Typecheck-Gate erfasst avd-p2-domain.spec.ts und
+  avd-p2-indexeddb.spec.ts. Die Browser-Suite benutzt native IndexedDB am
+  isolierten Test-Ursprung, zweite Tabs, Reload, einen echten Abbruch,
+  einen echten ConstraintError und eine blockierte native Öffnung.
+  Wiederholung mit denselben IDs überprüft, dass keine Teilzeilen aus
+  fehlgeschlagenen Transaktionen zurückbleiben.
+- Der Vertrag prüft passive Daten mit Form-, Unicode-, Hash-, Größen- und
+  Referenzgrenzen. Beim Lesen werden ausgewählte Originale, ihre direkten
+  Vorgänger und verwendete Berechnungsoriginale erneut geprüft. Content-Hashes
+  belegen weder Herkunft noch Zugriffsschutz. Bösartiger Code derselben
+  Browser-Origin kann Browserdaten manipulieren. Lokaler Speicher kann
+  blockiert, gelöscht oder durch Browserquoten begrenzt werden.
+- Vollständige fachliche Zahlenmodelle, AP-01c, UI-Verdrahtung,
+  Berechnungsplanung, tatsächliche Exporte, Quoten-/Backup-Produktkonzept und
+  rechtliche oder bankseitige Freigaben liegen außerhalb von P2. Ein
+  Browserarchiv ist keine externe unveränderliche Langzeitablage.
