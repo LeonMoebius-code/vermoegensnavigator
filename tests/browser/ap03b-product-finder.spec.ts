@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { emptyProductAnswers, nextProductAnswers, nextProductSelection, preferenceMatches, products } from "../../app/presentation/retirement/product-finder-data";
 
 const productNames = {
   basis: "UniVorsorge Basis",
@@ -55,7 +56,7 @@ test("AP03B-01/09/10/12/17/18: six source-dated products, separate bank status, 
     await product.getByText(`Tarifdetails und Quellen zu ${productNames[id]}`, { exact: true }).click();
     await expect(product.locator("time")).toBeVisible();
     await expect(product.locator("time")).toHaveAttribute("datetime", "2026-11-19");
-    await expect(product.getByRole("link")).toHaveCount(2);
+    await expect(product.getByRole("link")).toHaveCount(3);
     const domain = id.startsWith("ruv-") ? /https:\/\/www\.ruv\.de\// : /https:\/\/www\.union-investment\.de\//;
     for (const link of await product.getByRole("link").all()) await expect(link).toHaveAttribute("href", domain);
   }
@@ -132,10 +133,11 @@ test("AP03B-03/04/05/06/07/08/11: explicit feature statuses, two then three colu
   const headings = () => comparison(page).getByRole("list", { name: "Gewählte Alternativen" }).locator("strong");
   await expect(headings()).toHaveText([productNames.pro, productNames["ruv-individuell"]]);
   await expect(cell(page, "Abgleich mit Ihren Wünschen", "pro")).toContainText("Schutz: Nicht vorgesehen");
-  await expect(cell(page, "Abgleich mit Ihren Wünschen", "pro")).toContainText("Auszahlung: Teilweise / tarifabhängig");
+  await expect(cell(page, "Abgleich mit Ihren Wünschen", "pro")).toContainText("Auszahlung: Nicht vorgesehen");
   await expect(cell(page, "Abgleich mit Ihren Wünschen", "ruv-individuell")).toContainText("Anlageentscheidung: Erfüllt");
-  await expect(cell(page, "Auszahlungsarten", "pro")).toContainText("Lebenslange Rente: Tarifabhängig");
-  await expect(cell(page, "Auszahlungsarten", "ruv-individuell")).toContainText("Fondsauszahlplan: Öffentlich belegt");
+  await expect(cell(page, "Abgleich mit Ihren Wünschen", "ruv-individuell")).toContainText("Auszahlung: Nicht belegt / noch zu prüfen");
+  await expect(cell(page, "Auszahlungsarten", "pro")).toContainText("Lebenslange Rente: Nicht vorgesehen");
+  await expect(cell(page, "Auszahlungsarten", "ruv-individuell")).toContainText("Auszahlplan: Öffentlich belegt");
 
   await button(page, "Zurück zu den Produktkarten").click();
   await select(page, "ruv-garantie-80").check();
@@ -233,4 +235,126 @@ test("AP03B-19: A/B switch keeps the ephemeral A3 draft, discard clears it witho
   await showCards(page);
   await expect(page.locator(".retirement-product-grid").getByRole("checkbox", { checked: true })).toHaveCount(0);
   expect(await storage()).toEqual(before);
+});
+
+const unionIds = ["basis", "pro", "garantie"] as const;
+const ruvIds = ["ruv-standard", "ruv-individuell", "ruv-garantie-80"] as const;
+
+for (const [preference, heading, status] of [
+  ["Lebenslange Rente", "F01/F02/F03", "Nicht vorgesehen"],
+  ["Fondsauszahlplan", "F04", "Erfüllt"],
+  ["Beide Auszahlungsarten prüfen", "F05", "Nicht vorgesehen"],
+] as const) {
+  test(`R85-N1-${heading}: Union payout matches ${preference} with product-specific evidence`, async ({ page }) => {
+    await openFinder(page);
+    await button(page, "Weiter").click();
+    await button(page, "Weiter").click();
+    await page.getByRole("radio", { name: preference, exact: true }).check();
+    await button(page, "Produkte anzeigen").click();
+    for (const id of unionIds) {
+      await expect(card(page, id)).toContainText("Lebenslange Rente: Nicht vorgesehen");
+      await select(page, id).check();
+    }
+    await button(page, "Direktvergleich öffnen").click();
+    for (const id of unionIds) {
+      const payouts = cell(page, "Auszahlungsarten", id);
+      await expect(payouts).toContainText("Lebenslange Rente: Nicht vorgesehen");
+      await expect(payouts).toContainText("Fondsauszahlplan: Öffentlich belegt");
+      await expect(payouts).toContainText("auch keine Übertragung an einen Versicherer zum Beginn der Auszahlphase");
+      await expect(payouts.getByRole("link")).toHaveAttribute("href", /wie-funktioniert-die-auszahlung-aus-dem-altersvorsorgedepot$/);
+      const match = cell(page, "Abgleich mit Ihren Wünschen", id);
+      await expect(match).toContainText(`Auszahlung: ${status}`);
+      if (heading === "F05") await expect(match).toContainText("Die Kombination fehlt. Union bietet hier einen Fondsauszahlplan an.");
+    }
+  });
+}
+
+for (const [preference, status] of [
+  ["Lebenslange Rente", "Erfüllt"],
+  ["Fondsauszahlplan", "Nicht belegt / noch zu prüfen"],
+] as const) {
+  test(`R85-N1-F06/F07/F08: R+V payout evidence and match for ${preference}`, async ({ page }) => {
+    await openFinder(page);
+    await button(page, "Weiter").click();
+    await button(page, "Weiter").click();
+    await page.getByRole("radio", { name: preference, exact: true }).check();
+    await button(page, "Produkte anzeigen").click();
+    for (const id of ruvIds) {
+      await expect(card(page, id)).toContainText("Lebenslange Rente: Öffentlich belegt");
+      await expect(card(page, id)).not.toContainText("Fondsauszahlplan: Öffentlich belegt");
+      await select(page, id).check();
+    }
+    await button(page, "Direktvergleich öffnen").click();
+    for (const id of ruvIds) {
+      const payouts = cell(page, "Auszahlungsarten", id);
+      await expect(payouts).toContainText("Auszahlplan: Öffentlich belegt");
+      await expect(payouts).not.toContainText("Fondsauszahlplan: Öffentlich belegt");
+      await expect(payouts).toContainText("Die Fondsmechanik ist öffentlich nicht belegt");
+      await expect(payouts.getByRole("link")).toHaveAttribute("href", "https://www.ruv.de/altersvorsorge/private-rentenversicherung/altersvorsorgedepot");
+      await expect(cell(page, "Abgleich mit Ihren Wünschen", id)).toContainText(`Auszahlung: ${status}`);
+    }
+  });
+}
+
+test("R85-N1-T01/T02/T03/T04: own allowed values only, malformed preferences never match", () => {
+  const guarantee = products.find(product => product.id === "garantie")!;
+  for (const [field, values] of [
+    ["payout", ["__invalid__", "__proto__", "constructor", undefined, null, {}, ["plan"]]],
+    ["protection", ["bogus", null, ["full"]]],
+    ["investment", ["synthetic", {}, ["model"], null, 1]],
+  ] as const) {
+    for (const value of values) {
+      const input = { ...emptyProductAnswers, [field]: value };
+      expect(preferenceMatches(guarantee, input)[field]).toBe("unknown");
+      expect(nextProductAnswers(input, emptyProductAnswers)).toBeNull();
+    }
+  }
+  const inherited = Object.create({ payout: "plan", protection: "full", investment: "model" });
+  const getter = { ...emptyProductAnswers, get payout() { throw new Error("must not read accessor"); } };
+  for (const input of [null, [], inherited, getter]) {
+    expect(preferenceMatches(guarantee, input).payout).toBe("unknown");
+    expect(nextProductAnswers(input, emptyProductAnswers)).toBeNull();
+  }
+  expect(preferenceMatches(guarantee, inherited)).toEqual({ payout: "unknown", protection: "unknown", investment: "unknown" });
+  for (const protection of ["atLeast80", "full"]) {
+    expect(preferenceMatches(guarantee, { ...emptyProductAnswers, protection }).protection).toBe("supported");
+  }
+  for (const payout of ["", "open"]) {
+    expect(preferenceMatches(guarantee, { ...emptyProductAnswers, payout }).payout).toBeNull();
+  }
+  expect(nextProductAnswers({ ...emptyProductAnswers }, emptyProductAnswers)).toBe(emptyProductAnswers);
+  expect(nextProductAnswers({ ...emptyProductAnswers, payout: "plan" }, emptyProductAnswers)?.payout).toBe("plan");
+});
+
+test("R85-N1-T05/T06/N05: selection validation rejects whole invalid input and preserves equal sets", () => {
+  const current = ["basis", "pro"] as const;
+  const single = ["basis"] as const;
+  expect(nextProductSelection(["basis", "__invalid__"], single)).toBeNull();
+  const hole = ["basis", "pro"];
+  delete hole[1];
+  for (const ids of [
+    ["basis", "__invalid__"], ["basis", "basis"], ["basis", "pro", "ruv-standard", "garantie"],
+    ["__proto__"], ["constructor"], hole, null, { length: 2, 0: "basis", 1: "pro" },
+  ]) {
+    expect(nextProductSelection(ids, current)).toBeNull();
+    expect(current).toEqual(["basis", "pro"]);
+  }
+  expect(nextProductSelection(["pro", "basis"], current)).toBe(current);
+  expect(nextProductSelection(["pro", "ruv-standard", "basis"], current)).toEqual(["basis", "ruv-standard", "pro"]);
+  expect(nextProductSelection([], current)).toEqual([]);
+});
+
+test("R85-N1-T06: rapid selection preserves accepted toggles and refuses the fourth", async ({ page }) => {
+  await openFinder(page);
+  await showCards(page);
+  const inputs = page.locator(".retirement-product-grid input");
+  await inputs.evaluateAll(nodes => {
+    nodes.slice(0, 4).forEach(node => (node as HTMLInputElement).click());
+  });
+  await expect(page.getByRole("status").filter({ hasText: "3 von höchstens 3" })).toContainText("wurde nicht ausgewählt");
+  for (const id of ["basis", "ruv-standard", "pro"] as const) await expect(select(page, id)).toBeChecked();
+  await expect(select(page, "ruv-individuell")).not.toBeChecked();
+  await button(page, "Direktvergleich öffnen").click();
+  await expect(comparison(page).locator(".retirement-product-matrix")).toHaveAttribute("data-columns", "3");
+  await expect(comparison(page).getByRole("list", { name: "Gewählte Alternativen" }).getByRole("listitem")).toHaveCount(3);
 });

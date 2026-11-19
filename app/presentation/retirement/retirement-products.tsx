@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import {
   comparisonLimit, costLabel, featureLabels, payoutLabels, preferenceMatches, productFinderSourceDate,
-  productQuestions, products, productSources, type ProductAnswers, type ProductId,
+  productPayoutSource, productQuestions, products, productSources, type ProductAnswers, type ProductId,
 } from "./product-finder-data";
 
 type Product = typeof products[number];
@@ -13,10 +13,14 @@ function Protection({ product }: { product: Product }) {
 }
 
 function Payouts({ product }: { product: Product }) {
-  return <ul className="retirement-product-facts">
-    <li>Lebenslange Rente: <strong>{payoutLabels[product.annuity.status]}</strong>. {product.annuity.description}</li>
-    <li>Fondsauszahlplan: <strong>{payoutLabels[product.plan.status]}</strong>. {product.plan.description}</li>
-  </ul>;
+  const source = productPayoutSource(product);
+  return <>
+    <ul className="retirement-product-facts">
+      <li>Lebenslange Rente: <strong>{payoutLabels[product.annuity.status]}</strong>. {product.annuity.description}</li>
+      <li>{product.plan.kind === "fund" ? "Fondsauszahlplan" : "Auszahlplan"}: <strong>{payoutLabels[product.plan.status]}</strong>. {product.plan.description}</li>
+    </ul>
+    <a href={source.url}>Herstellerquelle zur Auszahlung</a>
+  </>;
 }
 
 function Sources({ product }: { product: Product }) {
@@ -35,8 +39,11 @@ function Preferences({ product, answers }: { product: Product; answers: ProductA
     ["Anlageentscheidung", matches.investment],
     ["Auszahlung", matches.payout],
   ] as const;
+  const unionCombinationMissing = answers.payout === "both" && product.annuity.status === "absent" && product.plan.kind === "fund";
   return <ul className="retirement-product-facts">
-    {rows.map(([label, match]) => <li key={label}>{label}: <strong>{match ? featureLabels[match] : "Keine Präferenz angegeben"}</strong></li>)}
+    {rows.map(([label, match]) => <li key={label}>{label}: <strong>{match ? featureLabels[match] : "Keine Präferenz angegeben"}</strong>
+      {label === "Auszahlung" && unionCombinationMissing && <>. Die Kombination fehlt. Union bietet hier einen Fondsauszahlplan an.</>}
+    </li>)}
   </ul>;
 }
 
@@ -110,9 +117,9 @@ function ProductComparison({ selected, answers, toggle }: {
   </div>;
 }
 
-export function RetirementProducts({ selected, change, answers, changeAnswers, step, navigate }: {
+export function RetirementProducts({ selected, toggleSelection, answers, changeAnswers, step, navigate }: {
   selected: readonly ProductId[];
-  change: (ids: ProductId[]) => void;
+  toggleSelection: (id: ProductId) => boolean;
   answers: ProductAnswers;
   changeAnswers: (answers: ProductAnswers) => void;
   step: ProductFinderStep;
@@ -139,18 +146,13 @@ export function RetirementProducts({ selected, change, answers, changeAnswers, s
   }
 
   function toggle(product: Product) {
-    const { id } = product;
-    if (selected.includes(id)) {
-      // The focused control disappears after removing a column.
-      if (step === "comparison") heading.current?.focus();
-      setRefused("");
-      change(selected.filter(candidate => candidate !== id));
-    } else if (selected.length < comparisonLimit) {
-      setRefused("");
-      change([...selected, id]);
-    } else {
+    if (!toggleSelection(product.id)) {
       setRefused(`${product.name} wurde nicht ausgewählt. Wählen Sie zuerst eine der drei Alternativen ab.`);
+      return;
     }
+    // The focused control disappears after removing a column.
+    if (step === "comparison") heading.current?.focus();
+    setRefused("");
   }
 
   const countText = `${selected.length} von höchstens ${comparisonLimit} Alternativen gewählt. Für den Direktvergleich sind mindestens zwei nötig.`;

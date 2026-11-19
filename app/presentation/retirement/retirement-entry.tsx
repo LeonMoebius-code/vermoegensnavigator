@@ -8,7 +8,7 @@ import { changeOldMode, changeOldYear, emptyOldDraft, oldContribution, oldRuleId
 import { emptyRiesterJourney, RiesterJourney } from "./riester-journey";
 import { emptyCapitalDraft, type CapitalRun } from "./projection-adapter";
 import { RetirementProducts, type ProductFinderStep } from "./retirement-products";
-import { comparisonLimit, emptyProductAnswers, type ProductAnswers, type ProductId } from "./product-finder-data";
+import { emptyProductAnswers, nextProductAnswers, nextProductSelection, type ProductId } from "./product-finder-data";
 import { RetirementProjection } from "./retirement-projection";
 import { editCustomerCapital, emptyCustomerPlan } from "./customer-plan-adapter";
 import { RetirementCustomer } from "./retirement-customer";
@@ -45,8 +45,9 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
       return p;
     });
   };
-  const [products, setProducts] = useState<ProductId[]>([]);
-  const [productAnswers, setProductAnswers] = useState(emptyProductAnswers);
+  const [productFinder, setProductFinder] = useState({ selected: [] as readonly ProductId[], answers: emptyProductAnswers });
+  // Event handlers can run in one React batch before the next render.
+  const currentFinder = useRef(productFinder);
   const [productStep, setProductStep] = useState<ProductFinderStep>(0);
   const [capital, setCapital] = useState(emptyCapitalDraft);
   const [capitalResult, setCapitalResult] = useState<CapitalRun | null>(null);
@@ -74,18 +75,38 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
     setCapitalRefresh(status => status === "calculated" ? "products_changed" : status);
     invalidateCapital();
   };
-  const changeProducts = (ids: ProductId[]) => {
-    if (ids.length > comparisonLimit) return;
-    setProducts(ids);
-    productFinderChanged();
+  const storeProductFinder = (next: typeof productFinder) => {
+    currentFinder.current = next;
+    setProductFinder(next);
   };
-  const changeProductAnswers = (next: ProductAnswers) => {
-    setProductAnswers(next);
-    productFinderChanged();
+  const changeProducts = (ids: unknown) => {
+    const current = currentFinder.current;
+    const next = nextProductSelection(ids, current.selected);
+    if (!next) return false;
+    if (next !== current.selected) {
+      storeProductFinder({ ...current, selected: next });
+      productFinderChanged();
+    }
+    return true;
+  };
+  const toggleProduct = (id: ProductId) => {
+    const selected = currentFinder.current.selected;
+    return changeProducts(selected.includes(id) ? selected.filter(candidate => candidate !== id) : [...selected, id]);
+  };
+  const changeProductAnswers = (input: unknown) => {
+    const current = currentFinder.current;
+    const next = nextProductAnswers(input, current.answers);
+    if (next && next !== current.answers) {
+      storeProductFinder({ ...current, answers: next });
+      productFinderChanged();
+    }
   };
   const navigateA = (next: "choice" | "a1" | "a2" | "a3" | "a4") => {
-    invalidateCapital();
-    if (next === "choice") { setPreview(null); setBPreview(null); }
+    if (next === "choice") {
+      invalidateCapital();
+      setPreview(null);
+      setBPreview(null);
+    }
     setStep(next);
   };
   const confirmDiscard = () => !dirty || window.confirm(discardMessage);
@@ -122,7 +143,7 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
     if (!confirmDiscard()) return;
     setDraft(emptyGrantDraft()); setDirty(false); setPreview(null); setChanged(false); setStep("choice");
     setBDraft(emptyOldDraft()); setBPreview(null); setBJourney(emptyRiesterJourney());
-    setProducts([]); setProductAnswers(emptyProductAnswers); setProductStep(0);
+    storeProductFinder({ selected: [], answers: emptyProductAnswers }); setProductStep(0);
     setCapital(emptyCapitalDraft()); setCapitalResult(null); setCapitalRefresh("none");
     setCustomerPlan(emptyCustomerPlan());
     setAnswers(emptyRetirementAnswers());
@@ -170,7 +191,7 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
         <button aria-current={step === "a3" ? "step" : undefined} onClick={() => navigateA("a3")}>A3 Produktvergleich</button>
         <button aria-current={step === "a4" ? "step" : undefined} onClick={() => navigateA("a4")}>A4 Kapitalentwicklung</button>
       </nav>
-      {step === "a3" ? <RetirementProducts selected={products} change={changeProducts} answers={productAnswers}
+      {step === "a3" ? <RetirementProducts selected={productFinder.selected} toggleSelection={toggleProduct} answers={productFinder.answers}
           changeAnswers={changeProductAnswers} step={productStep} navigate={setProductStep} />
         : step === "a4" ? <>
           {capitalRefresh === "products_changed" && <p className="retirement-notice" role="status">
@@ -178,7 +199,13 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
           </p>}
           <RetirementProjection draft={capital} result={capitalResult}
             change={next => { setCapital(next); setCapitalResult(null); setDirty(true); }}
-            show={next => { setCapitalResult(next); setCapitalRefresh("calculated"); setDirty(true); }} />
+            show={next => {
+              setCapitalResult(next);
+              if (next.status === "responses" && next.responses.every(result => result.status === "calculated" || result.status === "partial")) {
+                setCapitalRefresh("calculated");
+              }
+              setDirty(true);
+            }} />
         </> : <>
       {step === "a1" ? <section className="panel retirement-form" aria-label="Bestätigungen für das Beitragsjahr">
         <p>Die rechtliche Prüfung erfolgt vorgelagert für diese Person und das gewählte Jahr. Diese Oberfläche ermittelt keine Anspruchsberechtigung.</p>

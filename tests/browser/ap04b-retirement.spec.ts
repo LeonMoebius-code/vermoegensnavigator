@@ -218,3 +218,106 @@ test("A4B-15: existing cases, full JSON/XLSX/print and raw storage remain identi
   expect(await state(page)).toEqual(before);page.once("dialog",d=>d.accept());await nav(page,"Ergebnis & Export").click();expect(await outputs("after")).toEqual(exportBefore);expect(await state(page)).toEqual(before);
   expect(await page.evaluate(key=>localStorage.getItem(key),CASE_STORAGE_KEY)).toBe(raw);expect(exportBefore.case.schemaVersion).toBe(11);
 });
+
+const n1Confirmations = [
+  "Förderjahr, Betrag und Buchungsmonat dieser einmaligen rein hypothetischen Zulage bestätigt",
+  "Vollständigen hypothetischen Kostenpfad bestätigt; keine Herstellerkosten übernommen",
+  "Referenz: vollständigen hypothetischen Kostenpfad bestätigt; keine Herstellerkosten übernommen",
+  "Die sichtbaren neutralen Modellannahmen für diesen aktuellen Snapshot bewusst bestätigt",
+] as const;
+const n1Stale = (page: Page) => page.getByRole("status").filter({ hasText: "Die bisherige Vorschau ist veraltet" });
+const n1Value = (page: Page) => metric(model(page), "Vollständiger Endwert im gewählten Modell");
+
+async function n1Confirm(page: Page) {
+  for (const label of n1Confirmations) await input(page, label).check();
+  await button(page, "Neutrale Kapitalentwicklung berechnen").click();
+}
+
+async function n1CapitalSetup(page: Page) {
+  await zeroForm(page);
+  await input(page, "Einmalige manuelle Zulagenhypothese hinzufügen").check();
+  await input(page, "Betrag der manuellen Zulagenhypothese in Euro").fill("0");
+  await input(page, "Hypothetischer Buchungsmonat der Zulage").fill("2027-02");
+  await input(page, "Einmaligen Aktienmarkt-Stress aktivieren").check();
+  await input(page, "Ereignismonat des Aktien-Stress").fill("2027-01");
+  await input(page, "Einmaliger Aktienkursverlust in %").fill("0");
+  await input(page, "Modell-Kostenmodus").selectOption("explicit");
+  await input(page, "Ungeförderten ETF-/Fondssparplan vergleichen").check();
+  await input(page, "Referenz-Kostenmodus").selectOption("explicit");
+  await n1Confirm(page);
+  await expect(n1Value(page)).toHaveText("300,00 €");
+}
+
+for (const [id, steps] of [
+  ["N01", ["A3 Produktvergleich", "A4 Kapitalentwicklung"]],
+  ["N02", ["A4 Kapitalentwicklung"]],
+  ["N07", ["A1 Fördercheck", "A2 Sparen & Förderung", "A4 Kapitalentwicklung"]],
+] as const) {
+  test(`R85-N1-${id}: only navigating preserves all four confirmations and the validated result`, async ({ page }) => {
+    await a4(page);
+    await n1CapitalSetup(page);
+    for (const step of steps) await button(page, step).click();
+    await expect(n1Value(page)).toHaveText("300,00 €");
+    for (const label of n1Confirmations) await expect(input(page, label)).toBeChecked();
+    await expect(n1Stale(page)).toHaveCount(0);
+  });
+}
+
+for (const change of ["product", "orientation"] as const) {
+  test(`R85-N1-N03/N04/N06: changing ${change} revokes confirmations until a valid new result`, async ({ page }) => {
+    await a4(page);
+    await n1CapitalSetup(page);
+    await button(page, "A3 Produktvergleich").click();
+    if (change === "orientation") {
+      await page.getByRole("radio", { name: "Mindestens 80 % der Beiträge und Zulagen" }).check();
+    } else {
+      await button(page, "Weiter").click();
+      await button(page, "Weiter").click();
+      await button(page, "Produkte anzeigen").click();
+      await page.getByTestId("product-basis").getByRole("checkbox").check();
+    }
+    await button(page, "A4 Kapitalentwicklung").click();
+    await expect(page.getByTestId("capital-results")).toHaveCount(0);
+    for (const label of n1Confirmations) await expect(input(page, label)).not.toBeChecked();
+    await expect(n1Stale(page)).toBeVisible();
+    for (const [label, value] of [
+      ["Startmonat des Modells", "2027-01"], ["Endmonat des Modells", "2027-03"],
+      ["Eigene monatliche Einzahlung in Euro", "100"], ["Modell-Aktienquote in %", "100"],
+      ["Mittlere Marktannahme: Aktienrendite p.a. in %", "0"],
+      ["Ereignismonat des Aktien-Stress", "2027-01"], ["Einmaliger Aktienkursverlust in %", "0"],
+      ["Betrag der manuellen Zulagenhypothese in Euro", "0"], ["Hypothetischer Buchungsmonat der Zulage", "2027-02"],
+      ["Jährliche modellierte Bestandsminderung in %", "0"], ["Referenz: jährliche modellierte Bestandsminderung in %", "0"],
+    ]) await expect(input(page, label)).toHaveValue(value);
+    await button(page, "Neutrale Kapitalentwicklung berechnen").click();
+    await expect(page.getByRole("alert")).toContainText("Eingabe korrigieren");
+    await expect(n1Stale(page)).toBeVisible();
+    await n1Confirm(page);
+    await expect(n1Value(page)).toHaveText("300,00 €");
+    await expect(n1Stale(page)).toHaveCount(0);
+  });
+}
+
+test("R85-N1-N05/N08: same orientation preserves A4 until explicitly switching to B", async ({ page }) => {
+  await a4(page);
+  await button(page, "A3 Produktvergleich").click();
+  const preferred = page.getByRole("radio", { name: "Mindestens 80 % der Beiträge und Zulagen" });
+  await preferred.check();
+  await button(page, "A4 Kapitalentwicklung").click();
+  await n1CapitalSetup(page);
+  await button(page, "A3 Produktvergleich").click();
+  await expect(preferred).toBeChecked();
+  await preferred.click();
+  await button(page, "A4 Kapitalentwicklung").click();
+  await expect(n1Value(page)).toHaveText("300,00 €");
+  for (const label of n1Confirmations) await expect(input(page, label)).toBeChecked();
+  await expect(n1Stale(page)).toHaveCount(0);
+
+  await button(page, "A/B-Auswahl").click();
+  await button(page, "B – Bestehende Riester-Rente prüfen").click();
+  await expect(page.getByRole("heading", { name: "B1 – Bestandsaufnahme", exact: true })).toBeVisible();
+  await button(page, "A/B-Auswahl").click();
+  await button(page, "A – Neue Altersvorsorge planen").click();
+  await button(page, "A4 Kapitalentwicklung").click();
+  await expect(page.getByTestId("capital-results")).toHaveCount(0);
+  for (const label of n1Confirmations) await expect(input(page, label)).not.toBeChecked();
+});
