@@ -3,7 +3,7 @@ import { applyCaseOverride, parseCatalog, publicCatalog, validateCostSelection }
 import { MODEL_VERSIONS, refKey, revisionHash, type Checked, type Kind, type Ref } from "./identity-contract";
 import type { ValidatedCatalog } from "./catalog-contract";
 import type { Channel } from "./source-contract";
-import { caseIdentity, caseRef, caseReferences, catalogIdentity, parseAvdCase, pathReferences, subresultKey,
+import { caseIdentity, caseRef, caseReferences, catalogIdentity, decisionInputHash, parseAvdCase, pathReferences, subresultKey,
   sameData, type AvdCase, type AvdPath, type AvdScenario, type BlockingDecision, type CatalogIdentity, type FundingVariant } from "./avd-case";
 import { amountCents, copyAvd, day, description, digest, id, kind, list, nullable, oneOf, requireAvd, revision,
   shape, stamp, unique, type Rule } from "./avd-data";
@@ -111,7 +111,7 @@ function pathContext(value: AvdCase, path: AvdPath, catalog: CurrentCatalog) {
   }
   const available = product.capabilities.some(item =>
     item.model === path.model && item.version === path.model_version && item.status === "available");
-  return { savings, payout, rootRefs, available };
+  return { savings, payout, rootRefs, available, accessRules: tariff.accessRules };
 }
 
 /** A draft can contain open inputs. A plan needs an explicit, nonempty Cartesian product. */
@@ -167,32 +167,55 @@ function dependencies(value: AvdCase, path: AvdPath, scenario: AvdScenario, fund
 
 const blockProof = shape({
   code: oneOf("model_blocked", "K2_blocked", "payout_costs_open", "scenario_return_open",
-    "payment_open", "funding_contribution_open", "conditional_grant_missing", "manual_decision"),
+    "payment_open", "funding_contribution_open", "conditional_grant_missing", "synthetic_requirement_unmet", "manual_decision"),
   reference_id: id
 });
 type BlockProof = ReturnType<typeof blockProof>;
 
-function checkManualBlock(decision: BlockingDecision, snapshot: ReturnType<typeof dependencies>, basisHash: string) {
-  const evidence = snapshot.evidence.find(item => item.id === decision.evidence_id);
-  requireAvd(evidence && evidence.axis === "contract"
-    && evidence.status === (decision.reason === "contract_requirement_unmet" ? "nicht_erfuellt" : "ungeklaert")
-    && evidence.proof_id === decision.proof_id && evidence.sources.length > 0
-    && evidence.checked_on <= decision.decided_on && decision.decided_on <= snapshot.as_of
-    && snapshot.path.people.includes(evidence.person_id) && snapshot.path.contracts.includes(evidence.contract_id)
-    && (evidence.child_id === null || snapshot.path.children.includes(evidence.child_id))
-    && !snapshot.funding_pools.some(item => item.assignments.some(grant => grant.evidence_id === evidence.id))
+/** The public P1 contract has no evaluable manufacturer access rules. This
+ * synthetic rule exercises the binding without making an external claim. */
+function syntheticReturnRequirement(snapshot: ReturnType<typeof dependencies>, accessRules: readonly Ref<"parameter">[],
+  catalog: CurrentCatalog) {
+  if (snapshot.mode !== "synthetic_fixture") return null;
+  const { path, scenario, funding } = snapshot;
+  const ref = accessRules.find(item => item.id === path.tariff.id + "-synthetic-return-floor-" + funding);
+  if (!ref) return null;
+  const record = catalog.get(ref, "parameter");
+  const data = record.data;
+  const contracts = snapshot.contracts.filter(contract => contract.kind === "avd");
+  if (contracts.length !== 1 || data.productId !== path.product.id || data.tariffId !== path.tariff.id
+    || !data.models.some(model => model.model === path.model && model.version === path.model_version)) return null;
+  requireAvd(data.phase === "savings" && data.unit === "annual_ratio" && data.approval === "approved"
+    && data.overridePolicy === "forbidden" && data.value.class === "A" && typeof data.value.value === "number"
+    && record.citations.length > 0, "invalid_synthetic_requirement", ref.id);
+  const floorBps = Math.round(data.value.value * 10_000);
+  const status = scenario.annual_return_bps === null ? "ungeklaert"
+    : scenario.annual_return_bps < floorBps ? "nicht_erfuellt" : "bestaetigt";
+  return { ref, status, citations: record.citations, contract: contracts[0] };
+}
+
+function checkManualBlock(decision: BlockingDecision, requirement: ReturnType<typeof syntheticReturnRequirement>,
+  inputHash: string | null, basisHash: string, asOf: string) {
+  const evidence = decision.evidence;
+  requireAvd(requirement && sameData(requirement.ref, evidence.requirement)
+    && requirement.citations.some(item => sameData(item.source, evidence.source))
+    && requirement.contract.id === evidence.contract_id && requirement.contract.person_id === evidence.person_id,
+    "blocking_decision_requirement", decision.id);
+  requireAvd(requirement.status === evidence.status && evidence.checked_on === asOf && decision.decided_on === asOf
     && jsonHash(evidence) === decision.evidence_hash, "blocking_decision_evidence", decision.id);
-  requireAvd(decision.basis_hash === basisHash, "blocking_decision_basis", decision.id);
+  requireAvd(decision.input_hash === inputHash && decision.basis_hash === basisHash,
+    "blocking_decision_basis", decision.id);
 }
 
 function planFor(value: AvdCase, catalog: CurrentCatalog) {
   assertCaseCatalog(value, catalog);
   requireAvd(value.paths.length && value.scenarios.length && value.funding_variants.length, "empty_comparison", "$");
   const entries = [];
-  const decisions = new Map(value.format === "avd.case.v3"
+  const inputHash = value.format === "avd.case.v4" ? decisionInputHash(value) : null;
+  const decisions = new Map(value.format === "avd.case.v4"
     ? value.blocking_decisions.map(decision => [keyOf(decision.key), decision]) : []);
   for (const path of value.paths) {
-    const { savings, payout, rootRefs, available } = pathContext(value, path, catalog);
+    const { savings, payout, rootRefs, available, accessRules } = pathContext(value, path, catalog);
     const costChecks = new Map<string, ReturnType<typeof validateCostSelection>>();
     for (const scenario of value.scenarios) {
       unique(scenario.returns.deducted.map(item => item.phase + ":" + item.component), scenario.id);
@@ -237,9 +260,13 @@ function planFor(value: AvdCase, catalog: CurrentCatalog) {
           blockers.push({ code: "conditional_grant_missing", reference_id: path.id });
         }
         const decision = decisions.get(keyOf(key));
+        const requirement = syntheticReturnRequirement(snapshot, accessRules, catalog);
+        if (requirement?.status === "nicht_erfuellt") {
+          blockers.push({ code: "synthetic_requirement_unmet", reference_id: requirement.ref.id });
+        }
         if (decision) {
-          checkManualBlock(decision, snapshot, basis_hash);
-          blockers.push({ code: "manual_decision", reference_id: decision.id });
+          checkManualBlock(decision, requirement, inputHash, basis_hash, value.as_of);
+          blockers.unshift({ code: "manual_decision", reference_id: decision.id });
         }
         const dependency_hash = decision ? jsonHash({ basis_hash, decision }) : basis_hash;
         entries.push({ key, dependency_hash, basis_hash, snapshot, modes, blockers });
@@ -326,6 +353,14 @@ export function parseCalculation(input: unknown): Calculation {
   const value = calculationShape(copyAvd(input), "$.calculation");
   requireAvd(revisionHash(value) === value.hash, "content_hash_mismatch", "$.calculation");
   return value;
+}
+
+/** Recognize prior persisted decision bindings for archival reading only. */
+export function hasLegacyDecisionBinding(input: AvdCase, comparison: Comparison): boolean {
+  if (input.format !== "avd.case.v3") return false;
+  const bindings = new Map(comparison.dependency_manifest.entries.map(item => [keyOf(item.key), item.dependency_hash]));
+  return input.blocking_decisions.some(decision =>
+    bindings.get(keyOf(decision.key)) === jsonHash({ basis_hash: decision.basis_hash, decision }));
 }
 
 /** Historical and current verification both use the exact supplied case and catalog snapshots. */

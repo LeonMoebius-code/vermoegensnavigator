@@ -1,9 +1,11 @@
 import { test, expect } from "@playwright/test";
-import { assertSuccessor, parseAvdCase, caseRef } from "../../app/domain/retirement/avd-case";
+import { jsonHash } from "../../app/domain/case/recovery-hash";
+import { assertSuccessor, decisionInputHash, parseAvdCase, caseRef } from "../../app/domain/retirement/avd-case";
 import { catalogRef, keyOf, planComparison, validateCaseCatalog, verifyComparison } from "../../app/domain/retirement/avd-comparison";
 import { MODEL_VERSIONS, reference } from "../../app/domain/retirement/identity-contract";
 import { record } from "./avd-catalog-fixture";
-import { candidate, fixture, manualBlockFixture, mutable, nextCase, nextCatalog, productCostCatalog, seal, unsupportedBlocks } from "./avd-p2-fixture";
+import { candidate, fixture, legacyManualBlockFixture, manualBlockFixture, mutable, nextCase, nextCatalog, productCostCatalog,
+  resealedManualCandidate, seal, unsupportedBlocks } from "./avd-p2-fixture";
 
 test("AVD-P2 A: immutable independent case with explicit O/null versus numerical zero", () => {
   const { input, catalog } = fixture();
@@ -126,7 +128,7 @@ test("AVD-P2 B: case, model, cost, funding and technical abort cannot masquerade
   expect(() => planComparison(wrongCostModel, catalog)).toThrow(/cost_model_mismatch/);
 });
 
-test("AVD-P2 R84-N2: reject one or twelve invented blocks even with freshly sealed hashes", () => {
+test("AVD-P2 N3-01/13: reject one or twelve invented blocks even with freshly sealed hashes", () => {
   const { input, catalog } = fixture();
   const base = candidate(input, catalog);
   for (const legacy of [true, false]) for (const count of [1, 12]) {
@@ -138,7 +140,7 @@ test("AVD-P2 R84-N2: reject one or twelve invented blocks even with freshly seal
   expect(verifyComparison(input, catalog, oldNumeric).result_capability.status).toBe("fully_numeric");
 });
 
-test("AVD-P2 R84-N2: verified manual block yields exactly one blocked result, without a capital number", () => {
+test("AVD-P2 N3-14: verified manual block yields exactly one blocked result, without a capital number", () => {
   const { input, catalog } = manualBlockFixture();
   const mixed = candidate(input, catalog);
   const verified = verifyComparison(input, catalog, mixed);
@@ -153,7 +155,7 @@ test("AVD-P2 R84-N2: verified manual block yields exactly one blocked result, wi
   expect(() => verifyComparison(input, catalog, seal(contradictory))).toThrow(/unknown_or_missing_field/);
 });
 
-test("AVD-P2 R84-N2: twelve open returns verify in a working case and closing them withdraws the blocks", () => {
+test("AVD-P2 N3-16: twelve open returns verify in a working case and closing them withdraws the blocks", () => {
   const { input, catalog } = fixture();
   const open = mutable(input);
   open.mode = "working";
@@ -174,32 +176,112 @@ test("AVD-P2 R84-N2: twelve open returns verify in a working case and closing th
   expect(() => verifyComparison(settled, catalog, candidate(settled, catalog))).toThrow(/real_calculation_unavailable/);
 });
 
-test("AVD-P2 R84-N2: manual decision needs matching evidence, scope and a current basis", () => {
+test("AVD-P2 N3-02/10: reclassified same-contract v3 evidence with all hashes renewed cannot certify twelve blocks", () => {
+  const { input, catalog, comparison } = legacyManualBlockFixture();
+  expect(() => verifyComparison(input, catalog, comparison)).toThrow(/dependency_manifest_mismatch/);
+  expect(verifyComparison(input, catalog, candidate(input, catalog)).result_capability.status).toBe("fully_numeric");
+});
+
+type ManualInputs = ReturnType<typeof manualBlockFixture>;
+type EditableDecision = ReturnType<typeof mutable<ManualInputs["input"]>>["blocking_decisions"][number];
+const adversarialCases: [string, (decision: EditableDecision, fixture: ManualInputs) => void, string][] = [
+  ["N3-03 unrelated rule for the same tariff", (decision, { catalog }) => {
+    const tariff = record(catalog, "synthetic-tariff-1", "tariff");
+    expect(tariff.id).toBe(record(catalog, "synthetic-cost-1", "parameter").data.tariffId);
+    decision.evidence.requirement = reference(record(catalog, "synthetic-cost-1", "parameter"));
+  }, "blocking_decision_requirement"],
+  ["N3-04 invented requirement ID", decision => {
+    decision.evidence.requirement.id = "invented-requirement";
+  }, "blocking_decision_requirement"],
+  ["N3-05 requirement for another product", decision => {
+    decision.key.path_id = "path-2";
+    decision.evidence.contract_id = "contract-2";
+  }, "blocking_decision_requirement"],
+  ["N3-06 requirement outside the selected funding path", decision => {
+    decision.key.funding_variant = "with_conditional";
+  }, "blocking_decision_requirement"],
+  ["N3-07 unresolved differs from unmet", decision => {
+    decision.evidence.status = "ungeklaert";
+  }, "blocking_decision_evidence"],
+  ["N3-08 current source and requirement but different contract", decision => {
+    decision.evidence.contract_id = "contract-2";
+  }, "blocking_decision_requirement"],
+  ["N3-08 current source missing from the requirement citations", (decision, { catalog }) => {
+    decision.evidence.source = reference(record(catalog, "synthetic-algorithm", "source"));
+  }, "blocking_decision_requirement"],
+  ["N3-11 reconstructed decision for a scenario satisfying the requirement", decision => {
+    decision.key.scenario_id = "middle";
+  }, "blocking_decision_evidence"]
+];
+for (const [title, change, error] of adversarialCases) {
+  test("AVD-P2 " + title, () => {
+    const fixture = manualBlockFixture();
+    const { catalog } = fixture;
+    const draft = mutable(fixture.input);
+    const decision = draft.blocking_decisions[0];
+    change(decision, fixture);
+    const plan = planComparison(seal({ ...draft, blocking_decisions: [] }), catalog);
+    decision.input_hash = decisionInputHash(draft);
+    decision.basis_hash = plan.entries.find(item => keyOf(item.key) === keyOf(decision.key))!.basis_hash;
+    decision.evidence_hash = jsonHash(decision.evidence);
+    const input = seal(draft);
+    const forged = resealedManualCandidate(input, catalog);
+    expect(() => verifyComparison(input, catalog, forged)).toThrow(new RegExp(error));
+  });
+}
+
+test("AVD-P2 N3-12: the synthetic rule has no authority in a working case", () => {
+  const { input, catalog } = manualBlockFixture();
+  const draft = mutable(input);
+  draft.mode = "working";
+  const [entry] = planComparison(seal({ ...draft, blocking_decisions: [] }), catalog).entries;
+  draft.blocking_decisions[0].input_hash = decisionInputHash(draft);
+  draft.blocking_decisions[0].basis_hash = entry.basis_hash;
+  const forged = seal(draft);
+  expect(() => verifyComparison(forged, catalog, resealedManualCandidate(forged, catalog))).toThrow(/blocking_decision_requirement/);
+});
+
+test("AVD-P2 N3-09/18/19: a new revision invalidates its decision and preserves independent calculations", () => {
   const { input, catalog } = manualBlockFixture();
   const verified = candidate(input, catalog);
-  const invalid = mutable(input);
-  const decision = invalid.blocking_decisions[0];
-  for (const evidenceId of ["missing", "proof-1", "proof-2"]) {
-    decision.evidence_id = evidenceId;
-    expect(() => verifyComparison(seal(invalid), catalog, verified)).toThrow(/blocking_decision_evidence/);
+  for (const revised of [
+    nextCase(input),
+    nextCase(input, draft => { draft.contracts[0].starts_on = "2026-11-02"; }),
+    nextCase(input, draft => { draft.scenarios[0].annual_return_bps = 10; })
+  ]) {
+    expect(() => verifyComparison(revised, catalog, verified)).toThrow(/blocking_decision_basis/);
   }
-  decision.evidence_id = input.blocking_decisions[0].evidence_id;
-  decision.proof_id = "invented";
-  expect(() => verifyComparison(seal(invalid), catalog, verified)).toThrow(/blocking_decision_evidence/);
-
-  const wrongScope = mutable(input);
-  wrongScope.blocking_decisions[0].key.path_id = "path-2";
-  expect(() => verifyComparison(seal(wrongScope), catalog, verified)).toThrow(/blocking_decision_evidence/);
-  const revised = nextCase(input, draft => { draft.evidence[2].proof_id = "new-evidence-revision"; });
-  expect(() => verifyComparison(revised, catalog, verified)).toThrow(/blocking_decision_evidence/);
-  const changedBasis = nextCase(input, draft => { draft.scenarios[0].annual_return_bps = 1; });
-  expect(() => verifyComparison(changedBasis, catalog, verified)).toThrow(/blocking_decision_basis/);
   const withdrawn = nextCase(input, draft => {
-    if (draft.format === "avd.case.v3") draft.blocking_decisions = [];
+    if (draft.format === "avd.case.v4") draft.blocking_decisions = [];
   });
-  const replacement = candidate(withdrawn, catalog, { previous: verified });
-  expect(verifyComparison(withdrawn, catalog, replacement).result_capability.status).toBe("fully_numeric");
+  const replacement = candidate(withdrawn, catalog, { previous: verified, reuse: "path-2" });
+  expect(verifyComparison(withdrawn, catalog, replacement).result_capability.status).toBe("partially_numeric");
+  expect(replacement.subresults[0].calculation.result).toMatchObject({ block: { code: "synthetic_requirement_unmet" } });
+  expect(replacement.subresults.slice(6).map(item => item.calculation))
+    .toEqual(verified.subresults.slice(6).map(item => item.calculation));
   expect(verifyComparison(input, catalog, verified).result_capability.status).toBe("partially_numeric");
+});
+
+test("AVD-P2 N3-15: twelve independently corroborated decisions yield documented blocks", () => {
+  const { input, catalog } = manualBlockFixture("all");
+  const comparison = candidate(input, catalog);
+  expect(verifyComparison(input, catalog, comparison).result_capability)
+    .toEqual({ status: "documented_blocks", numeric: 0, blocked: 12 });
+  for (const row of comparison.subresults) expect(row.calculation.result).toMatchObject({ block: { code: "manual_decision" } });
+});
+
+test("AVD-P2 N3-07/16: an open requirement verifies only as unresolved", () => {
+  const { input, catalog } = manualBlockFixture("open");
+  const comparison = candidate(input, catalog);
+  expect(verifyComparison(input, catalog, comparison).result_capability)
+    .toEqual({ status: "partially_numeric", numeric: 8, blocked: 4 });
+  expect(comparison.subresults[0].calculation.result).toMatchObject({ block: { code: "manual_decision" } });
+  const draft = mutable(input);
+  const decision = draft.blocking_decisions[0];
+  decision.evidence.status = "nicht_erfuellt";
+  decision.evidence_hash = jsonHash(decision.evidence);
+  const forged = seal(draft);
+  expect(() => verifyComparison(forged, catalog, resealedManualCandidate(forged, catalog))).toThrow(/blocking_decision_evidence/);
 });
 
 test("AVD-P2 B: exact dependencies permit reuse of unaffected product only", () => {

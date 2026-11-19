@@ -2,7 +2,7 @@ import { appendCatalogRevision } from "../../domain/retirement/catalog-validatio
 import type { ValidatedCatalog } from "../../domain/retirement/catalog-contract";
 import { assertSuccessor, caseIdentity, caseRef, catalogIdentity, originateCase, parseAvdCase, sameData,
   type AvdCase, type CaseIdentity, type CatalogIdentity } from "../../domain/retirement/avd-case";
-import { assertCatalogPublication, catalogRef, comparisonIdentity, comparisonRef, parseCalculation, parseComparison,
+import { assertCatalogPublication, catalogRef, comparisonIdentity, comparisonRef, hasLegacyDecisionBinding, parseCalculation, parseComparison,
   readCatalog, validateCaseCatalog, verifyComparison,
   type Calculation, type Comparison, type ComparisonIdentity, type ResultCapability } from "../../domain/retirement/avd-comparison";
 import { AvdError, copyAvd, id, nullable, oneOf, requireAvd, shape, stamp } from "../../domain/retirement/avd-data";
@@ -22,9 +22,11 @@ export type CurrentComparison =
   | { status: "current"; completeness: "complete"; result_capability: ResultCapability;
       case: CaseIdentity; comparison: Comparison };
 export type HistoricalComparison = {
-  status: "historisch_fixiert"; completeness: "complete"; result_capability: ResultCapability;
   comparison: Comparison; input: AvdCase; catalog: ValidatedCatalog;
-};
+} & (
+  | { status: "historisch_fixiert"; completeness: "complete"; result_capability: ResultCapability }
+  | { status: "historisch_unverifiziert" }
+);
 
 function request<T>(value: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -324,7 +326,8 @@ class AvdStore {
     if (!head.comparison) return { status: "missing", case: head.case };
     const comparison = await readComparisonRecord(tx, key, head.comparison);
     const authority = await catalogHead(tx, input.catalog.id);
-    if (!sameData(comparison.dependency_manifest.case, head.case) || !sameData(authority, input.catalog)) {
+    if (!sameData(comparison.dependency_manifest.case, head.case) || !sameData(authority, input.catalog)
+      || hasLegacyDecisionBinding(input, comparison)) {
       return { status: "veraltet", case: head.case, comparison: head.comparison };
     }
     const verified = await verifyStoredComparison(tx, comparison, input, catalog);
@@ -343,6 +346,13 @@ class AvdStore {
     return this.run("readonly", async tx => {
       const comparison = await readComparisonRecord(tx, key, pointer);
       const { input, catalog } = await readInput(tx, comparison.dependency_manifest.case);
+      if (hasLegacyDecisionBinding(input, comparison)) {
+        requireAvd(sameData(comparison.dependency_manifest.catalog, catalogRef(catalog)),
+          "dependency_manifest_mismatch", "$.dependency_manifest");
+        await checkComparisonPredecessor(tx, caseId, comparison);
+        await ledger(tx, caseId, comparison, false);
+        return { status: "historisch_unverifiziert", input, catalog, comparison };
+      }
       const verified = await verifyStoredComparison(tx, comparison, input, catalog);
       return { status: "historisch_fixiert", completeness: "complete", result_capability: verified.result_capability,
         input, catalog, comparison: verified.comparison };

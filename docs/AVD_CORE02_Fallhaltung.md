@@ -65,9 +65,10 @@ Publikation bereit.
   Vertragsereignisse auslösen. Es gibt keine automatische Verteilung.
 - Die frühere unveröffentlichte Version v1 wird am Formatrand abgelehnt.
   Fall, Vergleich und Manifest verwenden v2 als Grundlage. Fallformat v3
-  ergänzt ein Register manueller Sperrentscheidungen. Ein v2-Fall bleibt
-  ohne Umschreiben lesbar. P1 und der Datenbankaufbau verwenden dieselben
-  Verträge. Das allgemeine Fallschema bleibt bei Version 11.
+  enthält ältere manuelle Vermerke. Fallformat v4 unterstützt eine
+  Entscheidungsbindung an eine auswertbare Anforderung. v2 und v3 bleiben
+  ohne Umschreiben lesbar. P1 und der Datenbankaufbau bleiben unverändert.
+  Das allgemeine Fallschema bleibt bei Version 11.
 
 ## Vergleich und Herkunft
 
@@ -125,19 +126,40 @@ Szenariorenditen, offene Zahlungen und fehlende bedingte Förderannahmen. Eine
 optionale Erläuterung ergänzt diesen Nachweis. Technische Abbrüche haben
 keinen Ergebnisstatus.
 
-Eine manuelle Sperrentscheidung ist ein separater Eintrag im Fall. Sie
-identifiziert den betroffenen Teilergebnisschlüssel, die entscheidende Person,
-den Entscheidungstag, den fachlichen Grund und die Nachweisreferenz.
-Sie verlangt eigenständige, auf den konkreten Vertrag bezogene Evidenz mit
-Quellen und einer exakt gebundenen Evidenzfassung. Eine ungeklärte und eine
-nachweislich nicht erfüllte Vertragsanforderung bleiben unterschiedliche
-Entscheidungsgründe. Die Entscheidung bindet außerdem den gesamten
-maßgeblichen Teilstand. Ändert sich dieser Stand oder die Evidenz, braucht der
-neue Vergleich eine erneut geprüfte Entscheidung oder deren Rücknahme.
-Kopie und Restore übernehmen die historischen Eingaben. Manuelle
-Sperrentscheidungen müssen im neuen Arbeitsstand neu bestätigt werden.
-P2 prüft den gespeicherten Entscheidungsnachweis und seine Zuordnung.
-Die Identität im Nachweis ist eine Deklaration innerhalb des Falls.
+Ein v4-Entscheidungsnachweis bindet Teilergebnisschlüssel, Entscheidungstag,
+entscheidende Person und Begründung. Er fixiert die Fallrevision mit einem
+Hash über die Eingaben ohne Entscheidungsregister und bindet den Hash des
+maßgeblichen Teilstands. Die Evidenz hat eine eigene ID, einen separaten Hash,
+einen Personen- und Vertragsbezug, einen Prüftag sowie exakte Anforderungs-
+und Quellenrevisionen. Eine Kopie oder Wiederherstellung übernimmt keine
+Entscheidungen in den neuen Arbeitsstand.
+
+P2 ermittelt die anwendbare Anforderung und ihren Zustand aus dem geprüften
+Fachmodell. Die Entscheidung muss auf genau diese Anforderung und eine
+ihrer aktuellen Katalogquellen verweisen. `ungeklaert` und `nicht_erfuellt`
+folgen getrennt aus fehlendem Szenariowert und unterschrittenem Grenzwert.
+Ein neuer Fallstand, ein anderer Pfad oder eine geänderte Anforderungs- oder
+Evidenzfassung verlangt eine neue passende Entscheidung.
+
+Der öffentliche P1-Vertrag enthält keine fachlich auswertbaren externen
+Tarifzugangsregeln. Deshalb können manuelle Vertragsvermerke im Arbeitsmodus
+keine Ergebnisblockade oder Ausgabeberechtigung legitimieren. Der v3-Vermerk
+bleibt als prüfbedürftige Information lesbar. Ein bereits gespeicherter
+Vergleich mit solcher Entscheidungsbindung ist historisch unverifiziert.
+Historie erhält die Originale und ihre Nachweiskette. Ein neuer aktueller
+Vergleich muss die geltenden Regeln erfüllen.
+
+Die positive v4-Bindung verwendet ausschließlich im Fixture-Modus einen
+künstlichen Mindestwert für die modellierte Szenariorendite. Der Tarif muss
+die Regel für die gewählte Fördervariante deklarieren. Produkt, Tarif,
+Modellversion und der einzige AVD-Vertrag des Pfads bilden den
+Geltungsbereich. Die Regel ist ein nicht überschreibbarer, zitierter
+P1-Testparameter in einem synthetischen Katalog. Die Anwendung prüft den
+Vergleich der Szenariorendite mit dem Grenzwert auch ohne manuelle
+Entscheidung. Die Regel beschreibt eine künstliche Modellvoraussetzung.
+Die Prüfung bestätigt gespeicherte Datenbindungen und die Auswertung dieser
+Regel. Die externe Wahrheit von Hersteller- oder Rechtsnachweisen erfordert
+eine gesonderte fachliche Prüfung.
 
 Ausschließlich explizite synthetische Fälle auf synthetischem Katalog dürfen
 synthetische Zahlen enthalten. Gültige historische Ergebnisse sind weiterhin

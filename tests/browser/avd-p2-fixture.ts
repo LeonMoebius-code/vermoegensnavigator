@@ -1,5 +1,5 @@
 import { jsonHash } from "../../app/domain/case/recovery-hash";
-import { caseRef, type AvdCase, type BlockingDecision } from "../../app/domain/retirement/avd-case";
+import { caseRef, decisionInputHash, type AvdCase, type BlockingDecision } from "../../app/domain/retirement/avd-case";
 import { catalogRef, keyOf, planComparison, type Comparison, type Calculation } from "../../app/domain/retirement/avd-comparison";
 import { reference, revisionHash, MODEL_VERSIONS } from "../../app/domain/retirement/identity-contract";
 import type { Catalog, CatalogRecord } from "../../app/domain/retirement/catalog-contract";
@@ -113,7 +113,11 @@ export function exportBoundaryFixture(released: boolean, openInputs = true) {
   working.mode = "working";
   working.catalog = catalogRef(catalog);
   if (openInputs) for (const scenario of working.scenarios) scenario.annual_return_bps = null;
-  // Publication metadata changes the record hashes. Rebind all references.
+  rebindCaseRefs(working, catalog);
+  return { input: seal(working), catalog };
+}
+
+function rebindCaseRefs(input: AvdCase, catalog: Catalog) {
   function rebind(value: unknown): void {
     if (Array.isArray(value)) { value.forEach(rebind); return; }
     if (value === null || typeof value !== "object") return;
@@ -124,21 +128,91 @@ export function exportBoundaryFixture(released: boolean, openInputs = true) {
       row.hash = target.hash;
     } else Object.values(row).forEach(rebind);
   }
-  rebind(working);
-  return { input: seal(working), catalog };
+  rebind(input);
 }
 
-export function manualBlockFixture() {
+export function manualBlockFixture(state: "single" | "all" | "open" = "single") {
   const { input, catalog } = fixture();
+  const draft = { ...mutable(input), format: "avd.case.v4" as const, blocking_decisions: [] as BlockingDecision[] };
+  if (state === "open") draft.scenarios[0].annual_return_bps = null;
+  const source = reference(record(catalog, "synthetic-source", "source"));
+  for (const path of state === "all" ? draft.paths : draft.paths.slice(0, 1)) {
+    const tariff = record(catalog, path.tariff.id, "tariff");
+    const variants = state === "all" ? draft.funding_variants : draft.funding_variants.slice(0, 1);
+    for (const variant of variants) {
+      const rule: CatalogRecord<"parameter"> = {
+        ...structuredClone(record(catalog, "synthetic-cost-1", "parameter")),
+        id: tariff.id + "-synthetic-return-floor-" + variant,
+        data: {
+          name: "Artificial projection prerequisite: minimum modeled return",
+          purpose: "general", productId: path.product.id, tariffId: tariff.id, phase: "savings", unit: "annual_ratio",
+          value: { class: "A", value: state === "all" ? 0.07 : 0.01, reason: "Synthetic fixture only" },
+          models: [{ model: path.model, version: path.model_version }], approval: "approved", overridePolicy: "forbidden"
+        }
+      };
+      catalog.records.push(rule);
+      catalog.current.push(reference(rule));
+      tariff.data.accessRules.push(reference(rule));
+    }
+  }
+  reseal(catalog);
+  draft.catalog = catalogRef(catalog);
+  rebindCaseRefs(draft, catalog);
+  const plan = planComparison(seal(draft), catalog);
+  const subjectEntries = state === "all" ? plan.entries : plan.entries.slice(0, 1);
+  const input_hash = decisionInputHash(seal(draft));
+  const blocking_decisions = subjectEntries.map(({ key, basis_hash, snapshot }, index): BlockingDecision => {
+    const requirement = reference(record(catalog,
+      snapshot.path.tariff.id + "-synthetic-return-floor-" + key.funding_variant, "parameter"));
+    const evidence = {
+      id: "requirement-evidence-" + (index + 1), requirement, source,
+      person_id: "applicant", contract_id: snapshot.path.contracts[0],
+      status: state === "open" ? "ungeklaert" as const : "nicht_erfuellt" as const, checked_on: draft.as_of
+    };
+    return { id: "decision-" + (index + 1), key, input_hash, basis_hash,
+      justification: "Synthetic model prerequisite evaluated against the modeled return",
+      evidence, evidence_hash: jsonHash(evidence), decided_on: draft.as_of, decided_by: "synthetic-agent" };
+  });
+  return { input: seal({ ...draft, blocking_decisions }), catalog };
+}
+
+/** Recreate the previously accepted v3 decision over same-contract evidence with no requirement. */
+export function legacyManualBlockFixture(working = false) {
+  const { input, catalog } = working ? exportBoundaryFixture(true, false) : fixture();
   const draft = mutable(input);
-  const evidence = { ...draft.evidence[0], id: "contract-evidence", axis: "contract" as const,
-    child_id: null, status: "nicht_erfuellt" as const, proof_id: "synthetic-contract-decision" };
-  draft.evidence.push(evidence);
-  const [entry] = planComparison(seal(draft), catalog).entries;
-  const decision: BlockingDecision = { id: "decision-1", key: entry.key, basis_hash: entry.basis_hash,
-    reason: "contract_requirement_unmet", evidence_id: evidence.id, evidence_hash: jsonHash(evidence),
-    proof_id: evidence.proof_id, decided_on: draft.as_of, decided_by: "synthetic-agent" };
-  return { input: seal({ ...draft, format: "avd.case.v3" as const, blocking_decisions: [decision] }), catalog };
+  for (const proof of draft.evidence.slice()) {
+    draft.evidence.push({ ...proof, id: "reclassified-" + proof.id, child_id: null, axis: "contract",
+      status: "nicht_erfuellt", proof_id: "synthetic-unrelated-contract-fact" });
+  }
+  const blocking_decisions = planComparison(seal(draft), catalog).entries.map(({ key, basis_hash }, i) => {
+    const evidence = draft.evidence[key.path_id === "path-1" ? 2 : 3];
+    return { id: "legacy-decision-" + i, key, basis_hash, reason: "contract_requirement_unmet" as const,
+      evidence_id: evidence.id, evidence_hash: jsonHash(evidence), proof_id: evidence.proof_id!,
+      decided_on: draft.as_of, decided_by: "synthetic-agent" };
+  });
+  const old = seal({ ...draft, format: "avd.case.v3" as const, blocking_decisions });
+  return { input: old, catalog, comparison: resealedManualCandidate(old, catalog) };
+}
+
+/** Recompute every affected hash as an adversary would, without asking the validator to approve the decisions. */
+export function resealedManualCandidate(input: Extract<AvdCase, {format: "avd.case.v3" | "avd.case.v4"}>,
+  catalog: Catalog): Comparison {
+  const base = candidate(seal({ ...input, blocking_decisions: [] }), catalog);
+  const caseIdentity = caseRef(input);
+  const decisions = new Map(input.blocking_decisions.map(decision => [keyOf(decision.key), decision]));
+  const subresults = base.subresults.map(item => {
+    const decision = decisions.get(keyOf(item.key));
+    const dependency_hash = decision ? jsonHash({ basis_hash: decision.basis_hash, decision }) : item.calculation.dependency_hash;
+    const result = decision ? { status: "nicht_berechenbar" as const,
+      block: { code: "manual_decision" as const, reference_id: decision.id }, explanation: null } : item.calculation.result;
+    const calculation = seal({ ...item.calculation, result, dependency_hash,
+      origin: { ...item.calculation.origin, case: caseIdentity } });
+    return { ...item, calculation };
+  });
+  return seal({ ...base, subresults, dependency_manifest: {
+    ...base.dependency_manifest, case: caseIdentity,
+    entries: subresults.map(({ key, calculation }) => ({ key, dependency_hash: calculation.dependency_hash }))
+  } }) as Comparison;
 }
 
 export function productCostCatalog(input: Catalog): Catalog {
