@@ -7449,3 +7449,39 @@ body[data-print-mode="customer"] .internal-only {
   .retirement-riester-grid, .retirement-riester-facts { grid-template-columns: minmax(0, 1fr); }
   .retirement-riester-journey .panel { padding: 18px; }
 }
+
+/* A3 product finder and responsive feature comparison. */
+.retirement-products h2:focus { outline: 2px solid #0066a6; outline-offset: 4px; }
+.retirement-product-question fieldset { display: grid; gap: 4px; border: 1px solid #cbd7df; padding: 10px 16px; }
+.retirement-products .retirement-checkbox { min-height: 44px; align-items: center; cursor: pointer; }
+.retirement-product-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
+.retirement-product-answers { display: grid; gap: 12px; }
+.retirement-product-answers dt { font-weight: 700; }
+.retirement-product-answers dd { margin-left: 0; }
+.retirement-product-facts { margin: 0; padding-left: 1.25em; }
+.retirement-product-facts li + li { margin-top: 6px; }
+.retirement-products .retirement-product-grid { align-items: stretch; }
+.retirement-product { display: flex; flex-direction: column; }
+.retirement-product > .retirement-checkbox { margin-top: auto; }
+.retirement-product-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 16px 0; padding: 10px 16px; border: 1px solid #cbd7df; border-radius: 8px; background: white; }
+.retirement-product-toolbar p { margin: 0; flex: 1 1 230px; }
+.retirement-product-columns { display: grid; gap: 12px; }
+.retirement-product-selection { padding: 0; list-style: none; }
+.retirement-product-selection > li,
+.retirement-product-row dl > div { min-width: 0; overflow-wrap: anywhere; }
+.retirement-product-selection > li > strong { display: block; margin-bottom: 8px; }
+.retirement-product-selection > li { padding: 12px; border: 1px solid #cbd7df; border-radius: 8px; background: #eef5f9; }
+.retirement-product-row { border-top: 1px solid #cbd7df; padding: 12px 0; }
+.retirement-product-row dt { font-weight: 700; }
+.retirement-product-row dd { margin: 6px 0 0; line-height: 1.5; }
+.retirement-product-row dd p { margin: 0 0 8px; }
+.retirement-product-row dl { margin: 0; }
+@media (min-width: 901px) {
+  .retirement-products .retirement-product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .retirement-product-matrix[data-columns="2"] .retirement-product-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .retirement-product-matrix[data-columns="3"] .retirement-product-columns { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .retirement-product-row dt { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+}
+@media (max-width: 900px) {
+  .retirement-product-row dl > div { border-left: 3px solid #cbd7df; padding-left: 10px; }
+}
