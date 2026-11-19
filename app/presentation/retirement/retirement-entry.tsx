@@ -7,7 +7,8 @@ import { changeOldMode, changeOldYear, emptyOldDraft, oldContribution, oldRuleId
   type Comparison, type NewScenario, type OldDraft, type OldField, type OldPreview, type NewPreview } from "./old-riester-adapter";
 import { emptyRiesterJourney, RiesterJourney } from "./riester-journey";
 import { emptyCapitalDraft, type CapitalRun } from "./projection-adapter";
-import { RetirementProducts } from "./retirement-products";
+import { RetirementProducts, type ProductFinderStep } from "./retirement-products";
+import { comparisonLimit, emptyProductAnswers, type ProductAnswers, type ProductId } from "./product-finder-data";
 import { RetirementProjection } from "./retirement-projection";
 import { editCustomerCapital, emptyCustomerPlan } from "./customer-plan-adapter";
 import { RetirementCustomer } from "./retirement-customer";
@@ -44,9 +45,12 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
       return p;
     });
   };
-  const [products, setProducts] = useState<string[]>([]);
+  const [products, setProducts] = useState<ProductId[]>([]);
+  const [productAnswers, setProductAnswers] = useState(emptyProductAnswers);
+  const [productStep, setProductStep] = useState<ProductFinderStep>(0);
   const [capital, setCapital] = useState(emptyCapitalDraft);
   const [capitalResult, setCapitalResult] = useState<CapitalRun | null>(null);
+  const [capitalRefresh, setCapitalRefresh] = useState<"none" | "calculated" | "products_changed">("none");
   const [bDraft, setBDraft] = useState(emptyOldDraft);
   const [bJourney, setBJourney] = useState(emptyRiesterJourney);
   const [bPreview, setBPreview] = useState<Comparison | null>(null);
@@ -64,6 +68,20 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
   const errorId = `${fieldPrefix}-error`;
   const invalidateCapital = () => {
     setCapitalResult(null); setCapital(d => ({ ...d, confirmed: false, grantConfirmed: false, costConfirmed: false, referenceCostConfirmed: false }));
+  };
+  const productFinderChanged = () => {
+    setDirty(true);
+    setCapitalRefresh(status => status === "calculated" ? "products_changed" : status);
+    invalidateCapital();
+  };
+  const changeProducts = (ids: ProductId[]) => {
+    if (ids.length > comparisonLimit) return;
+    setProducts(ids);
+    productFinderChanged();
+  };
+  const changeProductAnswers = (next: ProductAnswers) => {
+    setProductAnswers(next);
+    productFinderChanged();
   };
   const navigateA = (next: "choice" | "a1" | "a2" | "a3" | "a4") => {
     invalidateCapital();
@@ -104,7 +122,8 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
     if (!confirmDiscard()) return;
     setDraft(emptyGrantDraft()); setDirty(false); setPreview(null); setChanged(false); setStep("choice");
     setBDraft(emptyOldDraft()); setBPreview(null); setBJourney(emptyRiesterJourney());
-    setProducts([]); setCapital(emptyCapitalDraft()); setCapitalResult(null);
+    setProducts([]); setProductAnswers(emptyProductAnswers); setProductStep(0);
+    setCapital(emptyCapitalDraft()); setCapitalResult(null); setCapitalRefresh("none");
     setCustomerPlan(emptyCustomerPlan());
     setAnswers(emptyRetirementAnswers());
     title.current?.focus();
@@ -151,10 +170,16 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
         <button aria-current={step === "a3" ? "step" : undefined} onClick={() => navigateA("a3")}>A3 Produktvergleich</button>
         <button aria-current={step === "a4" ? "step" : undefined} onClick={() => navigateA("a4")}>A4 Kapitalentwicklung</button>
       </nav>
-      {step === "a3" ? <RetirementProducts selected={products} change={ids => { if (ids.length > 2) return; setProducts(ids); setDirty(true); invalidateCapital(); }} />
-        : step === "a4" ? <RetirementProjection draft={capital} result={capitalResult}
-          change={next => { setCapital(next); setCapitalResult(null); setDirty(true); }}
-          show={next => { setCapitalResult(next); setDirty(true); }} /> : <>
+      {step === "a3" ? <RetirementProducts selected={products} change={changeProducts} answers={productAnswers}
+          changeAnswers={changeProductAnswers} step={productStep} navigate={setProductStep} />
+        : step === "a4" ? <>
+          {capitalRefresh === "products_changed" && <p className="retirement-notice" role="status">
+            Produktwahl oder Orientierung geändert. Die bisherige Vorschau ist veraltet. Bestätigen Sie Ihre Modellannahmen für eine neue Berechnung.
+          </p>}
+          <RetirementProjection draft={capital} result={capitalResult}
+            change={next => { setCapital(next); setCapitalResult(null); setDirty(true); }}
+            show={next => { setCapitalResult(next); setCapitalRefresh("calculated"); setDirty(true); }} />
+        </> : <>
       {step === "a1" ? <section className="panel retirement-form" aria-label="Bestätigungen für das Beitragsjahr">
         <p>Die rechtliche Prüfung erfolgt vorgelagert für diese Person und das gewählte Jahr. Diese Oberfläche ermittelt keine Anspruchsberechtigung.</p>
         <label htmlFor={fieldId("year")}>Beitragsjahr</label>

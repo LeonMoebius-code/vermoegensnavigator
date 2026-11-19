@@ -27,19 +27,60 @@ async function picture(p: Page, info: TestInfo, name: string) {
   console.log(`AP04B_SCREENSHOT ${JSON.stringify({name,sha256:createHash("sha256").update(bytes).digest("hex"),gzipBase64:gzipSync(bytes).toString("base64")})}`);
 }
 
-test("A4B-01: three qualitative products, max two, no hidden product simulation", async({page})=>{
-  await entry(page);await button(page,"A3 Produktvergleich").click();await expect(page.getByRole("heading",{name:"A3 – Produktvergleich",exact:true})).toBeFocused();
-  const cards=page.locator(".retirement-product-grid");await expect(cards.locator(".retirement-product")).toHaveCount(3);
-  for(const name of ["Basis","Pro","Garantie"])await expect(cards.getByRole("heading",{name:`UniVorsorge ${name}`,exact:true})).toBeVisible();
-  await page.getByLabel("UniVorsorge Basis für Detailvergleich auswählen",{exact:true}).check();await page.getByLabel("UniVorsorge Pro für Detailvergleich auswählen",{exact:true}).check();
-  await expect(page.getByLabel("UniVorsorge Garantie für Detailvergleich auswählen",{exact:true})).toBeDisabled();
-  await expect(page.getByRole("region",{name:"Qualitative Detailgegenüberstellung"})).toContainText("Kosten noch nicht belastbar");
-  await expect(page.locator(".retirement-products")).toContainText("Öffentlich angekündigt");await expect(page.locator(".retirement-products")).toContainText("kein jederzeitiger Kapitalboden");
-  await button(page,"A4 Kapitalentwicklung").click();await zeroForm(page);await calculate(page);
-  await expect(metric(model(page),"Vollständiger Endwert im gewählten Modell")).toHaveText("300,00 €");
-  await button(page,"A3 Produktvergleich").click();await page.getByLabel("UniVorsorge Pro für Detailvergleich auswählen",{exact:true}).uncheck();await page.getByLabel("UniVorsorge Garantie für Detailvergleich auswählen",{exact:true}).check();
-  await button(page,"A4 Kapitalentwicklung").click();await noResult(page);await expect(input(page,"Modell-Aktienquote in %")).toHaveValue("100");
-  await calculate(page);await expect(metric(model(page),"Vollständiger Endwert im gewählten Modell")).toHaveText("300,00 €");
+test("A4B-01: six qualitative products, max three, no hidden product simulation", async ({ page }) => {
+  await entry(page);
+  await button(page, "A3 Produktvergleich").click();
+  await expect(page.getByRole("heading", { name: "A3 – Produktvergleich", exact: true })).toBeFocused();
+  await button(page, "Weiter").click();
+  await button(page, "Weiter").click();
+  await button(page, "Produkte anzeigen").click();
+  const cards = page.locator(".retirement-product-grid");
+  const select = (name: string) => cards.getByRole("checkbox", { name: `${name} für Detailvergleich auswählen`, exact: true });
+  await expect(cards.getByRole("article")).toHaveCount(6);
+  for (const name of ["Basis", "Pro", "Garantie"]) {
+    await expect(cards.getByRole("heading", { name: `UniVorsorge ${name}`, exact: true })).toBeVisible();
+  }
+  const selected = ["UniVorsorge Basis", "UniVorsorge Pro", "R+V-AltersvorsorgeGarantie 80"];
+  for (const name of selected) await select(name).check();
+  await select("UniVorsorge Garantie").click();
+  await expect(select("UniVorsorge Garantie")).not.toBeChecked();
+  await expect(cards.getByRole("checkbox", { checked: true })).toHaveCount(3);
+  await expect(page.getByRole("status").filter({ hasText: "von höchstens" })).toContainText("wurde nicht ausgewählt");
+  await button(page, "Direktvergleich öffnen").click();
+  const comparison = page.getByRole("region", { name: "Qualitative Detailgegenüberstellung" });
+  await expect(comparison).toContainText("Arbeitswert vorhanden, für öffentliche Anzeige nicht freigegeben");
+  await expect(comparison).toContainText("Öffentlich angekündigt");
+  await expect(comparison).toContainText("jederzeitiger 80-%-Depotboden ist nicht zugesagt");
+  await button(page, "A4 Kapitalentwicklung").click();
+  await zeroForm(page);
+  await calculate(page);
+  await expect(metric(model(page), "Vollständiger Endwert im gewählten Modell")).toHaveText("300,00 €");
+
+  await button(page, "A3 Produktvergleich").click();
+  await page.getByRole("button", { name: "UniVorsorge Pro abwählen" }).click();
+  await button(page, "Zurück zu den Produktkarten").click();
+  await select("UniVorsorge Garantie").check();
+  await button(page, "A4 Kapitalentwicklung").click();
+  await noResult(page);
+  await expect(page.getByRole("status").filter({ hasText: "Die bisherige Vorschau ist veraltet" })).toBeVisible();
+  for (const [label, value] of [
+    ["Modell-Aktienquote in %", "100"], ["Eigene monatliche Einzahlung in Euro", "100"],
+    ["Startmonat des Modells", "2027-01"], ["Endmonat des Modells", "2027-03"],
+    ["Mittlere Marktannahme: Aktienrendite p.a. in %", "0"],
+  ]) await expect(input(page, label)).toHaveValue(value);
+  await calculate(page);
+  await expect(page.getByText(/Die bisherige Vorschau ist veraltet/)).toHaveCount(0);
+  await expect(page.getByTestId("neutral-model")).toHaveCount(3);
+  await expect(page.getByTestId("capital-results")).not.toContainText(/UniVorsorge|R\+V/);
+  await expect(metric(model(page), "Vollständiger Endwert im gewählten Modell")).toHaveText("300,00 €");
+
+  await button(page, "A3 Produktvergleich").click();
+  await button(page, "Orientierung ändern").click();
+  await page.getByRole("radio", { name: "Mindestens 80 % der Beiträge und Zulagen" }).check();
+  await button(page, "A4 Kapitalentwicklung").click();
+  await noResult(page);
+  await expect(page.getByText(/Die bisherige Vorschau ist veraltet/)).toBeVisible();
+  await expect(input(page, "Eigene monatliche Einzahlung in Euro")).toHaveValue("100");
 });
 test("A4B-02: neutral January/October/zero examples and cost unknown status", async({page})=>{
   await a4(page);await zeroForm(page,"2027-01","2027-12");await calculate(page);
@@ -159,6 +200,7 @@ test("A4B-13: full calendar compacts display, detail stop does not shorten horiz
 for(const width of [390,1440])test(`A4B-14: ${width}px keyboard, field/result focus, source and overflow evidence`,async({page},info)=>{
   await page.setViewportSize({width,height:1000});await page.goto("./");await nav(page,"Altersvorsorge").focus();await page.keyboard.press("Enter");await button(page,"A – Neue Altersvorsorge planen").focus();await page.keyboard.press("Enter");
   await button(page,"A3 Produktvergleich").focus();await page.keyboard.press("Enter");await expect(page.getByRole("heading",{name:"A3 – Produktvergleich",exact:true})).toBeFocused();
+  await button(page,"Weiter").click();await button(page,"Weiter").click();await button(page,"Produkte anzeigen").click();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await picture(page,info,`a3-${width}`);
   await button(page,"A4 Kapitalentwicklung").focus();await page.keyboard.press("Enter");await zeroForm(page);await input(page,"Anfangskapital in Euro").fill("1,001");await calculate(page);await expect(input(page,"Anfangskapital in Euro")).toBeFocused();
   await input(page,"Anfangskapital in Euro").fill("0");await calculate(page);await expect(page.locator(".retirement-capital > .retirement-result")).toBeFocused();
