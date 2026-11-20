@@ -93,6 +93,7 @@ export function customerGrant(plan: CustomerPlan): Preview | PlanError {
 /** Any payment edit invalidates evidence of the contribution; a year/person edit all legal evidence. */
 export function editCustomerCapital(plan: CustomerPlan, capital: CapitalDraft,
   contribution: CustomerPlan["contribution"] = capital.monthly !== plan.capital.monthly ? undefined : plan.contribution): CustomerPlan {
+  if (JSON.stringify([plan.capital, plan.contribution]) === JSON.stringify([capital, contribution])) return plan;
   const candidate = { ...plan, capital, contribution };
   const payments = customerPayments(candidate);
   if (contribution && payments.status === "valid") capital = { ...capital, monthly: centsInput(payments.monthly) };
@@ -103,18 +104,23 @@ export function editCustomerCapital(plan: CustomerPlan, capital: CapitalDraft,
   };
   const before = ownSnapshot(plan), after = ownSnapshot({ ...plan, capital, contribution });
   const paymentsChanged = before === null || after === null || before !== after;
-  return { ...plan, contribution, capital: { ...capital, confirmed: false, grantConfirmed: false, costConfirmed: false, referenceCostConfirmed: false },
+  const prior = plan.capital;
+  const sameGrant = capital.start === prior.start && capital.end === prior.end && capital.grantEnabled === prior.grantEnabled
+    && capital.grantYear === prior.grantYear && capital.grantMonth === prior.grantMonth && capital.grantAmount === prior.grantAmount;
+  const sameCosts = capital.costMode === prior.costMode && capital.costPercent === prior.costPercent;
+  const sameReferenceCosts = capital.referenceEnabled === prior.referenceEnabled && capital.referenceCostMode === prior.referenceCostMode
+    && capital.referenceCostPercent === prior.referenceCostPercent;
+  return { ...plan, contribution, capital: { ...capital, confirmed: false, grantConfirmed: sameGrant && capital.grantConfirmed,
+    costConfirmed: sameCosts && capital.costConfirmed, referenceCostConfirmed: sameReferenceCosts && capital.referenceCostConfirmed },
     evidence: yearChanged ? changeYear(plan.evidence, Number(capital.start.slice(0, 4)))
       : paymentsChanged ? { ...plan.evidence, contributionConfirmed: false } : plan.evidence };
 }
 export function runCustomerCapital(plan: CustomerPlan): CapitalRun | PlanError {
   const d = plannedGrantDraft(plan);
   if ("status" in d) return d;
-  // The calculation action accepts visible hypothetical model inputs only. It never
-  // sets cost/grant evidence or changes any legal status passed to the grant domain.
   const payments = customerPayments(plan);
   if (payments.status !== "valid") return payments;
-  return calculateCapital(JSON.stringify({ ...plan.capital, monthly: centsInput(payments.monthly), confirmed: true }),
+  return calculateCapital(JSON.stringify({ ...plan.capital, monthly: centsInput(payments.monthly) }),
     payments.remainder ? { month: payments.remainderMonth, cents: payments.remainder } : undefined);
 }
 export interface LedgerPoint { month: string; cents: number; ownCents: number }

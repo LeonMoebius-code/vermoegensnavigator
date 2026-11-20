@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { enterStep, runNeutral } from "./ap04b-ux2-helpers";
 import { emptyRetirementAnswers, fundingOrientation, possibleText } from "../../app/presentation/retirement/retirement-questions";
 
 const btn = (p: Page, name: string) => p.getByRole("button", { name, exact: true });
@@ -64,8 +65,8 @@ test("S2 sequential employee route, own summary, keyboard focus and optional ans
   await expect(page.getByRole("checkbox", { name: "Ich pflege Angehörige", exact: true })).toBeChecked();
   await show(page, "Ihre erste Orientierung"); await btn(page, "Weiter zum eigenen Sparplan").click();
   await expect(page.getByTestId("customer-base-grant")).toHaveCount(0);
-  await btn(page, "Modellrechnung anzeigen").click(); await expect(page.getByTestId("scenario-line")).toHaveCount(3);
-  await btn(page, "Zurück zu meinen Voraussetzungen").click();
+  await runNeutral(page); await expect(page.getByTestId("scenario-line")).toHaveCount(3);
+  await enterStep(page, "A1"); await show(page, "Zeitraum und Person");
   await expect(page.getByLabel(birthLabel, { exact: true })).toHaveValue("1990");
 });
 
@@ -113,7 +114,8 @@ for (const answer of ["Ja", "Nein", "Weiß ich nicht / gemeinsam prüfen"]) test
   await expect(page.locator(".retirement-answer-summary")).toContainText(answer);
   await btn(page, "Weiter zum eigenen Sparplan").click(); await expect(page.getByTestId("customer-base-grant")).toHaveCount(0);
   await page.getByText("Beraterprüfung: Förderung und Sonderfälle", { exact: true }).click();
-  await expect(page.getByLabel("Gibt es Kinder, für die eine Kinderzulage infrage kommt?", { exact: true })).toHaveValue(answer === "Ja" ? "yes" : "unknown");
+  await expect(page.getByLabel("Gibt es Kinder, für die eine Kinderzulage infrage kommt?", { exact: true })).toHaveValue(answer === "Ja" ? "yes" : answer === "Nein" ? "no" : "unknown");
+  if (answer === "Nein") await expect(page.getByLabel("Für Person und Jahr geprüft: keine einzubeziehenden Kinder")).not.toBeChecked();
 });
 
 test("S2 invalid year and birth focus, optional empty sequence", async ({ page }) => {

@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { enterStep, runNeutral } from "./ap04b-ux2-helpers";
 import { emptyRetirementAnswers, fundingOrientation, invalidateAnswer, possibleText, type RetirementAnswers } from "../../app/presentation/retirement/retirement-questions";
 import { emptyCustomerPlan, customerGrant } from "../../app/presentation/retirement/customer-plan-adapter";
 
@@ -46,6 +47,7 @@ test("UX1 S1: no selected route, guest details, bounded example, B-specific orie
   await expect(button(page, "Neue Altersvorsorge planen")).toBeVisible();
   await expect(button(page, "B – Bestehende Riester-Rente prüfen")).toBeVisible();
   await expect(page.getByRole("radio")).toHaveCount(0);
+  await page.getByText("Was ist ein Altersvorsorgedepot?", { exact: true }).click();
   await page.getByText("Mehr erfahren", { exact: true }).click();
   await expect(page.getByText(/Beim neuen Altersvorsorgedepot sieht Union Investment einen Fondsauszahlplan vor/)).toBeVisible();
   await expect(page.getByRole("region", { name: "Das Altersvorsorgedepot verstehen" })).toContainText("540 € im Vertrag");
@@ -72,11 +74,12 @@ test("UX1 S2: unselected answers; standard orientation, multiple times, no fabri
   await expect(page.getByRole("group", { name: "Sind Sie verheiratet oder in einer eingetragenen Lebenspartnerschaft?" })).toHaveCount(0);
   await button(page, "Weiter zum eigenen Sparplan").click();
   await expect(page.getByTestId("customer-base-grant")).toHaveCount(0);
-  await button(page, "Modellrechnung anzeigen").click();
+  await runNeutral(page);
   await expect(page.getByTestId("scenario-line")).toHaveCount(3);
+  await enterStep(page, "A2");
   await page.getByText("Beraterprüfung: Förderung und Sonderfälle", { exact: true }).click();
   for (const label of ["Geprüfte unmittelbare Berechtigung", "Geprüfte Förderregelung", "Geprüfte Vertragszuordnung"]) await expect(page.getByLabel(label, { exact: true })).toHaveValue("unconfirmed");
-  await button(page, "Zurück zu meinen Voraussetzungen").click();
+  await enterStep(page, "A1");
   await show(page, "Erwerb und Versicherung");
   await expect(page.getByRole("checkbox", { name: "Kindererziehungszeiten", exact: true })).toBeChecked();
   await expect(page.getByRole("checkbox", { name: "Ich pflege Angehörige", exact: true })).toBeChecked();
@@ -98,8 +101,7 @@ test("UX1 partner, Riester, child evidence remain open; A/B navigation retains a
   await expect(page.getByRole("region", { name: "Vorläufige Förderorientierung" })).toContainText("mittelbaren Förderung");
   await button(page, "Bestehenden Riester-Vertrag zuerst prüfen").click();
   await expect(page.getByTestId("old-result")).toHaveCount(0);
-  await button(page, "A/B-Auswahl").click(); await button(page, "Neue Altersvorsorge planen").click(); await button(page, "Meine Voraussetzungen prüfen").click();
-  await show(page, "Besondere Voraussetzungen");
+  await button(page, "A/B-Auswahl").click(); await button(page, "Neue Altersvorsorge planen").click(); await show(page, "Besondere Voraussetzungen");
   await expect(tri(page, "Ist Ihr Partner selbst unmittelbar förderberechtigt?", "Ja")).toBeChecked();
   await show(page, "Zeitraum und Person");
   await expect(page.getByLabel(yearLabel, { exact: true })).toHaveValue("2028");
@@ -129,12 +131,12 @@ test("UX1 correction of a previously confirmed personal case blocks stale grant 
   await page.getByLabel("Für Person und Jahr geprüft: keine einzubeziehenden Kinder", { exact: true }).check();
   await page.getByLabel("Den geplanten Jahres-Eigenbeitrag für Person, Vertrag und Jahr fachlich als förderfähig geprüft", { exact: true }).check();
   await expect(page.getByTestId("customer-base-grant")).toHaveText("390,00 €");
-  await button(page, "Zurück zu meinen Voraussetzungen").click();
+  await enterStep(page, "A1");
   await show(page, "Erwerb und Versicherung"); await show(page, "Bestehende Vorsorge und Kinder");
   await show(page, "Ihre erste Orientierung"); await button(page, "Zurück").click();
   await button(page, "Weiter zum eigenen Sparplan").click();
   await expect(page.getByTestId("customer-base-grant")).toHaveText("390,00 €");
-  await button(page, "Zurück zu meinen Voraussetzungen").click(); await show(page, "Erwerb und Versicherung"); await page.getByRole("radio", { name: "Selbstständig oder freiberuflich", exact: true }).check();
+  await enterStep(page, "A1"); await show(page, "Erwerb und Versicherung"); await page.getByRole("radio", { name: "Selbstständig oder freiberuflich", exact: true }).check();
   await expect(page.getByTestId("funding-orientation")).not.toHaveText(possibleText);
   await button(page, "Weiter zum eigenen Sparplan").click();
   await expect(page.getByTestId("customer-base-grant")).toHaveCount(0);
@@ -149,7 +151,7 @@ for (const width of [375, 768, 1280]) test(`UX1 M1/M2 ${width}px: long labels, k
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await button(page, "Neue Altersvorsorge planen").focus(); await page.keyboard.press("Enter");
   await button(page, "Meine Voraussetzungen prüfen").focus(); await page.keyboard.press("Enter");
-  await expect(page.getByRole("heading", { name: "Ihre mögliche Förderung", exact: true })).toBeFocused();
+  await expect(page.getByRole("heading", { name: "Ihre Situation und Förderung", exact: true })).toBeFocused();
   const year = page.getByLabel(yearLabel, { exact: true }); await year.fill("oops"); await button(page, "Weiter zum eigenen Sparplan").click();
   await expect(year).toBeFocused(); await expect(year).toHaveAttribute("aria-invalid", "true");
   await year.fill("2027"); await show(page, "Erwerb und Versicherung"); await page.getByRole("radio", { name: employee, exact: true }).check();
@@ -165,6 +167,6 @@ for (const width of [375, 768, 1280]) test(`UX1 M1/M2 ${width}px: long labels, k
   await button(page, "Weiter zum eigenen Sparplan").click(); await expect(page.getByTestId("customer-retirement")).toBeVisible();
   await page.evaluate(() => { document.body.style.zoom = "1"; });
   await page.setViewportSize({ width: Math.floor(width / 2), height: 700 });
-  await button(page, "Zurück zu meinen Voraussetzungen").click();
+  await enterStep(page, "A1");
   expect(await page.evaluate(() => document.querySelector(".retirement-questionnaire")!.scrollWidth <= document.querySelector(".retirement-questionnaire")!.clientWidth)).toBe(true);
 });

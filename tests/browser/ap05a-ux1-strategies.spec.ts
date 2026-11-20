@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { enterStep, openGrantEvidence } from "./ap04b-ux2-helpers";
 import { emptyRiesterJourney, invalidateRiesterAnswer } from "../../app/presentation/retirement/riester-journey";
 import { emptyOldDraft, previewComparison } from "../../app/presentation/retirement/old-riester-adapter";
 const btn = (p: Page, name: string) => p.getByRole("button", { name, exact: true });
@@ -107,12 +108,12 @@ test("UXB-06: navigation preserves B answers/choices and independent A draft, no
   await enter(page); const before = await storage(page);
   await label(page, "Bei welchem Anbieter besteht Ihr Vertrag?").fill("Testanbieter"); await label(page, "Ihr eigener Jahresbeitrag in Euro").fill("360");
   await btn(page, "Für mich prüfen: Strategie 1").click(); await btn(page, "Für mich prüfen: Strategie 4").click(); await label(page, "Variante der Strategie 4").selectOption("4a");
-  await btn(page, "B2 Fördervergleich").click(); await btn(page, "A/B-Auswahl").click(); await btn(page, "A – Neue Altersvorsorge planen").click();
-  await label(page, "Unmittelbare Berechtigung").selectOption("direct_confirmed");
+  await btn(page, "B2 Fördervergleich").click(); await btn(page, "A/B-Auswahl").click(); await btn(page, "Neue Altersvorsorge planen").click(); await enterStep(page, "A2"); await openGrantEvidence(page);
+  await label(page, "Geprüfte unmittelbare Berechtigung").selectOption("direct_confirmed");
   await btn(page, "A/B-Auswahl").click(); await btn(page, "B – Bestehende Riester-Rente prüfen").click();
   await expect(label(page, "Bei welchem Anbieter besteht Ihr Vertrag?")).toHaveValue("Testanbieter"); await expect(label(page, "Ihr eigener Jahresbeitrag in Euro")).toHaveValue("360");
   await expect(btn(page, "Für mich prüfen: Strategie 1")).toHaveAttribute("aria-pressed", "true"); await expect(label(page, "Variante der Strategie 4")).toHaveValue("4a");
-  await btn(page, "A/B-Auswahl").click(); await btn(page, "A – Neue Altersvorsorge planen").click(); await expect(label(page, "Unmittelbare Berechtigung")).toHaveValue("direct_confirmed");
+  await btn(page, "A/B-Auswahl").click(); await btn(page, "Neue Altersvorsorge planen").click(); await enterStep(page, "A2"); await openGrantEvidence(page); await expect(label(page, "Geprüfte unmittelbare Berechtigung")).toHaveValue("direct_confirmed");
   expect(await storage(page)).toEqual(before);
 });
 
@@ -201,8 +202,8 @@ for (const [field, fieldLabel, nextValue] of [
   await label(page, "Zahlen Sie derzeit regelmäßig in den Vertrag ein?").selectOption("yes");
   await label(page, "Kommt Kinderzulage für Sie infrage?").selectOption("no");
   await label(page, "Ist ein Ehe- oder Lebenspartner für Ihre Förderung relevant?").selectOption("no");
-  await btn(page, "A/B-Auswahl").click(); await btn(page, "A – Neue Altersvorsorge planen").click();
-  await label(page, "Unmittelbare Berechtigung").selectOption("direct_confirmed");
+  await btn(page, "A/B-Auswahl").click(); await btn(page, "Neue Altersvorsorge planen").click(); await enterStep(page, "A2"); await openGrantEvidence(page);
+  await label(page, "Geprüfte unmittelbare Berechtigung").selectOption("direct_confirmed");
   await btn(page, "A/B-Auswahl").click(); await btn(page, "B – Bestehende Riester-Rente prüfen").click();
   await confirmOld(page);
   await btn(page, "B2 Fördervergleich").click();
@@ -239,7 +240,7 @@ for (const [field, fieldLabel, nextValue] of [
   await btn(page, "B2 Fördervergleich").click();
   for (const name of ["Neu-Szenario: unmittelbare Berechtigung", "Neu-Szenario: Förderregime", "Neu-Szenario: Vertragskontext", "Neu-Szenario: vollständige Kinderzuordnung"]) await expect(label(page, name)).toHaveValue("unconfirmed");
   await expect(page.getByTestId("old-result")).toHaveCount(0); await expect(page.getByTestId("new-result")).toHaveCount(0);
-  await btn(page, "A/B-Auswahl").click(); await btn(page, "A – Neue Altersvorsorge planen").click(); await expect(label(page, "Unmittelbare Berechtigung")).toHaveValue("direct_confirmed");
+  await btn(page, "A/B-Auswahl").click(); await btn(page, "Neue Altersvorsorge planen").click(); await enterStep(page, "A2"); await openGrantEvidence(page); await expect(label(page, "Geprüfte unmittelbare Berechtigung")).toHaveValue("direct_confirmed");
   expect(await storage(page)).toEqual(before);
 });
 

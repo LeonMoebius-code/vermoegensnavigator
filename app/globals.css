@@ -7485,3 +7485,166 @@ body[data-print-mode="customer"] .internal-only {
 @media (max-width: 900px) {
   .retirement-product-row dl > div { border-left: 3px solid #cbd7df; padding-left: 10px; }
 }
+
+/* AP-04b UX2: shared A1–A4 journey. */
+.retirement-view.retirement-ux2 {
+  width: 100%;
+  max-width: 1320px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  container: retirement-journey / inline-size;
+}
+.retirement-ux2 .retirement-journey-header {
+  margin: 8px 0 20px;
+  padding: clamp(20px, 4vw, 42px);
+  border-radius: 16px;
+  color: white;
+  background: linear-gradient(112deg, #063264, #0c5476);
+}
+.retirement-ux2 .retirement-journey-header h1 {
+  margin: 0 0 10px;
+  color: inherit;
+  font-size: clamp(27px, 4vw, 44px);
+  line-height: 1.13;
+}
+.retirement-ux2 .retirement-journey-header h1:focus { outline-color: white; }
+.retirement-session-note { margin: 0; color: #e3eff8; font-size: .88rem; }
+.retirement-ux2 .retirement-entry-cards { gap: 20px; }
+.retirement-ux2 .retirement-entry-cards .panel {
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0;
+  padding: clamp(20px, 3vw, 34px);
+  border-top: 3px solid var(--navy-2);
+}
+.retirement-entry-cards h2, .retirement-entry-cards p { margin: 0; }
+.retirement-entry-cards p { color: var(--muted); line-height: 1.55; }
+.retirement-introduction > button { margin-top: 16px; }
+.retirement-ux2 .retirement-route-back { padding-left: 0; background: transparent; border: 0; }
+.retirement-ux2 .retirement-guided-nav {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0 0 24px;
+  gap: 6px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+}
+.retirement-guided-nav button { min-width: 0; border-radius: 8px; font-weight: 650; }
+.retirement-guided-nav [aria-current="step"] { text-decoration: underline; text-underline-offset: 4px; }
+.retirement-ux2 :is(.retirement-stage, .retirement-question-layout) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+.retirement-stage-main, .retirement-stage-summary, .retirement-capital-flow { min-width: 0; }
+.retirement-ux2 :is(.retirement-stage-summary, .retirement-orientation, .retirement-funding-card) {
+  margin: 0;
+  background: var(--paper);
+  border-top: 3px solid var(--teal);
+}
+.retirement-stage-summary dt, .retirement-capital-metrics dt { font-size: .84rem; color: var(--muted); }
+.retirement-stage-summary dd { margin: 4px 0 13px; font-weight: 700; }
+.retirement-stage-summary p:last-child { margin-bottom: 0; }
+.retirement-ux2 .retirement-customer { color: var(--ink); }
+.retirement-ux2 .retirement-customer-inputs, .retirement-ux2 .retirement-customer-details { color: var(--ink); background: var(--paper); }
+.retirement-ux2 :is(.retirement-year-equivalent, .retirement-neutral-assumptions, .retirement-capital-metrics > div) {
+  border-radius: 10px;
+  padding: 13px 16px;
+  background: var(--canvas);
+}
+.retirement-ux2 .retirement-contribution-targets { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.retirement-ux2 .retirement-contribution-targets button { background: var(--paper); color: var(--ink); }
+.retirement-ux2 .retirement-contribution-targets button[aria-pressed="true"] { border: 2px solid var(--navy-2); background: var(--canvas); }
+.retirement-action-row, .retirement-capital-modes { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.retirement-ux2 .retirement-capital-modes { margin-bottom: 16px; }
+.retirement-ux2 .retirement-capital-modes button { flex: 1 1 140px; min-width: 0; border-radius: 10px; }
+.retirement-ux2 .retirement-capital-modes [aria-pressed="true"] { background: #005b94; color: #fff; font-weight: 700; }
+.retirement-ux2 :is(.retirement-capital-settings, .retirement-analysis-details) {
+  padding: 0 13px;
+  margin: 10px 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.retirement-ux2 :is(.retirement-capital-settings, .retirement-analysis-details) > summary {
+  min-height: 44px;
+  padding: 12px 0;
+  font-weight: 650;
+  cursor: pointer;
+}
+.retirement-capital-settings fieldset { margin: 0 0 12px; border-color: var(--line); border-radius: 9px; }
+.retirement-neutral-assumptions ul { display: grid; gap: 5px; margin: 8px 0; padding-inline-start: 18px; }
+.retirement-neutral-assumptions p { margin: 0; }
+.retirement-ux2 .retirement-capital-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 16px 0;
+}
+.retirement-ux2 .retirement-capital-metrics dd {
+  margin: 6px 0 0;
+  color: var(--ink);
+  font-size: clamp(17px, 2vw, 24px);
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+.retirement-ux2 .retirement-capital-overview { min-width: 0; padding: 14px 0; }
+.retirement-ux2 :is(.retirement-neutral, .retirement-model-blocked, .retirement-demo) { margin-bottom: 16px; }
+.retirement-ux2 .retirement-model-blocked { border-left: 3px solid #b9630b; }
+.retirement-ux2 .retirement-demo .retirement-capital-grid label { display: block; margin: 0 0 6px; font-weight: 650; }
+.retirement-ux2 .retirement-demo select { min-height: 44px; width: 100%; color: var(--ink); background: var(--paper); }
+.retirement-ux2 .retirement-chart-legend span { width: auto; height: auto; font-weight: 750; }
+.retirement-ux2 :is(.retirement-product-toolbar, .retirement-product-selection > li) { background: var(--canvas); }
+.retirement-ux2 .retirement-restart { margin-top: 24px; }
+.retirement-stage { container: retirement-stage / inline-size; }
+@container retirement-stage (max-width: 670px) {
+  .retirement-ux2 .retirement-contribution-targets { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .retirement-ux2 .retirement-scenario-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@container retirement-journey (min-width: 880px) {
+  .retirement-ux2 :is(.retirement-stage, .retirement-question-layout) {
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 28%);
+  }
+  .retirement-ux2 .retirement-stage-summary { position: sticky; top: 14px; }
+}
+@container retirement-journey (max-width: 620px) {
+  .retirement-ux2 .retirement-guided-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .retirement-ux2 .retirement-capital-metrics { grid-template-columns: minmax(0, 1fr); }
+  .retirement-ux2 .retirement-contribution-targets { grid-template-columns: minmax(0, 1fr); }
+}
+
+.retirement-ux2 .retirement-journey-header { padding-block: clamp(18px, 2.5vw, 30px); }
+.retirement-ux2 .retirement-journey-header h1 { width: fit-content; }
+.retirement-ux2 .retirement-session-note-detail, .retirement-product-context { color: var(--muted); font-size: .9rem; }
+.retirement-ux2 :is(.retirement-guided-nav, .retirement-capital-modes, .retirement-question-progress) button:not([aria-current="step"]):not([aria-pressed="true"]) {
+  border: 1px solid var(--line);
+  background: var(--canvas);
+  color: var(--ink);
+}
+.retirement-ux2 :is(.retirement-guided-nav, .retirement-capital-modes, .retirement-question-progress) button:hover { border-color: var(--navy-2); }
+.retirement-ux2 :is(.retirement-questionnaire, .retirement-stage-summary, .retirement-orientation, .retirement-product-question, .retirement-product, .retirement-neutral, .retirement-model-blocked, .retirement-demo) {
+  padding: clamp(16px, 2.15vw, 26px);
+}
+.retirement-ux2 .retirement-neutral .retirement-notice { margin-top: 0; }
+.retirement-ux2 .retirement-product-context { margin-top: 0; }
+.retirement-ux2 .retirement-product .retirement-checkbox { padding-top: 8px; }
+.retirement-ux2 .retirement-product button:not(.primary), .retirement-ux2 .retirement-product-actions button:not(.primary) {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--paper);
+  color: var(--ink);
+}
+.retirement-ux2 :is(.retirement-questionnaire, .retirement-orientation) { max-width: 100%; }
+.retirement-ux2 .retirement-questionnaire .retirement-question-actions > button { flex: 1 1 160px; min-width: 0; }
+.retirement-funding-bar { height: 9px; margin: 12px 0; overflow: hidden; border-radius: 8px; background: var(--teal); }
+.retirement-funding-bar span { display: block; height: 100%; background: var(--navy-2); }
+
+.retirement-ux2 .retirement-customer-chart svg text { font-size: 19px; }
+@container retirement-journey (max-width: 680px) {
+  .retirement-ux2 .retirement-customer-chart svg text { font-size: 26px; }
+}
+@container retirement-journey (max-width: 440px) {
+  .retirement-ux2 .retirement-customer-chart svg text { font-size: 32px; }
+}

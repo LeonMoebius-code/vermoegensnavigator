@@ -1,6 +1,6 @@
-import { useId, useRef } from "react";
+import { useId, useRef, type ReactNode } from "react";
 import type { Issue, MoneyMetric, ProjectionResult, Response, ScenarioComparison } from "../../domain/retirement/projection-contract";
-import { calculateCapital, issueMessage, scenarioNames, type CapitalDraft, type CapitalField, type CapitalRun } from "./projection-adapter";
+import { issueMessage, scenarioNames, type CapitalDraft, type CapitalField, type CapitalRun } from "./projection-adapter";
 import { euro } from "./direct-grant-adapter";
 
 const responseStatus: Record<Response["status"], string> = { calculated: "Modellrechnung verfügbar", partial: "Teilweise berechenbar",
@@ -80,7 +80,7 @@ export function RetirementProjectionResults({ result }: { result: Extract<Capita
         {result.mode === "comparison" && response.comparisonResults[i] && <ComparisonResult comparison={response.comparisonResults[i]} />}
       </section>;
     })}</div>
-    <details className="retirement-help"><summary>Rechenstand und Quellenbindung</summary>
+    <details className="retirement-help"><summary>Fachebene · Rechenstand und Quellenbindung</summary>
       <p>Ausschließlich hypothetische UI-Annahmen ap04b-ui-v1; kein Hersteller- oder Buchungsnachweis. Nullwerte bezeichnen nur ausdrücklich gewählte Modellannahmen.</p>
       {result.responses.map((r, i) => <div key={i}><p>Anfrage {i + 1}: <code>{r.requestHash ?? "Kein gültiger Anfragehash"}</code></p>
         <p>Rechenversion: {r.supportedVersions.modelVersion} · {r.supportedVersions.numericConventionVersion}</p>
@@ -96,17 +96,14 @@ function TextField({ id, label, value, change, invalid, error, month = false }: 
     type={month ? "month" : "text"} min={month ? "0100-01" : undefined} max={month ? "9999-12" : undefined}
     inputMode={month ? undefined : "decimal"} onChange={e => change(e.target.value)} aria-invalid={invalid} aria-describedby={invalid ? error : undefined} /></div>;
 }
-export function RetirementProjection({ draft, change, result, show }: { draft: CapitalDraft; change: (d: CapitalDraft) => void;
-  result: CapitalRun | null; show: (r: CapitalRun) => void }) {
+export function RetirementProjection({ draft, change, result, calculate, chart, annualPlan }: {
+  draft: CapitalDraft; change: (d: CapitalDraft, field: CapitalField) => void;
+  result: CapitalRun | null; calculate: () => CapitalRun; chart: ReactNode; annualPlan: boolean;
+}) {
   const prefix = useId(), output = useRef<HTMLDivElement>(null), error = `${prefix}-error`;
   const id = (field: CapitalField) => `${prefix}-${field}`;
   const invalid = (field: CapitalField) => result?.status === "invalid_input" && result.field === field;
-  const edit = (next: CapitalDraft, field: CapitalField) => {
-    const confirmations: CapitalField[] = ["confirmed", "costConfirmed", "referenceCostConfirmed", "grantConfirmed"];
-    if (!confirmations.includes(field)) next = { ...next, confirmed: false, costConfirmed: false, referenceCostConfirmed: false, grantConfirmed: false };
-    else if (field !== "confirmed") next = { ...next, confirmed: false };
-    change(next);
-  };
+  const edit = change;
   const scalar = <K extends Exclude<keyof CapitalDraft, "scenarios">>(key: K, value: CapitalDraft[K]) => edit({ ...draft, [key]: value }, key);
   const text = (key: Exclude<keyof CapitalDraft, "scenarios">, label: string, asMonth = false) => <TextField id={id(key)} label={label}
     value={String(draft[key])} change={v => scalar(key, v as never)} invalid={invalid(key)} error={error} month={asMonth} />;
@@ -127,21 +124,38 @@ export function RetirementProjection({ draft, change, result, show }: { draft: C
         : <p>Kein bestätigter Nachkostenwert. Reale Kosten und Gesamtkostenbetrag sind nicht als 0 EUR bekannt.</p>}
     </fieldset>;
   };
-  const calculate = () => {
-    const next = calculateCapital(JSON.stringify(draft)); show(next);
-    requestAnimationFrame(() => next.status === "invalid_input" && next.field !== "form"
-      ? document.getElementById(id(next.field))?.focus() : output.current?.focus());
+  const submit = () => {
+    const next = calculate();
+    requestAnimationFrame(() => {
+      const field = next.status === "invalid_input" ? document.getElementById(id(next.field)) : null;
+      if (!field) { output.current?.focus(); return; }
+      for (let parent = field.parentElement; parent; parent = parent.parentElement)
+        if (parent instanceof HTMLDetailsElement) parent.open = true;
+      field.focus();
+    });
   };
   return <div className="retirement-capital">
     <p className="retirement-notice"><strong>Neutrales Kapitalmarktmodell, keine UniVorsorge-Produktsimulation.</strong> A3-Auswahl, Garantien und Hersteller-Ablaufmechaniken
       werden nicht eingerechnet. Keine Prognose, keine Förderzusage und keine Nachsteuerrechnung.</p>
-    <p>A2-Übernahme ist eine spätere Etappe: kein automatisch gebundener Jahreswert und keine Wiederholung in Folgejahren.
-      Hier sind nur eine ausdrücklich zulagenfreie/offene Abdeckung und klar hypothetische Einzelereignisse möglich.</p>
-    <form className="retirement-form" onSubmit={e => { e.preventDefault(); calculate(); }} noValidate>
+    <p>Zeitraum und Eigenzahlungen stammen aus Ihrem Sparplan. Bedingte oder geprüfte Jahreszulagen werden ohne ausgewiesenes Buchungsereignis nicht übernommen.</p>
+    {result?.status === "responses" && <div className="retirement-result" ref={output} tabIndex={-1} aria-live="polite">
+      {chart}
+      <details className="retirement-analysis-details"><summary>Berateransicht · Beträge, Modellstatus und Rechendetails</summary>
+        <RetirementProjectionResults result={result} />
+      </details>
+    </div>}
+    <form className="retirement-form" onSubmit={e => { e.preventDefault(); submit(); }} noValidate>
+      <div className="retirement-neutral-assumptions">
+        <p><strong>{draft.equity} % Aktien</strong> · {draft.costMode === "gross_unknown" ? "Bruttomodell, reale Kosten offen" : "Hypothetisch gewählte Bestandsminderung"} · monatliche Zielquote</p>
+        <ul>{scenarioNames.map((name, i) => <li key={name}>{name}: {draft.scenarios[i].equity} % Aktien, {draft.scenarios[i].bond} % Renten p. a.</li>)}</ul>
+        <p>{draft.grantEnabled ? "Einmalige hypothetische Zulage separat erfasst." : draft.coverage === "unknown" ? "Offene Zulagenjahre · Teilszenario." : "Ohne weitere Zulagen modelliert."}</p>
+      </div>
+      <details className="retirement-capital-settings"><summary>Zahlungsplan und Modellannahmen bearbeiten</summary>
       <fieldset><legend>Zeitraum und eigene Zahlungen</legend><div className="retirement-capital-grid">
         {text("start", "Startmonat des Modells", true)}{text("end", "Endmonat des Modells", true)}
         {text("initial", "Anfangskapital in Euro")}{text("monthly", "Eigene monatliche Einzahlung in Euro")}
-      </div><p>Anfangskapital unmittelbar vor dem Start; Einzahlungen am Monatsende. Eurobeträge mit Dezimalkomma, ohne Cent-Rundung. Kein Hochrechnen des ersten Jahres auf zwölf Raten.</p>
+      </div><p>Änderungen wirken direkt im gemeinsamen Sparplan. Einzahlungen erfolgen im Modell zum Monatsende.</p>
+        {annualPlan && <p>Die Monatsrate folgt dem gewählten Jahresziel. Eine direkte Änderung der Rate aktiviert den individuellen Monatsbeitrag.</p>}
         {checkbox("oneOffEnabled", "Einmaligen eigenen Beitrag hinzufügen")}
         {draft.oneOffEnabled && <div className="retirement-capital-grid">{text("oneOff", "Einmaliger eigener Modellbeitrag in Euro")}{text("oneOffMonth", "Monat des einmaligen Modellbeitrags", true)}</div>}
       </fieldset>
@@ -182,13 +196,13 @@ export function RetirementProjection({ draft, change, result, show }: { draft: C
       <label htmlFor={id("output")}>Ausgabeumfang</label><select id={id("output")} value={draft.output} onChange={e => scalar("output", e.target.value as CapitalDraft["output"])}>
         <option value="auto">Automatisch – Vertragsgrenzen beachten</option><option value="compact">Kompakt – vollständige Berechnung</option><option value="detailed">Detailliert – bei langen Zeiträumen begrenzt</option>
       </select>
+      </details>
       {checkbox("confirmed", "Die sichtbaren neutralen Modellannahmen für diesen aktuellen Snapshot bewusst bestätigt")}
       <button className="primary" type="submit">Neutrale Kapitalentwicklung berechnen</button>
     </form>
-    <div className="retirement-result" ref={output} tabIndex={-1} aria-live="polite">
+    {result?.status !== "responses" && <div className="retirement-result" ref={output} tabIndex={-1} aria-live="polite">
       {result?.status === "invalid_input" ? <p id={error} role="alert">Eingabe korrigieren: {result.message}</p>
-        : result?.status === "responses" ? <RetirementProjectionResults result={result} />
-        : <p role="status" data-testid="capital-empty">Noch kein aktuelles Kapitalergebnis. Angaben und Bestätigungen prüfen; nach Änderungen neu berechnen.</p>}
-    </div>
+        : <p role="status" data-testid="capital-empty">Noch kein aktuelles Kapitalergebnis. Bestätigen Sie die Annahmen und starten Sie die Berechnung.</p>}
+    </div>}
   </div>;
 }

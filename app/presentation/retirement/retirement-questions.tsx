@@ -111,13 +111,12 @@ const insuranceOptions = [["statutory", "Gesetzliche Rentenversicherungspflicht"
 const answerOptions = [["yes", "Ja"], ["no", "Nein"], ["unknown", "Weiß ich nicht / gemeinsam prüfen"]] as const;
 const questionSections = ["Zeitraum und Person", "Erwerb und Versicherung", "Besondere Voraussetzungen", "Bestehende Vorsorge und Kinder", "Ihre erste Orientierung"] as const;
 
-export function RetirementQuestions({ answers: a, plan, change, birth, back, next, riester }: {
+export function RetirementQuestions({ answers: a, plan, change, birth, back, next, riester, section, setSection }: {
   answers: RetirementAnswers; plan: CustomerPlan; change: <K extends keyof RetirementAnswers>(key: K, value: RetirementAnswers[K]) => void;
   birth: (value: string) => void; back: () => void; next: () => void; riester: () => void;
+  section: number; setSection: (section: number) => void;
 }) {
   const prefix = useId(), yearRef = useRef<HTMLInputElement>(null), birthRef = useRef<HTMLInputElement>(null);
-  // Section navigation is presentation state only. Answers remain owned by RetirementEntry.
-  const [section, setSection] = useState(0);
   const heading = useRef<HTMLHeadingElement>(null);
   const insuranceQuestion = ["self", "none", "other"].includes(a.employment);
   const partnerQuestions = insuranceQuestion || a.employment === "civil" && a.civilConsent !== "yes";

@@ -24,7 +24,7 @@ const cell = (page: Page, title: string, product: ProductId) => row(page, title)
 async function openFinder(page: Page) {
   await page.goto("./");
   await page.locator(".sidebar nav").getByRole("button", { name: "Altersvorsorge" }).click();
-  await button(page, "A – Neue Altersvorsorge planen").click();
+  await button(page, "Neue Altersvorsorge planen").click();
   await button(page, "A3 Produktvergleich").click();
 }
 
@@ -220,7 +220,7 @@ test("AP03B-19: A/B switch keeps the ephemeral A3 draft, discard clears it witho
   await button(page, "B – Bestehende Riester-Rente prüfen").click();
   await expect(page.getByRole("heading", { name: "B1 – Bestandsaufnahme" })).toBeVisible();
   await button(page, "A/B-Auswahl").click();
-  await button(page, "A – Neue Altersvorsorge planen").click();
+  await button(page, "Neue Altersvorsorge planen").click();
   await button(page, "A3 Produktvergleich").click();
   await expect(select(page, "ruv-standard")).toBeChecked();
   expect(await storage()).toEqual(before);
@@ -229,7 +229,7 @@ test("AP03B-19: A/B switch keeps the ephemeral A3 draft, discard clears it witho
   await expect(select(page, "ruv-standard")).toBeChecked();
   page.once("dialog", dialog => dialog.accept());
   await button(page, "Spezialentwurf neu starten").click();
-  await button(page, "A – Neue Altersvorsorge planen").click();
+  await button(page, "Neue Altersvorsorge planen").click();
   await button(page, "A3 Produktvergleich").click();
   await expect(currentQuestion(page).getByRole("radio", { checked: true })).toHaveCount(0);
   await showCards(page);

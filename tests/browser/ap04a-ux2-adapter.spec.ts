@@ -14,7 +14,7 @@ function own(p: CustomerPlan) {
   return a.cents;
 }
 function assertProjection(p: CustomerPlan, total: number, finalMonth: string) {
-  const run = runCustomerCapital(p); expect(run.status).toBe("responses");
+  const run = runCustomerCapital({ ...p, capital: { ...p.capital, confirmed: true } }); expect(run.status).toBe("responses");
   if (run.status !== "responses") throw new Error("missing model");
   for (const result of run.responses.flatMap(r => r.projectionResults)) {
     expect(result.status).toBe("calculated");

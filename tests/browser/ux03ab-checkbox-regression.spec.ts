@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { enterStep, clearNeutralReturns, openNeutralSettings, openGrantEvidence, runNeutral } from "./ap04b-ux2-helpers";
 import { build } from "esbuild";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -17,33 +18,37 @@ function confirmedPlan(): CustomerPlan {
 }
 
 type Tree = { type?: unknown; props?: Record<string, unknown> };
-type Customer = (props: { plan: CustomerPlan; change: (next: CustomerPlan) => void; back: () => void }) => Tree;
-let component: Customer, directory: string;
+type Component = (props: Record<string, unknown>) => Tree;
+let savings: Component, model: Component, directory: string;
 test.beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "ux03-checkbox-component-"));
   const output = join(directory, "component.mjs");
   // This isolates hooks only, then invokes the REAL component's onChange handler.
   // It is a Node component-integration check, not a claimed browser rendering.
-  await build({ stdin: { contents: `export { RetirementCustomer } from ${JSON.stringify(resolve("app/presentation/retirement/retirement-customer.tsx"))};`,
+  await build({ stdin: { contents: `export { RetirementCustomer } from ${JSON.stringify(resolve("app/presentation/retirement/retirement-customer.tsx"))};
+    export { RetirementCapital } from ${JSON.stringify(resolve("app/presentation/retirement/retirement-capital.tsx"))};`,
     resolveDir: process.cwd(), loader: "tsx" }, bundle: true, platform: "node", format: "esm", jsx: "automatic", outfile: output,
     plugins: [{ name: "synthetic-react-hooks", setup(builder) {
       builder.onResolve({ filter: /^react(?:\/jsx-runtime)?$/ }, args => ({ path: args.path, namespace: "synthetic-hooks" }));
       builder.onLoad({ filter: /.*/, namespace: "synthetic-hooks" }, args => ({ loader: "js", contents: args.path === "react"
-        ? 'export const useId=()=>"checkbox-regression"; export const useRef=()=>({current:null}); export const useState=()=>[null,()=>{}];'
+        ? 'export const useId=()=>"checkbox-regression"; export const useRef=()=>({current:null}); export const useState=()=>[null,()=>{}]; export const useMemo=f=>f();'
         : 'export const Fragment=Symbol("fragment"); export const jsx=(type,props)=>({type,props}); export const jsxs=jsx;' }));
     } }] });
-  component = (await import(pathToFileURL(output).href)).RetirementCustomer as Customer;
+  const module = await import(pathToFileURL(output).href);
+  savings = module.RetirementCustomer as Component; model = module.RetirementCapital as Component;
 });
 test.afterAll(async () => { if (directory) await rm(directory, { recursive: true, force: true }); });
 
 function checkboxChange(plan: CustomerPlan, key: string, checked: boolean): CustomerPlan {
   let changed: CustomerPlan | null = null;
-  const root = component({ plan, change: next => { changed = next; }, back: () => {} });
+  const component = key === "oneOffEnabled" ? savings : model;
+  const root = component({ plan, change: (next: CustomerPlan) => { changed = next; }, back: () => {}, view: "neutral" });
   function find(value: unknown): Tree | null {
     if (Array.isArray(value)) { for (const child of value) { const hit = find(child); if (hit) return hit; } return null; }
     if (!value || typeof value !== "object") return null;
     const node = value as Tree;
     if (node.type === "input" && node.props?.id === `checkbox-regression-${key}`) return node;
+    if (typeof node.type === "function" && node.type.name === "RetirementProjection") return find(node.type(node.props));
     return find(node.props?.children);
   }
   const target = find(root);
@@ -65,7 +70,7 @@ test("P2 component: disabling own once revokes contribution evidence and grant u
   expect(next.evidence.contributionConfirmed).toBe(false);
   expect(next.evidence.entitlement).toBe("direct_confirmed");
   expect(customerGrant(next).status).toBe("review_required");
-  const capital = runCustomerCapital(next); expect(capital.status).toBe("responses");
+  const capital = runCustomerCapital({ ...next, capital: { ...next.capital, confirmed: true } }); expect(capital.status).toBe("responses");
   if (capital.status !== "responses") throw new Error("capital fixture");
   for (const response of capital.responses) expect(response.projectionResults[0].summary.specifiedEndBalance).toHaveProperty("displayCents", 30000);
   const checked = customerGrant({ ...next, evidence: { ...next.evidence, contributionConfirmed: true } });
@@ -93,7 +98,6 @@ for (const key of ["costConfirmed", "referenceCostConfirmed", "grantConfirmed"] 
   });
 
 const input = (p: Page, name: string) => p.getByLabel(name, { exact: true });
-const calculate = (p: Page) => p.getByRole("button", { name: "Modellrechnung anzeigen", exact: true }).click();
 test("P2 browser: remove confirmed own once, block grant, invalidate capital, reconfirm; market edit retains evidence", async ({ page }) => {
   await page.goto("./");
   await page.locator(".sidebar nav").getByRole("button", { name: /Altersvorsorge/ }).click();
@@ -105,10 +109,9 @@ test("P2 browser: remove confirmed own once, block grant, invalidate capital, re
   await input(page, "Bis wann möchten Sie sparen?").fill("2027-12");
   await input(page, "Wurde Ihre Förderberechtigung bereits geklärt?").selectOption("checked");
   await input(page, "Gibt es Kinder, für die eine Kinderzulage infrage kommt?").selectOption("no");
-  await page.getByText("Feineinstellungen und Modellannahmen", { exact: true }).click();
-  for (const scenario of ["Zurückhaltend", "Mittlere Annahme", "Höhere Annahme"]) for (const asset of ["Aktienrendite", "Rentenrendite"])
-    await input(page, `${scenario}: ${asset} in % p. a.`).fill("0");
-  await page.getByText("Eigene Einmalzahlung ergänzen", { exact: true }).click();
+  await clearNeutralReturns(page); await enterStep(page, "A2"); await openGrantEvidence(page);
+  const openOnce = () => page.getByText("Eigene Einmalzahlung ergänzen", { exact: true }).click();
+  await openOnce();
   const once = input(page, "Zusätzliche eigene Einmalzahlung einplanen");
   await once.check(); await input(page, "Einmalzahlung in Euro").fill("60"); await input(page, "Monat der Einmalzahlung").fill("2027-12");
   await input(page, "Geprüfte unmittelbare Berechtigung").selectOption("direct_confirmed");
@@ -119,32 +122,35 @@ test("P2 browser: remove confirmed own once, block grant, invalidate capital, re
   await contribution.check();
   await expect(page.getByTestId("customer-annual")).toContainText("360,00 €");
   await expect(page.getByTestId("customer-base-grant")).toHaveText("180,00 €");
-  await calculate(page); await expect(page.getByTestId("scenario-line")).toHaveCount(3);
+  await runNeutral(page); await expect(page.getByTestId("scenario-line")).toHaveCount(3);
   for (const value of await page.getByTestId("customer-end-value").allTextContents()) expect(value).toBe("360,00 €");
 
-  await once.uncheck();
+  await enterStep(page, "A2"); await openGrantEvidence(page); await openOnce(); await once.uncheck();
   await expect(page.getByTestId("customer-annual")).toContainText("300,00 €");
   await expect(contribution).not.toBeChecked();
   await expect(page.getByTestId("customer-base-grant")).toHaveCount(0);
   await expect(page.getByTestId("customer-grant-status")).toHaveText("Gemeinsam prüfen");
+  await enterStep(page, "A4");
   await expect(page.getByTestId("customer-end-value")).toHaveCount(0);
   await expect(page.getByTestId("scenario-line")).toHaveCount(0);
+  await enterStep(page, "A2"); await openGrantEvidence(page);
   await expect(input(page, "Geprüfte unmittelbare Berechtigung")).toHaveValue("direct_confirmed");
   await expect(input(page, "Geprüfte Förderregelung")).toHaveValue("new_confirmed");
   await expect(input(page, "Geprüfte Vertragszuordnung")).toHaveValue("single_eligible_confirmed");
 
-  await calculate(page); // Independent capital remains usable without grant confirmation.
+  await runNeutral(page); // Independent capital remains usable without grant confirmation.
   await expect(page.getByTestId("customer-base-grant")).toHaveCount(0);
   for (const value of await page.getByTestId("customer-end-value").allTextContents()) expect(value).toBe("300,00 €");
-  await contribution.check();
+  await enterStep(page, "A2"); await openGrantEvidence(page); await contribution.check();
   await expect(page.getByTestId("customer-base-grant")).toHaveText("150,00 €");
+  await enterStep(page, "A4");
   await expect(page.getByTestId("scenario-line")).toHaveCount(3);
 
-  await input(page, "Einmaligen Aktienkursverlust modellieren").check();
-  await expect(contribution).toBeChecked();
-  await expect(page.getByTestId("customer-base-grant")).toHaveText("150,00 €");
+  await openNeutralSettings(page);
+  await input(page, "Einmaligen Aktienmarkt-Stress aktivieren").check();
   await expect(page.getByTestId("scenario-line")).toHaveCount(0);
-  await input(page, "Einmaligen Aktienkursverlust modellieren").uncheck();
+  await input(page, "Einmaligen Aktienmarkt-Stress aktivieren").uncheck();
+  await enterStep(page, "A2"); await openGrantEvidence(page); await openOnce();
   await expect(contribution).toBeChecked();
   await expect(page.getByTestId("customer-base-grant")).toHaveText("150,00 €");
   await once.check();
