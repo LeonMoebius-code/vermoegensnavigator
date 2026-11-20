@@ -117,13 +117,14 @@ function ProductComparison({ selected, answers, toggle }: {
   </div>;
 }
 
-export function RetirementProducts({ selected, toggleSelection, answers, changeAnswers, step, navigate }: {
+export function RetirementProducts({ selected, toggleSelection, answers, changeAnswers, step, navigate, next }: {
   selected: readonly ProductId[];
   toggleSelection: (id: ProductId) => boolean;
   answers: ProductAnswers;
   changeAnswers: (answers: ProductAnswers) => void;
   step: ProductFinderStep;
   navigate: (step: ProductFinderStep) => void;
+  next: () => void;
 }) {
   const prefix = useId();
   const heading = useRef<HTMLHeadingElement>(null);
@@ -158,7 +159,7 @@ export function RetirementProducts({ selected, toggleSelection, answers, changeA
   const countText = `${selected.length} von höchstens ${comparisonLimit} Alternativen gewählt. Für den Direktvergleich sind mindestens zwei nötig.`;
 
   return <div className="retirement-products">
-    <p className="retirement-notice">Der Produktfinder dient der Orientierung. Produktberatung, Kundenfall und Export sind für diese Vorschau nicht freigegeben. A4 verwendet eigenständige neutrale Modellannahmen.</p>
+    <p className="retirement-product-context">Die Antworten dienen der Orientierung. Für die Kapitalentwicklung gelten die separat sichtbaren Modellannahmen.</p>
     {question && typeof step === "number" ? <section className="panel retirement-product-question">
       <p>Orientierung · Frage {step + 1} von {productQuestions.length}</p>
       <h2 ref={heading} tabIndex={-1} id={`${prefix}-question`}>{question.title}</h2>
@@ -185,10 +186,10 @@ export function RetirementProducts({ selected, toggleSelection, answers, changeA
               <button onClick={() => move(0)}>Orientierung ändern</button>
             </>}
         </div>
-        {step === "cards" && <dl className="retirement-product-answers">
+        {step === "cards" && <details className="retirement-help"><summary>Ihre angegebenen Wünsche</summary><dl className="retirement-product-answers">
           {productQuestions.map(item => <div key={item.key}><dt>{item.title}</dt>
             <dd>{item.options.find(([value]) => value === answers[item.key])?.[1] ?? "Keine Präferenz angegeben"}</dd></div>)}
-        </dl>}
+        </dl></details>}
         <div className={step === "cards" ? "retirement-product-toolbar" : undefined}>
           <p id={countId} role="status" aria-atomic="true">{countText}{refused && ` ${refused}`}</p>
           {step === "cards" && <button className="primary" disabled={selected.length < 2} aria-describedby={countId}
@@ -198,11 +199,8 @@ export function RetirementProducts({ selected, toggleSelection, answers, changeA
           : <>
             <div className="retirement-product-grid">{products.map(product => <ProductCard key={product.id}
               product={product} answers={answers} checked={selected.includes(product.id)} countId={countId} toggle={() => toggle(product)} />)}</div>
-            <div className="retirement-product-actions">
-              <button className="primary" disabled={selected.length < 2} aria-describedby={countId}
-                onClick={() => move("comparison")}>Auswahl vergleichen</button>
-            </div>
           </>}
+        <div className="retirement-product-actions"><button className="primary" onClick={next}>Weiter zur Kapitalentwicklung</button></div>
       </section>
     </>}
   </div>;

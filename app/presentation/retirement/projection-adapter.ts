@@ -16,7 +16,7 @@ export interface CapitalDraft {
   referenceCostMode: "gross_unknown" | "explicit"; referenceCostPercent: string; referenceCostConfirmed: boolean;
   output: "auto" | "detailed" | "compact"; confirmed: boolean;
 }
-export type CapitalField = keyof CapitalDraft | `scenarios.${number}.${"equity" | "bond"}` | "form";
+export type CapitalField = keyof CapitalDraft | `scenarios.${number}.${"equity" | "bond"}` | "form" | "annual" | "birthYear";
 export const scenarioNames = ["Defensivere Marktannahme", "Mittlere Marktannahme", "Höhere Marktannahme"] as const;
 export const emptyCapitalDraft = (): CapitalDraft => ({
   start: "2027-01", end: "2056-12", initial: "0", monthly: "100", equity: "60",

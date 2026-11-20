@@ -4,7 +4,8 @@ import { customerGrant, editCustomerCapital, emptyCustomerPlan, ledgerPoints, pl
 import type { ProjectionResult } from "../../app/domain/retirement/projection-contract";
 
 function zero() { const p = emptyCustomerPlan(); p.capital = { ...p.capital, start: "2027-10", end: "2027-12", equity: "100", scenarios: [0, 1, 2].map(() => ({ equity: "0", bond: "0" })) }; return p; }
-function results(p = zero()) { const r = runCustomerCapital(p); expect(r.status).toBe("responses"); if (r.status !== "responses") throw new Error("model response missing"); return r.responses.flatMap(x => x.projectionResults); }
+function modelRun(p: ReturnType<typeof zero>) { return runCustomerCapital({ ...p, capital: { ...p.capital, confirmed: true } }); }
+function results(p = zero()) { const r = modelRun(p); expect(r.status).toBe("responses"); if (r.status !== "responses") throw new Error("model response missing"); return r.responses.flatMap(x => x.projectionResults); }
 
 for (const [start, end, first, total] of [["2027-01", "2027-12", 120000, 120000], ["2027-10", "2027-12", 30000, 30000],
   ["2027-10", "2028-03", 30000, 60000], ["2027-10", "2027-10", 10000, 10000]] as const) test(`UX03 bridge ${start}–${end}: independent month counts`, () => {
@@ -57,7 +58,7 @@ for (const [key, value] of [["monthly", ""], ["monthly", "-1"], ["monthly", "1e3
   });
 
 test("UX03 no grants inferred or repeated, immutable input, no legal flags modified", () => {
-  const p = zero(), before = JSON.stringify(p), run = runCustomerCapital(p);
+  const p = zero(), before = JSON.stringify(p), run = modelRun(p);
   expect(JSON.stringify(p)).toBe(before); expect(p.evidence.entitlement).toBe("unconfirmed"); expect(p.capital.confirmed).toBe(false);
   expect(run.status).toBe("responses"); if (run.status !== "responses") return;
   for (const raw of run.requests) { const r = JSON.parse(raw); expect(r.projection.parameters.grantEvents).toEqual([]); expect(r.sources[0].quality).toBe("hypothetical"); }
@@ -80,7 +81,7 @@ test("UX03 partial trajectories keep specified balances; full grant-inclusive me
 
 test("UX03 reference reuses the identical cashflow schedule and dates", () => {
   const p = zero(); p.capital.referenceEnabled = true;
-  const run = runCustomerCapital(p); if (run.status !== "responses") throw new Error("comparison missing");
+  const run = modelRun(p); if (run.status !== "responses") throw new Error("comparison missing");
   expect(run.mode).toBe("comparison");
   for (const s of JSON.parse(run.requests[0]).scenarios) { expect(s.retirement.parameters.contributionSchedule).toEqual(s.reference.parameters.contributionSchedule); expect(s.retirement.parameters.period).toEqual(s.reference.parameters.period); }
   expect(run.responses[0].projectionResults).toHaveLength(6);

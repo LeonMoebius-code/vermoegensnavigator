@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { clearNeutralReturns, enterStep, runNeutral } from "./ap04b-ux2-helpers";
 const label = (p: Page, name: string) => p.getByLabel(name, { exact: true });
 async function enter(p: Page) {
   await p.goto("./"); await p.locator(".sidebar nav").getByRole("button", { name: /Altersvorsorge/ }).click();
@@ -12,11 +13,7 @@ async function october(p: Page) {
   await label(p, "Wie viel möchten Sie monatlich einzahlen?").fill("10");
 }
 const target = (p: Page, text: string) => p.getByRole("group", { name: "Beitragsziele", exact: true }).getByRole("button", { name: new RegExp(`^${text}`) });
-async function zero(p: Page) {
-  await p.getByText("Feineinstellungen und Modellannahmen", { exact: true }).click();
-  for (const scenario of ["Zurückhaltend", "Mittlere Annahme", "Höhere Annahme"]) for (const asset of ["Aktienrendite", "Rentenrendite"])
-    await label(p, `${scenario}: ${asset} in % p. a.`).fill("0");
-}
+
 
 test("UX2 UI October minimum, target sync, manual override and no stale curve", async ({ page }) => {
   await enter(page); await october(page);
@@ -29,14 +26,15 @@ test("UX2 UI October minimum, target sync, manual override and no stale curve", 
   await expect(label(page, "Wie viel möchten Sie monatlich einzahlen?")).toHaveValue("40,00");
   await expect(page.getByTestId("customer-annual")).toContainText("120,00 €");
   await expect(page.getByTestId("conditional-base-grant")).toHaveText("60,00 €");
-  await zero(page); await page.getByRole("button", { name: "Modellrechnung anzeigen", exact: true }).click();
+  await clearNeutralReturns(page); await runNeutral(page);
   for (const v of await page.getByTestId("customer-end-value").allTextContents()) expect(v).toBe("120,00 €");
+  await enterStep(page, "A2");
   await label(page, "Wie viel möchten Sie monatlich einzahlen?").fill("45");
   await expect(page.getByTestId("contribution-mode")).toHaveText("Individuell");
   await expect(target(page, "Förder-Mindestbeitrag")).toHaveAttribute("aria-pressed", "false");
   await expect(page.getByTestId("customer-annual")).toContainText("135,00 €");
   await expect(page.getByTestId("scenario-line")).toHaveCount(0);
-  await page.getByRole("button", { name: "Modellrechnung anzeigen", exact: true }).click();
+  await runNeutral(page);
   for (const v of await page.getByTestId("customer-end-value").allTextContents()) expect(v).toBe("135,00 €");
 });
 
@@ -52,7 +50,7 @@ test("UX2 UI annual amount and dated one-off reach the exact same model", async 
   await expect(page.getByTestId("customer-annual")).toContainText("120,01 €");
   await expect(page.getByTestId("conditional-base-grant")).toHaveCount(0);
   await expect(page.getByTestId("conditional-funding-status")).toContainText("Centbruchteil");
-  await zero(page); await page.getByRole("button", { name: "Modellrechnung anzeigen", exact: true }).click();
+  await clearNeutralReturns(page); await runNeutral(page);
   for (const v of await page.getByTestId("customer-end-value").allTextContents()) expect(v).toBe("120,01 €");
 });
 
@@ -60,7 +58,7 @@ test("UX2 UI annual validation focuses field and preserves other entries", async
   await enter(page); await october(page); await target(page, "Höchste Grundzulage").click();
   await page.getByTestId("customer-annual-input").fill("120,001");
   await expect(page.getByTestId("customer-annual-input")).toHaveAttribute("aria-invalid", "true");
-  await page.getByRole("button", { name: "Modellrechnung anzeigen", exact: true }).click();
+  await page.getByRole("button", { name: "Weiter zum Produktvergleich", exact: true }).click();
   await expect(page.getByTestId("customer-annual-input")).toBeFocused();
   await expect(page.getByTestId("customer-base-grant")).toHaveCount(0);
   await expect(page.getByTestId("conditional-base-grant")).toHaveCount(0);
@@ -102,13 +100,13 @@ for (const width of [375, 768, 1280]) test(`UX2 UI ${width}px readable targets, 
 
 
 test("R81-R1-01: excess one-off distinguishes target, actual contribution and conditional grant", async ({ page }) => {
-  await enter(page); await october(page); await zero(page);
+  await enter(page); await october(page); await clearNeutralReturns(page); await enterStep(page, "A2");
   const minimum = target(page, "Förder-Mindestbeitrag");
   const childGoal = target(page, "Kinderzulage voll");
   const annualGoal = label(page, "Jahresziel für das erste Kalenderjahr in Euro");
   const monthly = label(page, "Wie viel möchten Sie monatlich einzahlen?");
   const actual = page.getByTestId("planned-annual-contribution");
-  const calculate = () => page.getByRole("button", { name: "Modellrechnung anzeigen", exact: true }).click();
+  const calculate = () => runNeutral(page);
   async function displayed(goal: string, actualEuro: string, rate: string, grantEuro: string, card: typeof minimum) {
     await expect(annualGoal).toHaveValue(goal);
     await expect(actual).toHaveText(`Tatsächlich geplanter Jahresbeitrag: ${actualEuro} €`);
@@ -139,6 +137,8 @@ test("R81-R1-01: excess one-off distinguishes target, actual contribution and co
   await calculate();
   await expect(page.getByTestId("customer-end-value")).toHaveText(["200,00 €", "200,00 €", "200,00 €"]);
   await expect(page.getByTestId("customer-own")).toContainText("200,00 €");
+  await enterStep(page, "A2");
+  await page.getByText("Eigene Einmalzahlung ergänzen", { exact: true }).click();
   await expect(page.getByTestId("conditional-funding")).toContainText("Das Kapitalmodell übernimmt dieses bedingte Szenario nicht automatisch.");
 
   // Switching goals updates the active example without altering the own one-off.

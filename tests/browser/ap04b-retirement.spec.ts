@@ -1,4 +1,5 @@
 import { test, expect, type Page, type Locator, type TestInfo } from "@playwright/test";
+import { openNeutralSettings, openGrantEvidence, runNeutral } from "./ap04b-ux2-helpers";
 import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
@@ -13,14 +14,15 @@ const input = (p: Page, label: string) => p.getByLabel(label, { exact: true });
 const model = (p: Page, i = 0, reference = false) => p.getByTestId("capital-results").getByTestId(reference ? "reference-model" : "neutral-model").nth(i);
 const metric = (root: Locator, label: string) => root.getByText(label, { exact: true }).locator("..").locator("dd > strong").first();
 const state = (p: Page) => p.evaluate(() => ({ local: Object.fromEntries(Object.entries(localStorage)), session: Object.fromEntries(Object.entries(sessionStorage)), cookie: document.cookie, url: location.href }));
-async function entry(p: Page) { await p.goto("./");await nav(p,"Altersvorsorge").click();await button(p,"A – Neue Altersvorsorge planen").click(); }
+async function entry(p: Page) { await p.goto("./");await nav(p,"Altersvorsorge").click();await button(p,"Neue Altersvorsorge planen").click(); }
 async function a4(p: Page) { await entry(p);await button(p,"A4 Kapitalentwicklung").click(); }
 async function zeroForm(p: Page, start="2027-01", end="2027-03") {
+  await openNeutralSettings(p);
   await input(p,"Startmonat des Modells").fill(start);await input(p,"Endmonat des Modells").fill(end);
   await input(p,"Anfangskapital in Euro").fill("0");await input(p,"Eigene monatliche Einzahlung in Euro").fill("100");await input(p,"Modell-Aktienquote in %").fill("100");
   for(const name of names)for(const asset of ["Aktienrendite","Rentenrendite"])await input(p,`${name}: ${asset} p.a. in %`).fill("0");
 }
-async function calculate(p: Page) { await p.getByLabel("Die sichtbaren neutralen Modellannahmen",{exact:false}).check();await button(p,"Neutrale Kapitalentwicklung berechnen").click(); }
+async function calculate(p: Page) { await runNeutral(p, { detail: true, navigate: false }); }
 async function noResult(p: Page) { await expect(p.getByTestId("capital-results")).toHaveCount(0);await expect(p.getByLabel("Die sichtbaren neutralen Modellannahmen",{exact:false})).not.toBeChecked(); }
 async function picture(p: Page, info: TestInfo, name: string) {
   const bytes=await p.screenshot({animations:"disabled"});await info.attach(name,{body:bytes,contentType:"image/png"});
@@ -30,7 +32,7 @@ async function picture(p: Page, info: TestInfo, name: string) {
 test("A4B-01: six qualitative products, max three, no hidden product simulation", async ({ page }) => {
   await entry(page);
   await button(page, "A3 Produktvergleich").click();
-  await expect(page.getByRole("heading", { name: "A3 – Produktvergleich", exact: true })).toBeFocused();
+  await expect(page.getByRole("heading", { name: "Welche Anlage passt zu Ihren Wünschen?", exact: true })).toBeFocused();
   await button(page, "Weiter").click();
   await button(page, "Weiter").click();
   await button(page, "Produkte anzeigen").click();
@@ -150,7 +152,7 @@ for(const group of [0,1])test(`A4B-09: relevant visible field group ${group} inv
     :names.flatMap(name=>[[`${name}: Aktienrendite p.a. in %`,"0,5"],[`${name}: Rentenrendite p.a. in %`,"0,2"]]);
   for(const [label,value] of changes){await calculate(page);await expect(page.getByTestId("capital-results")).toBeVisible();if(label==="Ausgabeumfang")await input(page,label).selectOption(value);else await input(page,label).fill(value);await noResult(page);}
 });
-for(const group of [0,1])test(`A4B-09b: conditional assumption group ${group} invalidates all confirmations`,async({page})=>{
+for(const group of [0,1])test(`A4B-09b: conditional assumption group ${group} invalidates only dependent confirmations`,async({page})=>{
   await a4(page);await zeroForm(page,"2027-01","2028-12");
   for(const label of ["Einmaligen eigenen Beitrag hinzufügen","Einmaligen Aktienmarkt-Stress aktivieren","Einmalige manuelle Zulagenhypothese hinzufügen","Ungeförderten ETF-/Fondssparplan vergleichen"])await page.getByLabel(label,{exact:true}).check();
   await input(page,"Einmaliger eigener Modellbeitrag in Euro").fill("10");await input(page,"Monat des einmaligen Modellbeitrags").fill("2027-02");
@@ -162,32 +164,53 @@ for(const group of [0,1])test(`A4B-09b: conditional assumption group ${group} in
     await page.getByLabel("Förderjahr, Betrag und Buchungsmonat dieser einmaligen",{exact:false}).check();
     for(const prefix of ["Vollständigen","Referenz: vollständigen"])await page.getByLabel(`${prefix} hypothetischen Kostenpfad bestätigt; keine Herstellerkosten übernommen`,{exact:true}).check();
     await calculate(page);await expect(page.getByTestId("capital-results")).toBeVisible();await input(page,label).fill(value);await noResult(page);
-    await expect(page.getByLabel("Förderjahr, Betrag und Buchungsmonat dieser einmaligen",{exact:false})).not.toBeChecked();
-    for(const prefix of ["Vollständigen","Referenz: vollständigen"])await expect(page.getByLabel(`${prefix} hypothetischen Kostenpfad bestätigt; keine Herstellerkosten übernommen`,{exact:true})).not.toBeChecked();
+    const affectsGrant = ["Förderjahr der manuellen Zulagenhypothese", "Betrag der manuellen Zulagenhypothese in Euro", "Hypothetischer Buchungsmonat der Zulage"].includes(label);
+    await expect(page.getByLabel("Förderjahr, Betrag und Buchungsmonat dieser einmaligen",{exact:false})).toBeChecked({ checked: !affectsGrant });
+    await expect(page.getByLabel("Vollständigen hypothetischen Kostenpfad bestätigt; keine Herstellerkosten übernommen",{exact:true})).toBeChecked({ checked: label !== "Jährliche modellierte Bestandsminderung in %" });
+    await expect(page.getByLabel("Referenz: vollständigen hypothetischen Kostenpfad bestätigt; keine Herstellerkosten übernommen",{exact:true})).toBeChecked({ checked: label !== "Referenz: jährliche modellierte Bestandsminderung in %" });
   }
 });
 test("A4B-10: A2 remains yearly, no silent transfer, A/B navigation invalidates A4",async({page})=>{
-  await entry(page);await input(page,"Unmittelbare Berechtigung").selectOption("direct_confirmed");await input(page,"Förderregime").selectOption("new_confirmed");await input(page,"Förderfähiger Vertrag").selectOption("single_eligible_confirmed");await input(page,"Kinderzuordnung im Beitragsjahr").selectOption("none_confirmed");
-  await button(page,"A2 Sparen & Förderung").click();await input(page,"Förderfähiger Jahres-Eigenbeitrag in Euro").fill("360");await input(page,"Beitragsstand").selectOption("planned");await page.getByLabel("Den angezeigten Jahres-Eigenbeitrag",{exact:false}).check();await button(page,"Fördervorschau prüfen").click();await expect(page.getByTestId("total-grant")).toHaveText("180,00 €");
-  await button(page,"A4 Kapitalentwicklung").click();await zeroForm(page,"2027-01","2027-12");await calculate(page);await expect(metric(model(page),"Separat spezifizierte Zulagen")).toHaveText("0,00 €");
-  await expect(page.locator(".retirement-capital")).toContainText("A2-Übernahme ist eine spätere Etappe");
-  await button(page,"A2 Sparen & Förderung").click();await input(page,"Förderfähiger Jahres-Eigenbeitrag in Euro").fill("600");await expect(page.getByTestId("grant-result")).toHaveCount(0);
-  await button(page,"A4 Kapitalentwicklung").click();await noResult(page);await expect(input(page,"Eigene monatliche Einzahlung in Euro")).toHaveValue("100");
-  await button(page,"A/B-Auswahl").click();await button(page,"B – Bestehende Riester-Rente prüfen").click();await expect(page.getByRole("heading",{name:"B1 – Bestandsaufnahme",exact:true})).toBeVisible();
-  await expect(input(page,"Maßgeblicher RV-Vorjahresbetrag in Euro")).toHaveValue("");
-  await button(page,"A/B-Auswahl").click();await button(page,"A – Neue Altersvorsorge planen").click();await button(page,"A4 Kapitalentwicklung").click();await noResult(page);
+  await entry(page);
+  await button(page,"A2 Sparen & Förderung").click();
+  await input(page,"Jahresziel für das erste Kalenderjahr in Euro").fill("360");
+  await openGrantEvidence(page);
+  await input(page,"Wurde Ihre Förderberechtigung bereits geklärt?").selectOption("checked");
+  await input(page,"Geprüfte unmittelbare Berechtigung").selectOption("direct_confirmed");
+  await input(page,"Geprüfte Förderregelung").selectOption("new_confirmed");
+  await input(page,"Geprüfte Vertragszuordnung").selectOption("single_eligible_confirmed");
+  await input(page,"Gibt es Kinder, für die eine Kinderzulage infrage kommt?").selectOption("no");
+  await input(page,"Für Person und Jahr geprüft: keine einzubeziehenden Kinder").check();
+  await input(page,"Den geplanten Jahres-Eigenbeitrag für Person, Vertrag und Jahr fachlich als förderfähig geprüft").check();
+  await expect(page.getByTestId("total-grant")).toHaveText("180,00 €");
+  await button(page,"A4 Kapitalentwicklung").click();
+  await openNeutralSettings(page);
+  await expect(input(page,"Eigene monatliche Einzahlung in Euro")).toHaveValue("30,00");
+  await calculate(page);
+  await expect(metric(model(page),"Separat spezifizierte Zulagen")).toHaveText("0,00 €");
+  await expect(metric(model(page),"Eigene Einzahlungen")).toHaveText("10.800,00 €");
+  await button(page,"A2 Sparen & Förderung").click();
+  await input(page,"Jahresziel für das erste Kalenderjahr in Euro").fill("600");
+  await expect(page.getByTestId("grant-result")).toHaveCount(0);
+  await button(page,"A4 Kapitalentwicklung").click();
+  await noResult(page); await openNeutralSettings(page);
+  await expect(input(page,"Eigene monatliche Einzahlung in Euro")).toHaveValue("50,00");
+  await button(page,"A/B-Auswahl").click(); await button(page,"B – Bestehende Riester-Rente prüfen").click();
+  await expect(page.getByRole("heading",{name:"B1 – Bestandsaufnahme",exact:true})).toBeVisible();
+  await button(page,"A/B-Auswahl").click(); await button(page,"Neue Altersvorsorge planen").click();
+  await button(page,"A4 Kapitalentwicklung").click(); await noResult(page);
 });
 for(const destination of ["Übersicht","Ergebnis & Export","Neustart"])test(`A4B-11: existing discard/cancel guard protects A4 at ${destination}`,async({page})=>{
   await a4(page);await zeroForm(page);await calculate(page);const before=await state(page);
   const action=()=>destination==="Neustart"?button(page,"Spezialentwurf neu starten").click():nav(page,destination).click();
   page.once("dialog",d=>d.dismiss());await action();await expect(metric(model(page),"Vollständiger Endwert im gewählten Modell")).toHaveText("300,00 €");expect(await state(page)).toEqual(before);
   page.once("dialog",d=>d.accept());await action();expect(await state(page)).toEqual(before);
-  if(destination!=="Neustart")await nav(page,"Altersvorsorge").click();await button(page,"A – Neue Altersvorsorge planen").click();await button(page,"A4 Kapitalentwicklung").click();await noResult(page);
+  if(destination!=="Neustart")await nav(page,"Altersvorsorge").click();await button(page,"Neue Altersvorsorge planen").click();await button(page,"A4 Kapitalentwicklung").click();await noResult(page);
   await expect(input(page,"Endmonat des Modells")).toHaveValue("2056-12");
 });
 test("A4B-12: reload loses A3/A4 only, no storage or hidden persistence",async({page})=>{
   await a4(page);const before=await state(page);await zeroForm(page);await calculate(page);expect(await state(page)).toEqual(before);
-  page.once("dialog",d=>d.accept());await page.reload();await nav(page,"Altersvorsorge").click();await button(page,"A – Neue Altersvorsorge planen").click();await button(page,"A4 Kapitalentwicklung").click();
+  page.once("dialog",d=>d.accept());await page.reload();await nav(page,"Altersvorsorge").click();await button(page,"Neue Altersvorsorge planen").click();await button(page,"A4 Kapitalentwicklung").click();
   await noResult(page);await expect(input(page,"Endmonat des Modells")).toHaveValue("2056-12");expect(await state(page)).toEqual(before);expect(await page.evaluate(()=>indexedDB.databases())).toEqual([]);
 });
 test("A4B-13: full calendar compacts display, detail stop does not shorten horizon",async({page})=>{
@@ -198,8 +221,8 @@ test("A4B-13: full calendar compacts display, detail stop does not shorten horiz
   await expect(page.getByTestId("capital-results")).toContainText("Kontrollierte Ressourcengrenze");await expect(page.getByTestId("neutral-model")).toHaveCount(0);await expect(input(page,"Endmonat des Modells")).toHaveValue("9999-12");
 });
 for(const width of [390,1440])test(`A4B-14: ${width}px keyboard, field/result focus, source and overflow evidence`,async({page},info)=>{
-  await page.setViewportSize({width,height:1000});await page.goto("./");await nav(page,"Altersvorsorge").focus();await page.keyboard.press("Enter");await button(page,"A – Neue Altersvorsorge planen").focus();await page.keyboard.press("Enter");
-  await button(page,"A3 Produktvergleich").focus();await page.keyboard.press("Enter");await expect(page.getByRole("heading",{name:"A3 – Produktvergleich",exact:true})).toBeFocused();
+  await page.setViewportSize({width,height:1000});await page.goto("./");await nav(page,"Altersvorsorge").focus();await page.keyboard.press("Enter");await button(page,"Neue Altersvorsorge planen").focus();await page.keyboard.press("Enter");
+  await button(page,"A3 Produktvergleich").focus();await page.keyboard.press("Enter");await expect(page.getByRole("heading",{name:"Welche Anlage passt zu Ihren Wünschen?",exact:true})).toBeFocused();
   await button(page,"Weiter").click();await button(page,"Weiter").click();await button(page,"Produkte anzeigen").click();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await picture(page,info,`a3-${width}`);
   await button(page,"A4 Kapitalentwicklung").focus();await page.keyboard.press("Enter");await zeroForm(page);await input(page,"Anfangskapital in Euro").fill("1,001");await calculate(page);await expect(input(page,"Anfangskapital in Euro")).toBeFocused();
@@ -214,7 +237,7 @@ test("A4B-15: existing cases, full JSON/XLSX/print and raw storage remain identi
   async function outputs(tag:string){const download=page.waitForEvent("download");await page.getByRole("button",{name:/Vollständige Sicherung/}).click();const jp=info.outputPath(`${tag}.json`);await(await download).saveAs(jp);const json=JSON.parse(await readFile(jp,"utf8"));
     const xd=page.waitForEvent("download");await page.getByRole("button",{name:/Excel-Arbeitsmappe/}).click();const xp=info.outputPath(`${tag}.xlsx`);await(await xd).saveAs(xp);const wb=XLSX.read(await readFile(xp),{type:"buffer"});
     return{case:json.case,sheets:Object.fromEntries(wb.SheetNames.map(n=>[n,XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:null})])),print:await page.locator(".print-document").textContent()};}
-  const before=await state(page),exportBefore=await outputs("before");await nav(page,"Altersvorsorge").click();await button(page,"A – Neue Altersvorsorge planen").click();await button(page,"A4 Kapitalentwicklung").click();await zeroForm(page);await calculate(page);
+  const before=await state(page),exportBefore=await outputs("before");await nav(page,"Altersvorsorge").click();await button(page,"Neue Altersvorsorge planen").click();await button(page,"A4 Kapitalentwicklung").click();await zeroForm(page);await calculate(page);
   expect(await state(page)).toEqual(before);page.once("dialog",d=>d.accept());await nav(page,"Ergebnis & Export").click();expect(await outputs("after")).toEqual(exportBefore);expect(await state(page)).toEqual(before);
   expect(await page.evaluate(key=>localStorage.getItem(key),CASE_STORAGE_KEY)).toBe(raw);expect(exportBefore.case.schemaVersion).toBe(11);
 });
@@ -230,7 +253,7 @@ const n1Value = (page: Page) => metric(model(page), "Vollständiger Endwert im g
 
 async function n1Confirm(page: Page) {
   for (const label of n1Confirmations) await input(page, label).check();
-  await button(page, "Neutrale Kapitalentwicklung berechnen").click();
+  await calculate(page);
 }
 
 async function n1CapitalSetup(page: Page) {
@@ -288,7 +311,7 @@ for (const change of ["product", "orientation"] as const) {
       ["Betrag der manuellen Zulagenhypothese in Euro", "0"], ["Hypothetischer Buchungsmonat der Zulage", "2027-02"],
       ["Jährliche modellierte Bestandsminderung in %", "0"], ["Referenz: jährliche modellierte Bestandsminderung in %", "0"],
     ]) await expect(input(page, label)).toHaveValue(value);
-    await button(page, "Neutrale Kapitalentwicklung berechnen").click();
+    await calculate(page);
     await expect(page.getByRole("alert")).toContainText("Eingabe korrigieren");
     await expect(n1Stale(page)).toBeVisible();
     await n1Confirm(page);
@@ -313,10 +336,11 @@ test("R85-N1-N05/N08: same orientation preserves A4 until explicitly switching t
   await expect(n1Stale(page)).toHaveCount(0);
 
   await button(page, "A/B-Auswahl").click();
+  page.once("dialog", dialog => dialog.accept());
   await button(page, "B – Bestehende Riester-Rente prüfen").click();
   await expect(page.getByRole("heading", { name: "B1 – Bestandsaufnahme", exact: true })).toBeVisible();
   await button(page, "A/B-Auswahl").click();
-  await button(page, "A – Neue Altersvorsorge planen").click();
+  await button(page, "Neue Altersvorsorge planen").click();
   await button(page, "A4 Kapitalentwicklung").click();
   await expect(page.getByTestId("capital-results")).toHaveCount(0);
   for (const label of n1Confirmations) await expect(input(page, label)).not.toBeChecked();

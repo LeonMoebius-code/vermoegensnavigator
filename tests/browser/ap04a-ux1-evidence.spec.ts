@@ -4,10 +4,10 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { emptyCustomerPlan, customerGrant, type CustomerPlan } from "../../app/presentation/retirement/customer-plan-adapter";
+import { emptyCustomerPlan, customerGrant, type ChangeCustomerPlan, type CustomerPlan } from "../../app/presentation/retirement/customer-plan-adapter";
 
 type Node = { type?: unknown; props?: Record<string, unknown> };
-let directory: string, component: (props: { plan: CustomerPlan; change: (p: CustomerPlan) => void; back: () => void }) => Node;
+let directory: string, component: (props: { plan: CustomerPlan; change: ChangeCustomerPlan; back: () => void }) => Node;
 test.beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "ux1-evidence-"));
   const output = join(directory, "component.mjs");
@@ -31,7 +31,7 @@ function fixture() {
 }
 function select(p: CustomerPlan, key: string, value: string): CustomerPlan | null {
   let changed: CustomerPlan | null = null;
-  const root = component({ plan: p, change: n => { changed = n; }, back: () => {} });
+  const root = component({ plan: p, change: edit => { const next = edit(p); if (next !== p) changed = next; }, back: () => {} });
   function find(v: unknown): Node | null {
     if (Array.isArray(v)) { for (const item of v) { const result = find(item); if (result) return result; } return null; }
     if (!v || typeof v !== "object") return null;
