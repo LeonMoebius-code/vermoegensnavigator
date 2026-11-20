@@ -1,9 +1,9 @@
 import { useId } from "react";
 import { euro } from "./direct-grant-adapter";
-import { centsInput, conditionalBaseGrant, contributionTargets, customerPayments, setContributionGoal, type CustomerPlan } from "./customer-plan-adapter";
+import { centsInput, conditionalBaseGrant, contributionTargets, customerPayments, setContributionGoal, type ChangeCustomerPlan, type CustomerPlan } from "./customer-plan-adapter";
 
 /** All amounts belong to CustomerPlan. No second payment state in this component. */
-export function ContributionOptimizer({ plan, change }: { plan: CustomerPlan; change: (plan: CustomerPlan) => void }) {
+export function ContributionOptimizer({ plan, change }: { plan: CustomerPlan; change: ChangeCustomerPlan }) {
   const id = useId(), payments = customerPayments(plan);
   const annualGoal = plan.contribution?.annual ?? (payments.status === "valid" ? centsInput(payments.total) : "");
   const individual = plan.contribution?.kind !== "target";
@@ -20,7 +20,7 @@ export function ContributionOptimizer({ plan, change }: { plan: CustomerPlan; ch
           contribution: { kind: "target", annual: centsInput(target.cents) }, capital: { ...plan.capital, oneOffEnabled: false } });
         const needed = payments.status === "valid" ? Math.max(0, target.cents - payments.firstOneOff) : null;
         return <button type="button" key={target.cents} aria-pressed={selected}
-          onClick={() => change(setContributionGoal(plan, centsInput(target.cents), "target"))}>
+          onClick={() => change(current => setContributionGoal(current, centsInput(target.cents), "target"))}>
           <strong>{target.title}</strong><span>Jahresziel: {euro(target.cents)}</span>
           {selected && payments.status === "valid" && <small>Tatsächlich geplanter Jahresbeitrag: {euro(payments.total)}</small>}
           <small>{needed === null || payments.status !== "valid" ? "Zeitraum und Einmalzahlung prüfen" : `${euro(Math.floor(needed / payments.months))} je Restmonat${needed % payments.months ? ` + ${euro(needed % payments.months)} Centausgleich` : ""}`}</small>
@@ -34,7 +34,7 @@ export function ContributionOptimizer({ plan, change }: { plan: CustomerPlan; ch
     <label htmlFor={`${id}-annual`}>Jahresziel für das erste Kalenderjahr in Euro</label>
     <input id={`${id}-annual`} data-testid="customer-annual-input" inputMode="decimal" value={annualGoal}
       aria-invalid={Boolean(error)} aria-describedby={error ? `${id}-error` : `${id}-annual-help`}
-      onChange={e => change(setContributionGoal(plan, e.target.value, "annual"))} />
+      onChange={e => { const annual = e.target.value; change(current => setContributionGoal(current, annual, "annual")); }} />
     <small id={`${id}-annual-help`}>Zielbetrag einschließlich der eigenen Einmalzahlung in diesem Jahr. Daraus wird Ihre Monatsrate ermittelt. Der tatsächlich geplante Jahresbeitrag kann bei einer höheren Einmalzahlung über dem Ziel liegen und wird gesondert angezeigt. Eine direkte Änderung der Monatsrate aktiviert „Individuell“.</small>
     {error && <p id={`${id}-error`} role="alert">{error.message}</p>}
     {payments.status === "valid" && <div role="status" data-testid="contribution-explanation">

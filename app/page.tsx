@@ -734,7 +734,11 @@ export default function Home() {
         </div>
       </header>
       <aside className="sidebar">
-        <nav>
+        <nav onFocus={event => {
+          const nav = event.currentTarget;
+          if (nav.scrollWidth > nav.clientWidth && event.target instanceof HTMLButtonElement)
+            event.target.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "instant" });
+        }}>
           <button
             className={view === "home" ? "active" : ""}
             onClick={() => setView("home")}

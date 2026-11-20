@@ -110,7 +110,7 @@ test("UX1 partner, Riester, child evidence remain open; A/B navigation retains a
   await expect(page.getByLabel(yearLabel, { exact: true })).toHaveValue("2028");
   page.once("dialog", d => d.accept()); await button(page, "Spezialentwurf neu starten").click();
   await button(page, "Neue Altersvorsorge planen").click(); await button(page, "Meine Voraussetzungen prüfen").click();
-  await expect(page.getByLabel(yearLabel, { exact: true })).toHaveValue("");
+  await expect(page.getByLabel(yearLabel, { exact: true })).toHaveValue("2027");
 });
 
 test("UX1 correction of a previously confirmed personal case blocks stale grant immediately", async ({ page }) => {

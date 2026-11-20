@@ -1,5 +1,5 @@
-import { useId, useRef, useState } from "react";
-import type { CustomerPlan } from "./customer-plan-adapter";
+import { useEffect, useId, useRef, useState } from "react";
+import { incompleteYearMessage, validContributionYear, type CustomerPlan } from "./customer-plan-adapter";
 import { changeYear } from "./direct-grant-adapter";
 
 /** Ephemeral answers owned by RetirementEntry; never legal evidence or persisted. */
@@ -111,10 +111,10 @@ const insuranceOptions = [["statutory", "Gesetzliche Rentenversicherungspflicht"
 const answerOptions = [["yes", "Ja"], ["no", "Nein"], ["unknown", "Weiß ich nicht / gemeinsam prüfen"]] as const;
 const questionSections = ["Zeitraum und Person", "Erwerb und Versicherung", "Besondere Voraussetzungen", "Bestehende Vorsorge und Kinder", "Ihre erste Orientierung"] as const;
 
-export function RetirementQuestions({ answers: a, plan, change, birth, back, next, riester, section, setSection }: {
+export function RetirementQuestions({ answers: a, plan, change, birth, back, next, riester, section, setSection, yearFocus }: {
   answers: RetirementAnswers; plan: CustomerPlan; change: <K extends keyof RetirementAnswers>(key: K, value: RetirementAnswers[K]) => void;
   birth: (value: string) => void; back: () => void; next: () => void; riester: () => void;
-  section: number; setSection: (section: number) => void;
+  section: number; setSection: (section: number) => void; yearFocus: number;
 }) {
   const prefix = useId(), yearRef = useRef<HTMLInputElement>(null), birthRef = useRef<HTMLInputElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -126,15 +126,22 @@ export function RetirementQuestions({ answers: a, plan, change, birth, back, nex
     setSection(target);
     requestAnimationFrame(() => heading.current?.focus());
   };
-  const [errors, setErrors] = useState<{ year?: string; birth?: string }>({});
+  const [errors, setErrors] = useState<{ birth?: string }>({});
+  const yearError = validContributionYear(a.year) ? undefined : incompleteYearMessage;
+  useEffect(() => {
+    if (yearFocus && yearError && section === 0) {
+      const frame = requestAnimationFrame(() => yearRef.current?.focus());
+      return () => cancelAnimationFrame(frame);
+    }
+  }, [yearFocus, yearError, section]);
   const id = (s: string) => `${prefix}-${s}`;
   const tri = (key: "civilConsent" | "married" | "separated" | "partner" | "riester" | "childBenefit", question: string) => <fieldset className="retirement-answer-group"><legend>{question}</legend>
     {answerOptions.map(([value, label]) => <label key={value} className="retirement-answer"><input type="radio" name={id(key)} checked={a[key] === value} onChange={() => change(key, value)} />{label}</label>)}
   </fieldset>;
   const submit = (target?: number) => {
-    const year = a.year && (!/^\d{4}$/.test(a.year) || Number(a.year) < 100) ? "Bitte ein vierstelliges Beitragsjahr eingeben oder offenlassen." : undefined;
+    const year = yearError;
     const birth = plan.birthYear && (!/^\d{4}$/.test(plan.birthYear) || Number(plan.birthYear) < 100 || Number(plan.birthYear) > Number(a.year || plan.capital.start.slice(0, 4))) ? "Bitte ein gültiges Geburtsjahr bis zum Beitragsjahr eingeben oder offenlassen." : undefined;
-    setErrors({ year, birth });
+    setErrors({ birth });
     if (year || birth) {
       setSection(0);
       requestAnimationFrame(() => { if (year) yearRef.current?.focus(); else birthRef.current?.focus(); });
@@ -164,8 +171,8 @@ export function RetirementQuestions({ answers: a, plan, change, birth, back, nex
       <form className="retirement-form" noValidate onSubmit={e => { e.preventDefault(); section === 4 ? submit() : submit(sections[position + 1]); }}>
         {section === 0 && <>
         <label htmlFor={id("year")}>Für welches Jahr möchten Sie erstmals einzahlen?</label>
-        <input id={id("year")} ref={yearRef} inputMode="numeric" value={a.year} placeholder="z. B. 2027" aria-invalid={!!errors.year} aria-describedby={errors.year ? id("year-error") : undefined} onChange={e => { setErrors({}); change("year", e.target.value); }} />
-        {errors.year && <p id={id("year-error")} role="alert">{errors.year}</p>}
+        <input id={id("year")} ref={yearRef} inputMode="numeric" value={a.year} placeholder="z. B. 2027" aria-invalid={!!yearError} aria-describedby={yearError ? id("year-error") : undefined} onChange={e => { setErrors({}); change("year", e.target.value); }} />
+        {yearError && <p id={id("year-error")} role="alert">{yearError}</p>}
         <label htmlFor={id("birth")}>In welchem Jahr sind Sie geboren? (optional)</label>
         <input id={id("birth")} ref={birthRef} inputMode="numeric" value={plan.birthYear} aria-invalid={!!errors.birth} aria-describedby={errors.birth ? id("birth-error") : undefined} onChange={e => { setErrors({}); birth(e.target.value); }} />
         {errors.birth && <p id={id("birth-error")} role="alert">{errors.birth}</p>}

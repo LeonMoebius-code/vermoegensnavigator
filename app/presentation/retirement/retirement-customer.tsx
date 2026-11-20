@@ -1,30 +1,68 @@
 import { useId, useRef } from "react";
 import { directGrantRuleContext } from "../../domain/retirement/direct-grant-rules";
 import { changeYear, euro, type GrantDraft } from "./direct-grant-adapter";
-import { conditionalBaseGrant, customerGrant, customerPayments, editCustomerCapital, type CustomerPlan } from "./customer-plan-adapter";
+import { conditionalBaseGrant, customerGrant, customerPayments, editCustomerCapital, editMonthlyContribution, paymentYear, type ChangeCustomerPlan, type CustomerPlan } from "./customer-plan-adapter";
 import { ContributionOptimizer } from "./contribution-optimizer";
 import type { CapitalDraft } from "./projection-adapter";
 
 export function RetirementCustomer({ plan, change, back, next }: {
-  plan: CustomerPlan; change: (p: CustomerPlan) => void; back: () => void; next: () => void;
+  plan: CustomerPlan; change: ChangeCustomerPlan; back: () => void; next: () => boolean;
 }) {
   const prefix = useId(), form = useRef<HTMLFormElement>(null);
   const id = (key: string) => `${prefix}-${key}`;
-  const edit = change;
-  const update = <K extends keyof CapitalDraft>(key: K, value: CapitalDraft[K]) => {
-    const manualRate = key === "monthly" && plan.contribution !== undefined;
-    const source = manualRate ? { ...plan, contribution: undefined, evidence: { ...plan.evidence, contributionConfirmed: false } } : plan;
-    change(editCustomerCapital(source, { ...plan.capital, [key]: value }));
-  };
-  const evidence = <K extends keyof GrantDraft>(key: K, value: GrantDraft[K]) => {
-    if (plan.evidence[key] === value) return;
-    const next = { ...plan.evidence, [key]: value };
+  const update = <K extends keyof CapitalDraft>(key: K, value: CapitalDraft[K]) => change(current => {
+    const capital = { ...current.capital, [key]: value };
+    return key === "monthly" ? editMonthlyContribution(current, capital) : editCustomerCapital(current, capital);
+  });
+  const samePersonYear = (current: CustomerPlan) => current.birthYear === plan.birthYear
+    && current.evidence.year === plan.evidence.year
+    && paymentYear(current.capital.start) === String(plan.evidence.year);
+  const evidence = <K extends keyof GrantDraft>(key: K, value: GrantDraft[K]) => change(current => {
+    if (current.evidence[key] === value) return current;
+    if (key === "contributionConfirmed" && value === true && (!samePersonYear(current) || current.evidence !== plan.evidence)) return current;
+    // A positive legal assessment only applies to the rendered person and year.
+    if ((key === "entitlement" && value === "direct_confirmed" || key === "regime" && value === "new_confirmed"
+      || key === "contract" && value === "single_eligible_confirmed")
+      && !samePersonYear(current)) return current;
+    const next = { ...current.evidence, [key]: value };
     if (key === "entitlement" || key === "regime" || key === "contract") next.contributionConfirmed = false;
     if (key === "regime" || key === "contract") {
       next.childrenStatus = "unconfirmed";
       next.children = next.children.map(c => ({ ...c, status: "assignment_unconfirmed" }));
     }
-    change({ ...plan, evidence: next });
+    return { ...current, evidence: next };
+  });
+  const updateFunding = (funding: CustomerPlan["funding"]) => change(current => funding === current.funding
+    ? current : { ...current, funding, evidence: changeYear(current.evidence, current.evidence.year) });
+  const updateChildren = (children: CustomerPlan["children"]) => change(current => children === current.children ? current : {
+    ...current, children, evidence: { ...current.evidence, childrenStatus: "unconfirmed",
+      children: current.evidence.children.map(c => ({ ...c, status: "assignment_unconfirmed" })) },
+  });
+  const confirmNoChildren = (checked: boolean) => change(current => {
+    if (current.children !== "no" || checked && (!samePersonYear(current) || current.evidence !== plan.evidence)) return current;
+    return { ...current, evidence: { ...current.evidence, childrenStatus: checked ? "none_confirmed" : "unconfirmed", children: [] } };
+  });
+  const sameChildContext = (current: CustomerPlan) => current.children === plan.children
+    && samePersonYear(current) && current.funding === plan.funding
+    && current.evidence.entitlement === plan.evidence.entitlement
+    && current.evidence.regime === plan.evidence.regime && current.evidence.contract === plan.evidence.contract;
+  const updateChild = (id: string, status: GrantDraft["children"][number]["status"]) => change(current => {
+    const child = current.evidence.children.find(c => c.id === id);
+    if (current.children !== "yes" || !child || child.status === status) return current;
+    if (status === "eligible_assigned_confirmed" && (!sameChildContext(current)
+      || child.status !== plan.evidence.children.find(c => c.id === id)?.status)) return current;
+    return { ...current, evidence: { ...current.evidence, childrenStatus: "assigned_confirmed",
+      children: current.evidence.children.map(c => c.id === id ? { ...c, status } : c) } };
+  });
+  const removeChild = (id: string) => change(current => ({ ...current, evidence: {
+    ...current.evidence, children: current.evidence.children.filter(c => c.id !== id),
+  } }));
+  const addChild = () => {
+    const id = crypto.randomUUID();
+    change(current => current.children !== "yes" ? current : {
+      ...current, evidence: { ...current.evidence, childrenStatus: "assigned_confirmed",
+        children: [...current.evidence.children, { id, status: "assignment_unconfirmed" }] },
+    });
   };
   const grant = customerGrant(plan), possible = conditionalBaseGrant(plan), payments = customerPayments(plan);
   const year = plan.capital.start.slice(0, 4);
@@ -50,8 +88,7 @@ export function RetirementCustomer({ plan, change, back, next }: {
           <h2 id={id("inputs")}>Wie möchten Sie einzahlen?</h2>
           <form ref={form} className="retirement-form" noValidate onSubmit={e => {
             e.preventDefault();
-            if (payments.status === "valid") next();
-            else form.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+            if (!next()) requestAnimationFrame(() => form.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus());
           }}>
             <div className="retirement-capital-grid">
               {text("start", "Ab wann möchten Sie sparen?", true)}
@@ -77,11 +114,11 @@ export function RetirementCustomer({ plan, change, back, next }: {
     <details className="retirement-customer-details"><summary>Beraterprüfung: Förderung und Sonderfälle</summary>
       <div className="retirement-form"><p>Diese Angaben dokumentieren eine gesonderte fachliche Prüfung. Beruf, Familienstand und Geburtsjahr ersetzen keine Prüfung von Berechtigung, Vertrag und Kinderzuordnung. Beitragsjahr {year}.</p>
           <label htmlFor={id("funding")}>Wurde Ihre Förderberechtigung bereits geklärt?</label>
-          <select id={id("funding")} value={plan.funding} onChange={e => edit({ ...plan, funding: e.target.value as CustomerPlan["funding"], evidence: changeYear(plan.evidence, plan.evidence.year) })}>
+          <select id={id("funding")} value={plan.funding} onChange={e => updateFunding(e.target.value as CustomerPlan["funding"])}>
             <option value="open">Noch nicht</option><option value="checked">Ja – gesonderte Prüfung erforderlich</option><option value="special">Unklarer Sonderfall</option>
           </select>
           <label htmlFor={id("children")}>Gibt es Kinder, für die eine Kinderzulage infrage kommt?</label>
-          <select id={id("children")} value={plan.children} onChange={e => edit({ ...plan, children: e.target.value as CustomerPlan["children"], evidence: { ...plan.evidence, childrenStatus: "unconfirmed", children: plan.evidence.children.map(c => ({ ...c, status: "assignment_unconfirmed" })) } })}>
+          <select id={id("children")} value={plan.children} onChange={e => updateChildren(e.target.value as CustomerPlan["children"])}>
             <option value="unknown">Unklar</option><option value="no">Nein</option><option value="yes">Ja</option>
           </select>
           {plan.children === "yes" && <p>Förderfähigkeit und Zuordnung klären wir für jedes Kind in der Beraterprüfung. Der Sparverlauf bleibt unabhängig davon nutzbar.</p>}
@@ -89,13 +126,13 @@ export function RetirementCustomer({ plan, change, back, next }: {
         {legalSelect("regime", "Geprüfte Förderregelung", [["unconfirmed", "Noch zu prüfen"], ["new_confirmed", "Neues Regime einschließlich etwaigem Wechsel fachlich bestätigt"], ["old", "Altes Riester-Regime"]])}
         {legalSelect("contract", "Geprüfte Vertragszuordnung", [["unconfirmed", "Noch zu prüfen"], ["single_eligible_confirmed", "Genau ein zulässiger Vertrag fachlich bestätigt"], ["multiple", "Mehrere Verträge"], ["transition_unconfirmed", "Übergang offen"]])}
         {plan.children === "no" ? <label className="retirement-checkbox"><input type="checkbox" checked={plan.evidence.childrenStatus === "none_confirmed"}
-          onChange={e => edit({ ...plan, evidence: { ...plan.evidence, childrenStatus: e.target.checked ? "none_confirmed" : "unconfirmed", children: [] } })} />Für Person und Jahr geprüft: keine einzubeziehenden Kinder</label> : plan.children === "yes" ? <fieldset><legend>Kinder einzeln prüfen</legend>
+          onChange={e => confirmNoChildren(e.target.checked)} />Für Person und Jahr geprüft: keine einzubeziehenden Kinder</label> : plan.children === "yes" ? <fieldset><legend>Kinder einzeln prüfen</legend>
           {plan.evidence.children.map((child, i) => <div className="retirement-child" key={child.id}><label htmlFor={id(child.id)}>Kind {i + 1}: Förderfähigkeit und Zuordnung</label>
-            <select id={id(child.id)} value={child.status} onChange={e => edit({ ...plan, evidence: { ...plan.evidence, childrenStatus: "assigned_confirmed", children: plan.evidence.children.map(c => c.id === child.id ? { ...c, status: e.target.value as typeof c.status } : c) } })}>
+            <select id={id(child.id)} value={child.status} onChange={e => updateChild(child.id, e.target.value as typeof child.status)}>
               <option value="assignment_unconfirmed">Noch zu prüfen</option><option value="eligible_assigned_confirmed">Für Person und Jahr fachlich bestätigt</option><option value="conflicting_assignment">Widersprüchliche Zuordnung</option><option value="eligibility_unconfirmed">Förderfähigkeit offen</option>
-            </select><button onClick={() => evidence("children", plan.evidence.children.filter(c => c.id !== child.id))}>Kind {i + 1} entfernen</button>
+            </select><button onClick={() => removeChild(child.id)}>Kind {i + 1} entfernen</button>
           </div>)}
-          <button onClick={() => edit({ ...plan, evidence: { ...plan.evidence, childrenStatus: "assigned_confirmed", children: [...plan.evidence.children, { id: crypto.randomUUID(), status: "assignment_unconfirmed" }] } })}>Kind zur Prüfung hinzufügen</button>
+          <button onClick={addChild}>Kind zur Prüfung hinzufügen</button>
         </fieldset> : <p>Die Kinderfrage ist noch offen. Es wird keine kinderlose Förderkonstellation angenommen.</p>}
         <label className="retirement-checkbox"><input type="checkbox" checked={plan.evidence.contributionConfirmed} onChange={e => evidence("contributionConfirmed", e.target.checked)} />Den geplanten Jahres-Eigenbeitrag für Person, Vertrag und Jahr fachlich als förderfähig geprüft</label>
         {grant.status !== "calculated" && <p data-testid="grant-review-message">Prüfhinweis: {grant.status === "unsupported" ? "Derzeit nicht unterstützt. " : "Fachlich prüfen. "}{grant.message}</p>}

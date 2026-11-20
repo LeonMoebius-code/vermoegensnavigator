@@ -96,15 +96,16 @@ function TextField({ id, label, value, change, invalid, error, month = false }: 
     type={month ? "month" : "text"} min={month ? "0100-01" : undefined} max={month ? "9999-12" : undefined}
     inputMode={month ? undefined : "decimal"} onChange={e => change(e.target.value)} aria-invalid={invalid} aria-describedby={invalid ? error : undefined} /></div>;
 }
+export type ChangeCapitalDraft = (edit: (draft: CapitalDraft) => CapitalDraft, field: CapitalField) => void;
+
 export function RetirementProjection({ draft, change, result, calculate, chart, annualPlan }: {
-  draft: CapitalDraft; change: (d: CapitalDraft, field: CapitalField) => void;
+  draft: CapitalDraft; change: ChangeCapitalDraft;
   result: CapitalRun | null; calculate: () => CapitalRun; chart: ReactNode; annualPlan: boolean;
 }) {
   const prefix = useId(), output = useRef<HTMLDivElement>(null), error = `${prefix}-error`;
   const id = (field: CapitalField) => `${prefix}-${field}`;
   const invalid = (field: CapitalField) => result?.status === "invalid_input" && result.field === field;
-  const edit = change;
-  const scalar = <K extends Exclude<keyof CapitalDraft, "scenarios">>(key: K, value: CapitalDraft[K]) => edit({ ...draft, [key]: value }, key);
+  const scalar = <K extends Exclude<keyof CapitalDraft, "scenarios">>(key: K, value: CapitalDraft[K]) => change(current => ({ ...current, [key]: value }), key);
   const text = (key: Exclude<keyof CapitalDraft, "scenarios">, label: string, asMonth = false) => <TextField id={id(key)} label={label}
     value={String(draft[key])} change={v => scalar(key, v as never)} invalid={invalid(key)} error={error} month={asMonth} />;
   const checkbox = (key: keyof CapitalDraft, label: string) => <label className="retirement-checkbox" htmlFor={id(key)}>
@@ -163,8 +164,8 @@ export function RetirementProjection({ draft, change, result, calculate, chart, 
         <p>Rentenquote ergänzt auf 100 %. Monatliches Rebalancing; geometrische Monatsrenditen aus den ausdrücklich gesetzten Jahresannahmen.</p>
         <div className="retirement-scenario-grid">{draft.scenarios.map((s, i) => <fieldset key={i}><legend>{scenarioNames[i]}</legend>
           {(["equity", "bond"] as const).map(key => <TextField key={key} id={id(`scenarios.${i}.${key}`)} label={`${scenarioNames[i]}: ${key === "equity" ? "Aktienrendite" : "Rentenrendite"} p.a. in %`}
-            value={s[key]} error={error} invalid={invalid(`scenarios.${i}.${key}`)} change={v => edit({ ...draft,
-              scenarios: draft.scenarios.map((x, n) => n === i ? { ...x, [key]: v } : x) }, `scenarios.${i}.${key}`)} />)}
+            value={s[key]} error={error} invalid={invalid(`scenarios.${i}.${key}`)} change={v => change(current => ({ ...current,
+              scenarios: current.scenarios.map((x, n) => n === i ? { ...x, [key]: v } : x) }), `scenarios.${i}.${key}`)} />)}
         </fieldset>)}</div><p>Die Startwerte sind editierbare hypothetische Beispiele, keine Produktdaten und keine garantierte untere Entwicklung.</p>
         {checkbox("stressEnabled", "Einmaligen Aktienmarkt-Stress aktivieren")}
         {draft.stressEnabled && <><div className="retirement-capital-grid">{text("stressMonth", "Ereignismonat des Aktien-Stress", true)}

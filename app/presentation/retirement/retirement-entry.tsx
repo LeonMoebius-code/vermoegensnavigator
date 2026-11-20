@@ -8,7 +8,7 @@ import { emptyRiesterJourney, RiesterJourney } from "./riester-journey";
 import { RetirementProducts, type ProductFinderStep } from "./retirement-products";
 import { emptyProductAnswers, nextProductAnswers, nextProductSelection, type ProductId } from "./product-finder-data";
 import { RetirementCapital, type CapitalView } from "./retirement-capital";
-import { customerPayments, editCustomerCapital, emptyCustomerPlan, metricCents, runCustomerCapital, type CustomerPlan } from "./customer-plan-adapter";
+import { bindCapitalConfirmations, customerPayments, editCustomerCapital, emptyCustomerPlan, incompleteYearMessage, metricCents, paymentYear, revokeCapitalConfirmations, runCustomerCapital, validBirthYear, validContributionYear, type ChangeCustomerPlan, type CustomerPlan } from "./customer-plan-adapter";
 import { RetirementCustomer } from "./retirement-customer";
 import { emptyRetirementAnswers, invalidateAnswer, RetirementInformation, RetirementQuestions, type RetirementAnswers } from "./retirement-questions";
 import type { CapitalRun } from "./projection-adapter";
@@ -39,9 +39,10 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
   const [intro, setIntro] = useState(true);
   const [plan, setPlan] = useState(emptyCustomerPlan);
   const currentPlan = useRef(plan);
-  const [answers, setAnswers] = useState(emptyRetirementAnswers);
+  const [answers, setAnswers] = useState(() => ({ ...emptyRetirementAnswers(), year: paymentYear(plan.capital.start) }));
   const currentAnswers = useRef(answers);
   const [questionSection, setQuestionSection] = useState(0);
+  const [yearFocus, setYearFocus] = useState(0);
   const [productFinder, setProductFinder] = useState({ selected: [] as readonly ProductId[], answers: emptyProductAnswers });
   const currentFinder = useRef(productFinder);
   const [productStep, setProductStep] = useState<ProductFinderStep>(0);
@@ -66,22 +67,39 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
     currentAnswers.current = next;
     setAnswers(next);
   };
-  const updatePlan = (next: CustomerPlan) => {
-    const prior = currentPlan.current;
+  // Event handlers commit one edit against the latest draft. The ref is updated
+  // before React renders, so another edit or calculation in the same batch sees it.
+  const updatePlan: ChangeCustomerPlan = edit => {
+    const prior = currentPlan.current, next = bindCapitalConfirmations(prior, edit(prior));
     if (JSON.stringify(prior) === JSON.stringify(next)) return;
-    if (next.capital.start.slice(0, 4) !== prior.capital.start.slice(0, 4))
-      storeAnswers({ ...currentAnswers.current, year: next.capital.start.slice(0, 4) });
-    if (JSON.stringify([next.capital, next.contribution]) !== JSON.stringify([prior.capital, prior.contribution]))
+    if (next.capital.start !== prior.capital.start) {
+      const year = paymentYear(next.capital.start);
+      if (year !== currentAnswers.current.year) storeAnswers({ ...currentAnswers.current, year });
+    }
+    if (JSON.stringify([next.capital, next.contribution]) !== JSON.stringify([prior.capital, prior.contribution])
+      || validBirthYear(next.birthYear, next.capital.start) !== validBirthYear(prior.birthYear, prior.capital.start))
       invalidateResult("inputs");
     storePlan(next);
     setDirty(true);
   };
-  const changeSituation = (next: CustomerPlan) => {
-    // Legal orientation never supplies a cashflow, but it invalidates the
-    // combined preview and the terms of any explicit hypothetical grant.
-    storePlan({ ...next, capital: { ...next.capital, confirmed: false, grantConfirmed: false } });
-    invalidateResult("inputs");
-    setDirty(true);
+  const yearIsBound = () => validContributionYear(currentAnswers.current.year)
+    && currentAnswers.current.year === paymentYear(currentPlan.current.capital.start);
+  const navigateA = (target: AStep) => {
+    if (target !== "a1" && !yearIsBound()) {
+      setIntro(false);
+      setQuestionSection(0);
+      setStep("a1");
+      setYearFocus(request => request + 1);
+      return;
+    }
+    setStep(target);
+  };
+  const changeSituation = (current: CustomerPlan, next: CustomerPlan, affectsCalendarOrValidity = false): CustomerPlan => {
+    // A1 provides no payments to the neutral model. Its legal context only
+    // binds a separately enabled grant hypothesis, while the calendar and
+    // a blocking input error affect the whole calculation.
+    if (!current.capital.grantEnabled && !affectsCalendarOrValidity) return next;
+    return revokeCapitalConfirmations(next, ["confirmed", "grantConfirmed"]);
   };
   const answer = <K extends keyof RetirementAnswers>(key: K, value: RetirementAnswers[K]) => {
     const prior = currentAnswers.current;
@@ -90,19 +108,30 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
     if ((key === "care" || key === "upbringing") && value) next.additions = "";
     if (key === "additions" && value) { next.care = false; next.upbringing = false; }
     storeAnswers(next);
-    let p = invalidateAnswer(currentPlan.current, key);
-    if (key === "childBenefit") p = { ...p, children: value === "yes" ? "yes" : value === "no" ? "no" : "unknown" };
-    if (key === "year" && /^\d{4}$/.test(String(value)) && Number(value) >= 100)
-      p = editCustomerCapital(p, { ...p.capital, start: `${value}${p.capital.start.slice(4)}` });
-    changeSituation(p);
+    updatePlan(current => {
+      let p = invalidateAnswer(current, key);
+      if (key === "childBenefit") p = { ...p, children: value === "yes" ? "yes" : value === "no" ? "no" : "unknown" };
+      if (key === "year" && validContributionYear(next.year)) {
+        const month = paymentYear(p.capital.start) ? p.capital.start.slice(5) : "01";
+        p = editCustomerCapital(p, { ...p.capital, start: `${next.year}-${month}` });
+      }
+      return changeSituation(current, p, key === "year");
+    });
+    if (key === "year") invalidateResult("inputs");
+    setDirty(true);
   };
+  const changeBirth = (value: string) => updatePlan(p => {
+    if (p.birthYear === value) return p;
+    const validityChanged = validBirthYear(p.birthYear, p.capital.start) !== validBirthYear(value, p.capital.start);
+    return changeSituation(p, { ...p, birthYear: value, evidence: changeYear(p.evidence, p.evidence.year) }, validityChanged);
+  });
   const storeProductFinder = (next: typeof productFinder) => {
     currentFinder.current = next;
     setProductFinder(next);
   };
   const productFinderChanged = () => {
     const p = currentPlan.current;
-    storePlan({ ...p, capital: { ...p.capital, confirmed: false, grantConfirmed: false, costConfirmed: false, referenceCostConfirmed: false } });
+    storePlan(revokeCapitalConfirmations(p));
     invalidateResult("products");
     setDirty(true);
   };
@@ -131,7 +160,7 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
   const enterB = () => {
     const p = currentPlan.current;
     if (p.capital.confirmed && !window.confirm(switchMessage)) return;
-    storePlan({ ...p, capital: { ...p.capital, confirmed: false, grantConfirmed: false, costConfirmed: false, referenceCostConfirmed: false } });
+    storePlan(revokeCapitalConfirmations(p));
     invalidateResult("inputs");
     setBPreview(null);
     setStep("b1");
@@ -151,7 +180,9 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
     setBDraft(emptyOldDraft()); setBPreview(null); setBJourney(emptyRiesterJourney());
     storeProductFinder({ selected: [], answers: emptyProductAnswers }); setProductStep(0);
     setResult(null); setRefresh("none"); setCapitalView("neutral");
-    storePlan(emptyCustomerPlan()); storeAnswers(emptyRetirementAnswers()); setQuestionSection(0);
+    const fresh = emptyCustomerPlan();
+    storePlan(fresh); storeAnswers({ ...emptyRetirementAnswers(), year: paymentYear(fresh.capital.start) });
+    setQuestionSection(0); setYearFocus(0);
   };
 
   const guided = steps.find(s => s.id === step);
@@ -191,26 +222,31 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
       </RiesterJourney>
     </> : <>
       <nav className="retirement-steps retirement-guided-nav" aria-label="Altersvorsorge-Schritte">
-        {steps.map(item => <button key={item.id} aria-current={step === item.id ? "step" : undefined} onClick={() => setStep(item.id)}>{item.label}</button>)}
+        {steps.map(item => <button key={item.id} aria-current={step === item.id ? "step" : undefined} onClick={() => navigateA(item.id)}>{item.label}</button>)}
       </nav>
       {step === "a1" ? intro ? <div className="retirement-introduction">
         <RetirementInformation />
         <button className="primary" onClick={() => setIntro(false)}>Meine Voraussetzungen prüfen</button>
       </div> : <RetirementQuestions answers={answers} plan={plan} change={answer}
         section={questionSection} setSection={setQuestionSection}
-        birth={value => { const p = currentPlan.current; if (p.birthYear !== value) changeSituation({ ...p, birthYear: value, evidence: changeYear(p.evidence, p.evidence.year) }); }}
-        back={() => setIntro(true)} next={() => setStep("a2")} riester={enterB} />
-      : step === "a2" ? <RetirementCustomer plan={plan} change={updatePlan} back={() => setStep("a1")} next={() => setStep("a3")} />
+        birth={changeBirth} yearFocus={yearFocus}
+        back={() => setIntro(true)} next={() => navigateA("a2")} riester={enterB} />
+      : step === "a2" ? <RetirementCustomer plan={plan} change={updatePlan} back={() => navigateA("a1")} next={() => {
+        if (!yearIsBound() || customerPayments(currentPlan.current).status !== "valid") return false;
+        navigateA("a3");
+        return true;
+      }} />
       : <div className="retirement-stage">
         <div className="retirement-stage-main">
           {step === "a3" ? <RetirementProducts selected={productFinder.selected} toggleSelection={toggleProduct} answers={productFinder.answers}
-            changeAnswers={changeProductAnswers} step={productStep} navigate={setProductStep} next={() => setStep("a4")} />
+            changeAnswers={changeProductAnswers} step={productStep} navigate={setProductStep} next={() => navigateA("a4")} />
           : <RetirementCapital plan={plan} change={updatePlan} result={result}
             stale={refresh === "products" ? "Produktwahl oder Orientierung geändert. Die bisherige Vorschau ist veraltet. Bestätigen Sie Ihre Modellannahmen für eine neue Berechnung."
               : refresh === "inputs" ? "Die bisherige Vorschau ist veraltet. Berechnen Sie die Kapitalentwicklung mit den aktuellen Angaben erneut." : null}
             view={capitalView} setView={setCapitalView} selected={productFinder.selected}
             calculate={() => {
-              const next = runCustomerCapital(currentPlan.current);
+              const next: CapitalRun = yearIsBound() ? runCustomerCapital(currentPlan.current)
+                : { status: "invalid_input", field: "start", message: incompleteYearMessage };
               setResult(next);
               if (next.status === "responses" && next.responses.every(response => response.status === "calculated" || response.status === "partial"))
                 setRefresh("calculated");
@@ -228,7 +264,7 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
             {step === "a4" && <div><dt>Mittlerer Endwert{middle?.status === "partial" ? " · Teilszenario" : ""}</dt><dd>{capitalView !== "neutral" ? "Herstellermodell gesperrt"
               : middleValue === null ? "Keine aktuelle Zahl" : euro(middleValue)}</dd></div>}
           </dl>
-          <button className="secondary" onClick={() => setStep("a2")}>Sparplan bearbeiten</button>
+          <button className="secondary" onClick={() => navigateA("a2")}>Sparplan bearbeiten</button>
         </aside>
       </div>}
     </>}

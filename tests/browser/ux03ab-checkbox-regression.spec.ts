@@ -42,7 +42,7 @@ test.afterAll(async () => { if (directory) await rm(directory, { recursive: true
 function checkboxChange(plan: CustomerPlan, key: string, checked: boolean): CustomerPlan {
   let changed: CustomerPlan | null = null;
   const component = key === "oneOffEnabled" ? savings : model;
-  const root = component({ plan, change: (next: CustomerPlan) => { changed = next; }, back: () => {}, view: "neutral" });
+  const root = component({ plan, change: (edit: (current: CustomerPlan) => CustomerPlan) => { changed = edit(plan); }, back: () => {}, view: "neutral" });
   function find(value: unknown): Tree | null {
     if (Array.isArray(value)) { for (const child of value) { const hit = find(child); if (hit) return hit; } return null; }
     if (!value || typeof value !== "object") return null;

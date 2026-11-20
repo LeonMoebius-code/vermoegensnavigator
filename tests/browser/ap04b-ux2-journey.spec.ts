@@ -193,7 +193,7 @@ test("UX02/05/19–23/35: navigation preserves a valid preview, changes revoke i
   await button(page, "A4 Kapitalentwicklung").click();
   await expect(page.getByTestId("scenario-line")).toHaveCount(3);
   await button(page, "A1 Fördercheck").click();
-  await input(page, "In welchem Jahr sind Sie geboren? (optional)").fill("2000");
+  await input(page, "Für welches Jahr möchten Sie erstmals einzahlen?").fill("2028");
   await button(page, "A4 Kapitalentwicklung").click();
   await expect(page.getByRole("status").filter({ hasText: "Vorschau ist veraltet" })).toBeVisible();
   await expect(page.getByTestId("customer-end-value")).toHaveCount(0);
@@ -205,7 +205,7 @@ test("UX02/05/19–23/35: navigation preserves a valid preview, changes revoke i
 });
 
 
-test("UX05/22: A1 contract and child changes revoke dependent evidence and the neutral preview", async ({ page }) => {
+test("UX05/22: A1 contract and child changes revoke dependent evidence and the preview with a manual grant", async ({ page }) => {
   await entry(page);
   await button(page, "Neue Altersvorsorge planen").click();
   await button(page, "Meine Voraussetzungen prüfen").click();
@@ -224,6 +224,11 @@ test("UX05/22: A1 contract and child changes revoke dependent evidence and the n
   await contribution.check();
   await expect(page.getByTestId("customer-base-grant")).toHaveText("390,00 €");
   await button(page, "A4 Kapitalentwicklung").click();
+  await page.getByText("Zahlungsplan und Modellannahmen bearbeiten", { exact: true }).click();
+  await input(page, "Einmalige manuelle Zulagenhypothese hinzufügen").check();
+  await input(page, "Betrag der manuellen Zulagenhypothese in Euro").fill("90");
+  await input(page, "Hypothetischer Buchungsmonat der Zulage").fill("2028-06");
+  await input(page, "Förderjahr, Betrag und Buchungsmonat dieser einmaligen rein hypothetischen Zulage bestätigt").check();
   await runNeutral(page);
   await expect(page.getByTestId("scenario-line")).toHaveCount(3);
   await button(page, "A1 Fördercheck").click();

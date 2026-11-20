@@ -118,7 +118,7 @@ for (const answer of ["Ja", "Nein", "Weiß ich nicht / gemeinsam prüfen"]) test
   if (answer === "Nein") await expect(page.getByLabel("Für Person und Jahr geprüft: keine einzubeziehenden Kinder")).not.toBeChecked();
 });
 
-test("S2 invalid year and birth focus, optional empty sequence", async ({ page }) => {
+test("S2 invalid year and birth focus, required plan year and optional personal answers", async ({ page }) => {
   await enter(page); await page.getByLabel(yearLabel, { exact: true }).fill("oops"); await btn(page, "Weiter").click();
   await expect(page.getByLabel(yearLabel, { exact: true })).toBeFocused();
   await expect(page.getByRole("alert")).toContainText("vierstelliges Beitragsjahr");
@@ -126,6 +126,10 @@ test("S2 invalid year and birth focus, optional empty sequence", async ({ page }
   await page.getByRole("navigation", { name: "Abschnitte der Förderfragen", exact: true }).getByRole("button", { name: /Ihre erste Orientierung$/ }).click(); await expect(page.getByLabel(birthLabel, { exact: true })).toBeFocused();
   await expect(page.getByLabel(birthLabel, { exact: true })).toHaveAttribute("aria-invalid", "true");
   await page.getByLabel(birthLabel, { exact: true }).fill(""); await page.getByLabel(yearLabel, { exact: true }).fill("");
+  await btn(page, "Weiter").click();
+  await expect(page.getByLabel(yearLabel, { exact: true })).toBeFocused();
+  await expect(page.getByRole("alert")).toContainText("Beitragsjahr noch nicht vollständig");
+  await page.getByLabel(yearLabel, { exact: true }).fill("2027");
   await btn(page, "Weiter").click(); await btn(page, "Weiter").click(); await btn(page, "Weiter").click();
   await expect(page.getByRole("status")).toHaveText("Abschnitt 4 von 4: Ihre erste Orientierung");
   await expect(page.locator(".retirement-answer-summary")).toContainText("Noch offen");

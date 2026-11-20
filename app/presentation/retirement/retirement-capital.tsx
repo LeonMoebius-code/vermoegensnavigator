@@ -1,10 +1,10 @@
 import { useId, useMemo, useState } from "react";
 import { MODEL_VERSIONS } from "../../domain/retirement/identity-contract";
-import { editCustomerCapital, metricCents, type CustomerPlan } from "./customer-plan-adapter";
+import { editCustomerCapital, editMonthlyContribution, isCapitalConfirmation, metricCents, sameCapitalConfirmation, type ChangeCustomerPlan, type CustomerPlan } from "./customer-plan-adapter";
 import { products, type ProductId } from "./product-finder-data";
 import { RetirementChart, CapitalSeriesChart, customerScenarioNames } from "./retirement-chart";
-import { projectionEuro, RetirementProjection } from "./retirement-projection";
-import { scenarioNames, type CapitalDraft, type CapitalField, type CapitalRun } from "./projection-adapter";
+import { projectionEuro, RetirementProjection, type ChangeCapitalDraft } from "./retirement-projection";
+import { scenarioNames, type CapitalRun } from "./projection-adapter";
 import { computeSavingsDemo, demoExamples, demoProductName, type DemoExample, type ProductModel } from "./retirement-model-demo";
 
 export type CapitalView = "neutral" | ProductModel;
@@ -17,7 +17,6 @@ const options = [
   { key: "M1", label: "M1 · Kostenvergleich" },
   { key: "M2", label: "M2 · Anlageportfolio" },
 ] as const;
-const fields = new Set<CapitalField>(["confirmed", "grantConfirmed", "costConfirmed", "referenceCostConfirmed"]);
 
 function NeutralCharts({ result }: { result: Extract<CapitalRun, { status: "responses" }> }) {
   const response = result.responses[0];
@@ -99,15 +98,20 @@ function SyntheticModel({ mode }: { mode: ProductModel }) {
 }
 
 export function RetirementCapital({ plan, change, result, calculate, stale, view, setView, selected }: {
-  plan: CustomerPlan; change: (p: CustomerPlan) => void; result: CapitalRun | null;
+  plan: CustomerPlan; change: ChangeCustomerPlan; result: CapitalRun | null;
   calculate: () => CapitalRun; stale: string | null; view: CapitalView; setView: (view: CapitalView) => void; selected: readonly ProductId[];
 }) {
   const [demo, setDemo] = useState(false);
-  const update = (capital: CapitalDraft, field: CapitalField) => {
-    if (fields.has(field)) { change({ ...plan, capital: { ...capital, confirmed: field === "confirmed" && capital.confirmed } }); return; }
-    const source = field === "monthly" && plan.contribution ? { ...plan, contribution: undefined, evidence: { ...plan.evidence, contributionConfirmed: false } } : plan;
-    change(editCustomerCapital(source, capital));
-  };
+  const update: ChangeCapitalDraft = (edit, field) => change(current => {
+    const capital = edit(current.capital);
+    if (!isCapitalConfirmation(field)) {
+      return field === "monthly" ? editMonthlyContribution(current, capital) : editCustomerCapital(current, capital);
+    }
+    if (capital[field] === current.capital[field]) return current;
+    if (capital[field] && !sameCapitalConfirmation(current, plan, field))
+      return current;
+    return { ...current, capital: { ...capital, confirmed: field === "confirmed" && capital.confirmed } };
+  });
   return <section className="retirement-capital-flow">
     <div className="retirement-capital-modes" role="group" aria-label="Kapitalmodell">
       {options.map(option => <button key={option.key} aria-pressed={option.key === view} onClick={() => { setView(option.key); setDemo(false); }}>{option.label}</button>)}
