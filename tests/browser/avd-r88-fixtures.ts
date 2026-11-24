@@ -1,5 +1,5 @@
 import { calculatePersonalFunding, type PersonYearInput } from "../../app/domain/retirement/premium-entitlement";
-import { claimId, claimVersion, type Booking } from "../../app/domain/retirement/premium-funding";
+import { claimId, claimVersion, reversalAssignmentReference, type Booking, type Claim } from "../../app/domain/retirement/premium-funding";
 import { reference } from "../../app/domain/retirement/identity-contract";
 import type { PremiumProductPath, PremiumWorkspace } from "../../app/presentation/retirement/premium-product-configuration";
 import type { ChannelRights } from "../../app/domain/retirement/premium-session";
@@ -28,6 +28,46 @@ export function fundingFile(personYears: readonly PersonYearInput[], bookings: r
       id: person.personId + "-" + contract.id + "-" + person.year, contractId: contract.id,
       month: person.year + "-12", cents: contract.ownCents, kind: "special", amountEvidence: evidenceB,
     }))) };
+}
+
+export function childReversalDossiers() {
+  const base = (contractId: string) => ({ component: "base", contractId, cents: 39000, childId: null, evidence: evidenceB } as const);
+  const child = (personId: string, supersedesPerson: string | null) => ({ id: "K", benefit: { value: "yes" as const, evidence: evidenceB },
+    assignedPerson: { value: personId, evidence: evidenceB }, supersedesPerson });
+  const part = (contractId: string, cents: number, part?: string) => ({ component: "child" as const, contractId, cents,
+    childId: "K", evidence: evidenceB, ...(part ? { part } : {}) });
+  const old = personYear({ personId: "A", year: 2028, ruleVersion: "estg-2028-v1",
+    contracts: [{ id: "VA", ownCents: 120000, eligibility: evidenceB }], children: [child("A", null)],
+    allocations: [base("VA"), part("VA", 20000, "first"), part("VA", 10000, "second")] });
+  const successor = personYear({ personId: "B", year: 2028, ruleVersion: "estg-2028-v1",
+    contracts: [{ id: "VB", ownCents: 120000, eligibility: evidenceB }], children: [child("B", "A")],
+    allocations: [base("VB"), part("VB", 30000)] });
+  const prior = calculatePersonalFunding([old])[0].claims.find(c => c.key.component === "child")!;
+  const currentBase = calculatePersonalFunding([successor])[0].claims.find(c => c.key.component === "base")!;
+  const book = (claim: Claim, partIndex: number, id: string, month: string, cents: number, reverses: string | null = null): Booking => {
+    const part = claim.parts[partIndex];
+    return { id, externalId: "statement-" + id, claim: claimId(claim.key), claimVersion: claimVersion(claim),
+      contractId: part.contractId, partId: part.id, allocationId: part.allocationId, month, cents, kind: "grant",
+      bookingVersion: "statement-v1", reverses, openingInclusion: null, amountEvidence: evidenceB };
+  };
+  const original = book(prior, 0, "first-in", "2029-01", 20000);
+  const reversal = book(prior, 0, "first-out", "2029-02", -20000, original.id);
+  const secondOriginal = book(prior, 1, "second-in", "2029-02", 10000);
+  const supplemental = book(prior, 1, "second-out", "2029-03", -10000, original.id);
+  const successorBase = book(currentBase, 0, "base-in", "2030-02", 39000);
+  const proof = { reversalId: supplemental.id, reversalVersion: supplemental.bookingVersion, originalId: secondOriginal.id,
+    originalVersion: secondOriginal.bookingVersion, effectiveMonth: "2029-04", evidence: evidenceB };
+  const schedule = (version: string, confirmedBookingIds: string[], month = "2030-03") => ({ version, firstYear: 2028, lastYear: 2028,
+    events: [{ personId: successor.personId, year: successor.year, component: "child", childId: "K", contractId: "VB",
+      month, cents: 30000, confirmedBookingIds }] });
+  const before = { ...fundingFile([successor], [original, reversal, successorBase]), historicClaims: [prior],
+    chosenSchedule: schedule("initial", [original.id, reversal.id]) };
+  const pending = { ...fundingFile([successor], [supplemental]),
+    chosenSchedule: schedule("entered-while-pending", [original.id, reversal.id, supplemental.id]) };
+  const known = [original.id, reversal.id, supplemental.id, secondOriginal.id, reversalAssignmentReference(proof)];
+  const correctedBase = { ...fundingFile([successor], [secondOriginal]), reversalAssignments: [proof] };
+  const corrected = { ...correctedBase, chosenSchedule: schedule("authorized-after-proof", known) };
+  return { before, pending, correctedBase, corrected, schedule, known, proof, original, reversal, supplemental, secondOriginal, successorBase };
 }
 export const allowedChannels: ChannelRights = {
   screen: { allowed: true, version: "screen-v1" }, csv: { allowed: true, version: "csv-v1" },

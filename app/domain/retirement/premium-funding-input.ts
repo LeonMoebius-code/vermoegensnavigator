@@ -2,7 +2,8 @@ import { jsonHash } from "../case/recovery-hash";
 import { copyAvd, description, id, integer, list, nullable, oneOf, requireAvd, shape } from "./avd-data";
 import { monthIndex } from "./premium-calendar";
 import { allocationPartId, calculatePersonalFunding, grantEvidence, personYearList } from "./premium-entitlement";
-import { bookingAssignmentReference, claimId, claimVersion, deriveFunding, distinctRegister, type FundingRegister, type Hypothesis } from "./premium-funding";
+import { bookingAssignmentReference, claimId, claimVersion, deriveFunding, distinctRegister, reversalAssignmentReference, settlementReference,
+  type FundingRegister, type Hypothesis } from "./premium-funding";
 import { open, type Cashflow } from "./premium-contract";
 
 const cents = integer(0, Number.MAX_SAFE_INTEGER);
@@ -42,8 +43,8 @@ const dossierFields = { format: oneOf("avd.funding-evidence.v1"), personYears: p
   ownPayments: nullable(list(payment, 3500)) };
 const bookingAssignments = list(shape({ bookingId: id, bookingVersion: id, sourceClaimVersion: id,
   claimVersion: id, partId: id, allocationId: id, allocationVersion: id, effectiveMonth: month, evidence: bookedEvidence }), 2000);
-const dossier = shape(dossierFields);
-const dossierWithAssignments = shape({ ...dossierFields, bookingAssignments });
+const reversalAssignments = list(shape({ reversalId: id, reversalVersion: id, originalId: id, originalVersion: id,
+  effectiveMonth: month, evidence: bookedEvidence }), 2000);
 
 export interface FundingEvidence {
   readonly people: ReturnType<typeof calculatePersonalFunding>;
@@ -54,9 +55,13 @@ export interface FundingEvidence {
 
 export function readFundingEvidence(input: unknown, previous: FundingEvidence | null = null): FundingEvidence {
   const payload = copyAvd(input);
-  const { bookingAssignments: incomingAssignments, ...data } =
-    payload && typeof payload === "object" && Object.hasOwn(payload, "bookingAssignments")
-      ? dossierWithAssignments(payload, "förderakte") : { ...dossier(payload, "förderakte"), bookingAssignments: [] };
+  const fields = {
+    ...dossierFields,
+    ...(payload && typeof payload === "object" && Object.hasOwn(payload, "bookingAssignments") ? { bookingAssignments } : {}),
+    ...(payload && typeof payload === "object" && Object.hasOwn(payload, "reversalAssignments") ? { reversalAssignments } : {}),
+  };
+  const { bookingAssignments: incomingAssignments = [], reversalAssignments: incomingReversals = [], ...data } =
+    shape(fields)(payload, "förderakte");
   const people = calculatePersonalFunding(data.personYears);
   const active = people.flatMap(p => p.claims);
   const historic = previous?.register.claims ?? [];
@@ -66,23 +71,29 @@ export function readFundingEvidence(input: unknown, previous: FundingEvidence | 
     s => jsonHash([s.oldBookingId, s.childYearKey]), "settlements");
   const assignments = distinctRegister([...(previous?.register.bookingAssignments ?? []), ...incomingAssignments],
     bookingAssignmentReference, "booking assignments");
+  const reversals = distinctRegister([...(previous?.register.reversalAssignments ?? []), ...incomingReversals],
+    reversalAssignmentReference, "reversal assignments");
   const s = data.chosenSchedule;
   const selectedSchedules = new Map(previous?.selectedSchedules);
   const prior = s && selectedSchedules.get(s.version);
   requireAvd(!prior || prior.scheduleRevision === jsonHash(s), "SCHEDULE_VERSION_REUSED", "chosenSchedule.version");
+  const submittedEvidence = new Set([...booked.map(event => event.id), ...settlements.map(settlementReference),
+    ...assignments.map(bookingAssignmentReference), ...reversals.map(reversalAssignmentReference)]);
   const hypothesis = prior ?? (s ? { version: s.version, scheduleRevision: jsonHash(s), firstYear: s.firstYear, lastYear: s.lastYear,
-    events: s.events.map((event): Hypothesis => {
+    events: s.events.flatMap((event): Hypothesis[] => {
       const c = active.find(c => c.key.personId === event.personId && c.key.year === event.year
         && c.key.component === event.component && c.key.childId === event.childId);
       requireAvd(c, "SCHEDULE_PART_OPEN", event.contractId);
       const partId = "part" in event && typeof event.part === "string" ? allocationPartId(claimId(c.key), event.contractId, event.part) : null;
       const [part, ...others] = c.parts.filter(p => p.contractId === event.contractId && (!partId || p.id === partId));
       requireAvd(part && others.length === 0 && event.cents <= part.cents, "SCHEDULE_PART_OPEN", event.contractId);
-      return { id: jsonHash([s.version, event]), month: event.month, kind: "grant", cents: event.cents,
+      // A plan submitted before its supporting evidence cannot become active on evidence arrival alone.
+      if (event.confirmedBookingIds.some(id => !submittedEvidence.has(id))) return [];
+      return [{ id: jsonHash([s.version, event]), month: event.month, kind: "grant", cents: event.cents,
         contractId: part.contractId, claim: claimId(c.key), claimVersion: claimVersion(c), partId: part.id,
         allocationId: part.allocationId, allocationVersion: part.allocationVersion, hypothesisVersion: s.version,
         scheduleRevision: jsonHash(s), confirmedBookingIds: event.confirmedBookingIds,
-        amountEvidence: { class: "S", source: "Ausdrücklich eingereichter Förderplan", version: s.version } };
+        amountEvidence: { class: "S", source: "Ausdrücklich eingereichter Förderplan", version: s.version } }];
     }) } : null);
   if (hypothesis) selectedSchedules.set(hypothesis.version, hypothesis);
   const ownPayments = data.ownPayments === null ? null : distinctRegister(data.ownPayments, p => p.id, "ownPayments");
@@ -93,9 +104,9 @@ export function readFundingEvidence(input: unknown, previous: FundingEvidence | 
       requireAvd(sum === BigInt(contract.ownCents), "CONTRACT_PAYMENTS_DIFFER", contract.id);
     }
   }
-  const register: FundingRegister = { registerVersion: jsonHash([data, booked, settlements, assignments]), claims,
+  const register: FundingRegister = { registerVersion: jsonHash([data, booked, settlements, assignments, ...(reversals.length ? [reversals] : [])]), claims,
     activeClaimVersions: active.map(claimVersion), booked, hypothesis, opening: data.opening ?? previous?.register.opening ?? null,
-    disjointSettlements: settlements, bookingAssignments: assignments, claimIssues: [
+    disjointSettlements: settlements, bookingAssignments: assignments, ...(reversals.length ? { reversalAssignments: reversals } : {}), claimIssues: [
       ...people.flatMap(p => p.issues),
       ...(ownPayments === null && data.personYears.some(p => p.contracts.length > 1) ? [open("OWN_CONTRACT_PLAN_OPEN", "ownPayments")] : []),
     ] };

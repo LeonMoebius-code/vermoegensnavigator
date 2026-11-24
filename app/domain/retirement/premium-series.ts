@@ -63,7 +63,7 @@ function paymentBasis(inputs: SavingsInputs, months: readonly string[], perspect
   }
   let funding = null;
   if (perspective !== "OHNE_ZULAGEN" && inputs.funding) funding = deriveFunding(inputs.funding, {
-    from: timeline.valuationStart, through: timeline.valuationEnd, lastFundingYear: timeline.finalFundingYear,
+    from: timeline.valuationStart, through: timeline.valuationEnd, lastFundingYear: timeline.finalFundingYear, contractId,
   });
   const side = funding?.perspectives[perspective];
   const fundingIssues = side?.issues ?? (perspective === "OHNE_ZULAGEN" ? [] : [open("FUNDING_SELECTION_OPEN", "funding")]);

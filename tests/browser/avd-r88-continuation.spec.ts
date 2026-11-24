@@ -3,7 +3,7 @@ import { build } from "esbuild";
 import { PDFDocument } from "pdf-lib";
 import { expect, test, type Page } from "@playwright/test";
 import { enterStep, openGrantEvidence, openNeutralSettings, retirementButton, retirementInput } from "./ap04b-ux2-helpers";
-import { confirmedTransfer, evidenceB, fundingFile, personYear } from "./avd-r88-fixtures";
+import { childReversalDossiers, confirmedTransfer, evidenceB, fundingFile, personYear } from "./avd-r88-fixtures";
 
 async function enter(page: Page) {
   await page.goto("./");
@@ -150,4 +150,63 @@ test("R88-F04 D2-T46/T47: download real PDF and CSV, preserve prior bytes after 
   await page.getByText("Historische Ausgaben dieser Sitzung", { exact: true }).click();
   expect(await download(page.getByRole("button", { name: /^PDF · Historischer Bericht/ }))).toEqual(originalPDF);
   expect(await download(page.getByRole("button", { name: /^CSV · Historischer Bericht/ }))).toEqual(originalCSV);
+});
+
+test("R88-N3: an open pre-window child reversal blocks new A4 documents but preserves historical downloads", async ({ page }) => {
+  const f = childReversalDossiers();
+  await enterProtectedWorkspace(page);
+  await enterStep(page, "A2");
+  await retirementInput(page, "Ab wann möchten Sie sparen?").fill("2030-01");
+  await retirementInput(page, "Bis wann möchten Sie sparen?").fill("2030-12");
+  const importDossier = async (data: object) => {
+    await enterStep(page, "A2");
+    const input = page.getByLabel("Förderakte auswählen");
+    if (!await input.isVisible()) await page.getByText("Förderbelege und mehrere Verträge", { exact: true }).click();
+    await input.setInputFiles({ name: "synthetic-child-ledger.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(data)) });
+    await expect(page.getByText("Förderakte übernommen.", { exact: true })).toBeVisible();
+  };
+  const fix = retirementButton(page, "Modellvergleich fixieren");
+  const pdf = retirementButton(page, "Fixierten Vergleich als PDF ausgeben");
+  const csv = retirementButton(page, "Fixierten Vergleich als CSV ausgeben");
+  const download = async (button: typeof pdf) => {
+    const event = page.waitForEvent("download");
+    await button.click();
+    return readFile((await (await event).path())!);
+  };
+  const combined = page.getByTestId("premium-comparison").getByRole("row", { name: /Mit gewählter Förderannahme 0 %/ });
+  const checkBlocked = async () => {
+    await enterStep(page, "A4");
+    await expect(combined).toContainText("Offen");
+    await expect(fix).toHaveCount(0);
+    await expect(pdf).toBeDisabled();
+    await expect(csv).toBeDisabled();
+  };
+
+  await importDossier(f.before);
+  await enterStep(page, "A4");
+  await retirementInput(page, "Jährliche Bruttogesamtrendite in %").fill("0");
+  await expect(combined).toContainText("690,00 €");
+  await fix.click();
+  const originalPdf = await download(pdf), originalCsv = await download(csv);
+  const originalRevision = (await PDFDocument.load(originalPdf)).getSubject()!;
+
+  await importDossier(f.pending);
+  const ledger = page.getByRole("table", { name: "Belegte Förderbuchungen" });
+  await expect(ledger.getByRole("row", { name: /VA 2029-02 -200,00 €/ })).toBeVisible();
+  await expect(ledger.getByRole("row", { name: /VA 2029-03 -100,00 €/ })).toBeVisible();
+  await checkBlocked();
+  await expect(page.getByRole("row", { name: /Nur belegte Förderbuchungen 0 %/ })).toContainText("390,00 €");
+  await page.getByText("Historische Ausgaben dieser Sitzung", { exact: true }).click();
+  expect(await download(page.getByRole("button", { name: /^PDF · Historischer Bericht/ }))).toEqual(originalPdf);
+  expect(await download(page.getByRole("button", { name: /^CSV · Historischer Bericht/ }))).toEqual(originalCsv);
+
+  await importDossier({ ...f.correctedBase, chosenSchedule: f.pending.chosenSchedule });
+  await checkBlocked();
+  await importDossier(f.corrected);
+  await enterStep(page, "A4");
+  await expect(combined).toContainText("690,00 €");
+  await fix.click();
+  const nextPdf = await PDFDocument.load(await download(pdf));
+  expect(nextPdf.getSubject()).not.toBe(originalRevision);
+  expect((await download(csv)).toString()).toContain(nextPdf.getSubject());
 });

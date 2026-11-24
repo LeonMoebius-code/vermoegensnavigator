@@ -10,7 +10,7 @@ import { DEFAULT_INFLATION, reservePrice, type PriceSelection } from "../app/dom
 import { calculateCurve, productStressDifference, stressEndDifference, type CurveRequest } from "../app/domain/retirement/premium-series";
 import { createPremiumSession, type PremiumDraft } from "../app/domain/retirement/premium-session";
 import { productCurves, productPathKey, selectProductOption } from "../app/presentation/retirement/premium-product-configuration";
-import { confirmedTransfer, evidenceB as B, evidenceS as S, fundingFile, personYear, syntheticPremiumWorkspace } from "../tests/browser/avd-r88-fixtures";
+import { childReversalDossiers, confirmedTransfer, evidenceB as B, evidenceS as S, fundingFile, personYear, syntheticPremiumWorkspace } from "../tests/browser/avd-r88-fixtures";
 
 const window = { from: "2029-01", through: "2030-12", lastFundingYear: null };
 const bankPart = (id: string, contractId: string, cents: number) => ({ id, contractId, cents, allocationId: id, allocationVersion: "v1", evidence: B });
@@ -61,16 +61,23 @@ test("N2-01 / D2-T24 / D4-T89–91: allocation-invalid reversals keep the child-
   assert.ok(same.perspectives.BEDINGT_KOMBINIERT.issues.length);
   const mature = deriveFunding(register(ledger, planned(refs)), after);
   assert.deepEqual(mature.ledger, ledger);
-  assert.deepEqual(mature.perspectives.BEDINGT_KOMBINIERT.payments, [planned(refs)]);
-  assert.deepEqual(mature.perspectives.BEDINGT_KOMBINIERT.issues, []);
+  assert.deepEqual(mature.perspectives.BEDINGT_KOMBINIERT.payments, []);
+  assert.ok(mature.perspectives.BEDINGT_KOMBINIERT.issues.some(i => i.reason === "AUSGLEICH_OFFEN"));
+  const clean = [posted, debit1, debit2];
+  const cleanPlan = planned(clean.map(e => e.id));
+  const resolved = deriveFunding(register(clean, cleanPlan), after);
+  assert.deepEqual(resolved.perspectives.BEDINGT_KOMBINIERT, { payments: [cleanPlan], issues: [] });
   const next = booking(successor, 0, "new-B", "2029-12", 30000);
   const actual = deriveFunding(register([...ledger, next, next], planned(refs)), after);
   assert.deepEqual(actual.perspectives.BEDINGT_KOMBINIERT.payments, [next]);
-  assert.deepEqual(actual.perspectives.BEDINGT_KOMBINIERT.issues, []);
+  assert.ok(actual.perspectives.BEDINGT_KOMBINIERT.issues.some(i => i.reason === "AUSGLEICH_OFFEN"));
   const settlement = { oldBookingId: posted.id, childYearKey: childYearKey(old.key)!, evidence: B, month: "2029-10" };
   const settledRefs = [posted.id, wrong[0].id, settlementReference(settlement)];
   assert.deepEqual(deriveFunding(register([posted, wrong[0]], planned(settledRefs), { disjointSettlements: [settlement] }), after)
-    .perspectives.BEDINGT_KOMBINIERT.payments, [planned(settledRefs)]);
+    .perspectives.BEDINGT_KOMBINIERT.payments, []);
+  const disjointPlan = planned([posted.id, settlementReference(settlement)]);
+  assert.deepEqual(deriveFunding(register([posted], disjointPlan, { disjointSettlements: [settlement] }), after)
+    .perspectives.BEDINGT_KOMBINIERT, { payments: [disjointPlan], issues: [] });
 
   const store = createPremiumSession({ rights: syntheticPremiumWorkspace().rights, scope: "internal" });
   const draft: PremiumDraft = { caseRevision: "n2-fund", price: { mode: "automatic" }, inflation: DEFAULT_INFLATION,
@@ -86,7 +93,7 @@ test("N2-01 / D2-T24 / D4-T89–91: allocation-invalid reversals keep the child-
   assert.equal(store.reserveOperation("fix"), null);
   assert.equal(store.reserveOperation("pdf"), null);
   assert.equal(store.reserveOperation("csv"), null);
-  const fixed = publish(store, { ...draft, savings: { ...draft.savings, funding: register([...ledger, next], planned(refs), { registerVersion: "n2-funding-b" }) } });
+  const fixed = publish(store, { ...draft, savings: { ...draft.savings, funding: register([...clean, next], cleanPlan, { registerVersion: "n2-funding-b" }) } });
   assert.notEqual(fixed.comparisonRevision, blocked.comparisonRevision);
   assert.ok(fixed.complete && store.commitOperation(store.reserveOperation("fix")!));
   assert.ok(await store.commitDocument(store.reserveOperation("csv")!));
@@ -96,6 +103,88 @@ function publish(store: ReturnType<typeof createPremiumSession>, draft: PremiumD
   assert.equal(store.edit(draft.savings.caseId, draft.caseRevision, draft, () => draft).issue, null);
   return store.commit(store.reserve()!)!;
 }
+
+test("N3-01: a missing original preserves the signed B booking and invalid evidence is still rejected", () => {
+  const f = childReversalDossiers();
+  const unresolved = { ...f.supplemental, reverses: f.secondOriginal.id };
+  const initial = readFundingEvidence(f.before);
+  const input = { ...f.pending, bookings: [unresolved] };
+  const pending = readFundingEvidence(input, initial);
+  const repeat = readFundingEvidence(input, pending);
+  assert.deepEqual(repeat.register, pending.register);
+  const check = (register: FundingRegister) => deriveFunding(register, window);
+  const result = check(pending.register);
+  assert.deepEqual(result.ledger, [...f.before.bookings, unresolved]);
+  assert.deepEqual(result.perspectives.NUR_BELEGTE_HISTORIE.payments, f.before.bookings);
+  assert.ok(result.perspectives.BEDINGT_KOMBINIERT.issues.some(issue => issue.path === unresolved.id && issue.month === unresolved.month));
+  assert.ok(result.perspectives.BEDINGT_KOMBINIERT.payments.every(event => event.amountEvidence.class === "B"));
+  const complete = readFundingEvidence({ ...f.corrected, reversalAssignments: [],
+    chosenSchedule: f.schedule("after-missing-original", [f.original.id, f.reversal.id, unresolved.id, f.secondOriginal.id]) }, pending);
+  const resolved = check(complete.register);
+  assert.deepEqual(resolved.ledger, [...result.ledger, f.secondOriginal]);
+  assert.deepEqual(resolved.perspectives.BEDINGT_KOMBINIERT.issues, []);
+  assert.equal(resolved.perspectives.BEDINGT_KOMBINIERT.payments.filter(event => event.amountEvidence.class === "S").length, 1);
+
+  for (const invalid of [
+    { ...unresolved, reverses: f.successorBase.id, month: "2030-03" },
+    { ...unresolved, reverses: f.original.id, month: "2028-12" },
+    { ...unresolved, reverses: f.reversal.id },
+    { ...unresolved, reverses: unresolved.id },
+  ]) assert.throws(() => readFundingEvidence({ ...input, bookings: [invalid] }, initial), /REVERSAL_REFERENCE_OPEN/);
+  assert.throws(() => readFundingEvidence({ ...input, bookings: [{ ...unresolved, claimVersion: "unknown" }] }, initial), /BOOKING_IDENTITY_OPEN/);
+  assert.throws(() => readFundingEvidence({ ...input, bookings: [{ ...unresolved, month: "2029-13" }] }, initial), /invalid_month/);
+  assert.throws(() => readFundingEvidence({ ...input, bookings: [{ ...unresolved, amountEvidence: S }] }, initial), /unknown_value/);
+  assert.throws(() => readFundingEvidence({ ...input, bookings: [{ ...unresolved, cents: -1 }] }, pending), /IDENTITY_COLLISION/);
+});
+
+test("N3-02: only a unique dated reversal proof and fresh selection close the affected path", () => {
+  const f = childReversalDossiers();
+  const initial = readFundingEvidence(f.before);
+  const pending = readFundingEvidence(f.pending, initial);
+  const at = { ...window, from: "2030-01" };
+  const evaluate = (register: FundingRegister, bounds = at) => deriveFunding(register, bounds);
+  const combined = (register: FundingRegister, bounds = at) => evaluate(register, bounds).perspectives.BEDINGT_KOMBINIERT;
+  const checkOpen = (register: FundingRegister, bounds = at) => {
+    const side = combined(register, bounds);
+    assert.ok(side.issues.some(issue => issue.reason === "AUSGLEICH_OFFEN"));
+    assert.ok(side.payments.every(event => event.amountEvidence.class === "B"));
+  };
+  checkOpen(pending.register, window);
+  checkOpen(pending.register, { ...window, from: "2029-03" });
+  checkOpen(pending.register);
+  const beforeDebit = evaluate(pending.register, { ...window, through: "2029-02" });
+  assert.deepEqual(beforeDebit.ledger, pending.register.booked);
+  assert.deepEqual(beforeDebit.perspectives.NUR_BELEGTE_HISTORIE, { payments: [f.original, f.reversal], issues: [] });
+  assert.deepEqual(evaluate(pending.register).perspectives.OHNE_ZULAGEN, { payments: [], issues: [] });
+  const independent = calculateCurve({ caseId: "n3-other-contract", openingCents: 10000, openingVersion: "1", own: [], profiles: [],
+    timeline: { valuationStart: at.from, valuationEnd: at.through, contributions: { kind: "holdings_only" }, payoutStart: null, finalFundingYear: null },
+    funding: pending.register }, { id: "other-contract", returnEvidence: S, scenarioVersion: "1", contractId: "independent",
+    valueBasis: "nominal", perspective: "BEDINGT_KOMBINIERT", model: { mode: "NEUTRAL", annualBps: 0 } }, null, null);
+  assert.ok(independent.status === "computed" && independent.value.end.status === "computed" && independent.value.end.cents === 10000);
+  const stale = readFundingEvidence({ ...f.correctedBase, chosenSchedule: f.pending.chosenSchedule }, pending);
+  assert.ok(combined(stale.register).issues.some(issue => issue.reason === "CLAIM_REMAINDER_OPEN"));
+  assert.ok(combined(stale.register).payments.every(event => event.amountEvidence.class === "B"));
+  for (const proof of [{ ...f.proof, originalVersion: "stale" }, { ...f.proof, effectiveMonth: "2029-02" },
+    { ...f.proof, originalId: f.original.id }]) {
+    checkOpen(readFundingEvidence({ ...f.corrected, reversalAssignments: [proof] }, pending).register);
+  }
+  checkOpen(readFundingEvidence({ ...f.corrected, reversalAssignments: [f.proof, { ...f.proof, evidence: { ...B, version: "another" } }] }, pending).register);
+  const resolved = readFundingEvidence(f.corrected, pending);
+  const settled = evaluate(resolved.register, window);
+  assert.deepEqual(settled.ledger, [...pending.register.booked, f.secondOriginal]);
+  assert.notEqual(resolved.register.registerVersion, pending.register.registerVersion);
+  assert.deepEqual(readFundingEvidence(f.corrected, resolved).register, resolved.register);
+  assert.deepEqual(settled.perspectives.NUR_BELEGTE_HISTORIE.payments, settled.ledger);
+  assert.deepEqual(settled.perspectives.BEDINGT_KOMBINIERT.issues, []);
+  assert.equal(combined(resolved.register).payments.at(-1)?.cents, 30000);
+  const anticipated = readFundingEvidence({ ...f.pending, chosenSchedule: f.corrected.chosenSchedule }, initial);
+  const arrived = readFundingEvidence(f.corrected, anticipated);
+  assert.ok(combined(arrived.register).issues.some(issue => issue.reason === "CLAIM_REMAINDER_OPEN"));
+  assert.ok(combined(arrived.register).payments.every(event => event.amountEvidence.class === "B"));
+  checkOpen(resolved.register, { ...window, through: "2029-03" });
+  const tooSoon = readFundingEvidence({ ...f.corrected, chosenSchedule: f.schedule("at-proof-month", f.known, f.proof.effectiveMonth) }, pending);
+  assert.ok(combined(tooSoon.register, window).payments.every(event => event.amountEvidence.class === "B"));
+});
 
 test("N2-02 / X13: equal material price base permits provenance reuse, mismatches block fixing and documents", async () => {
   const ws = syntheticPremiumWorkspace(), path = ws.paths[0], catalog = modelCatalog(ws.catalog, "internal");
