@@ -1,7 +1,7 @@
 import { jsonHash } from "../case/recovery-hash";
 import { AvdError, copyAvd, requireAvd, unique } from "./avd-data";
 import { modelCatalog, resolveCost, resolvePath, type ModelCatalog } from "./model-catalog";
-import { applyFactor, basisPoints, euros, monthlyFactor, outputCents } from "./model-decimal";
+import { advanceSavingsMonth, basisPoints, euros, monthlyFactor, outputCents } from "./model-decimal";
 import {
   m1Input, m2Input, modelMonths, SCENARIOS, type M1Input, type M2Input, type ModelPath,
 } from "./model-input";
@@ -152,8 +152,8 @@ function m1Series(request: M1Input, prepared: ReturnType<typeof prepare>, cost: 
       scenario, gross_annual_rate_bps: rate,
       months: prepared.months.map((month, index) => {
         const inflow = prepared.inflows[index];
-        gross = applyFactor(gross, grossFactor) + inflow;
-        net = applyFactor(net, netFactor) + inflow;
+        gross = advanceSavingsMonth(gross, grossFactor, inflow);
+        net = advanceSavingsMonth(net, netFactor, inflow);
         const monthAt = "$.months." + month;
         return {
           month, inflow_cents: outputCents(inflow, monthAt),

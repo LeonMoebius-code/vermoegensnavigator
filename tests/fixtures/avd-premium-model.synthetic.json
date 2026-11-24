@@ -1,0 +1,18 @@
+{
+  "ruleVersion": "FE-01-D4/2026-11-24",
+  "modelVersion": "avd.premium-model.v1",
+  "synthetic": true,
+  "moneyUnit": "integer cents",
+  "portfolioControls": {
+    "mixed": { "openingCents": 10000, "openingWeightsBps": [8000, 2000], "initialEquityBps": -7500, "positiveCents": 2000, "negativeCents": -5000,
+      "nextMonthEquityBps": 1000, "expectedNegativeFirstCents": 5721, "expectedPositiveFirstCents": 5631 },
+    "twoDebits": { "openingCents": 10000, "openingWeightsBps": [8000, 2000], "securedDebitCents": -4000, "proRataDebitCents": -4000,
+      "nextMonthEquityBps": 1000, "expectedSecuredFirstCents": 2067, "expectedProRataFirstCents": 2120 },
+    "nextMonth": { "nonListedReturnsBps": 0, "additionalCostsCents": 0, "additionalPayments": [], "additionalEndActions": [] }
+  },
+  "priceControls": {
+    "berlinStart": "2026-11-30T23:00:02.000Z", "utcStart": "2026-11-30T23:00:03.000Z",
+    "valuationMonth": "2027-11", "nominalCents": 1020000, "inflationBps": 200,
+    "berlinRealCents": 1001652, "utcRealCents": 1000000
+  }
+}

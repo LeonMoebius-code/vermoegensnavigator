@@ -1,14 +1,21 @@
-import { useId, useRef } from "react";
+import { useId, useRef, useState } from "react";
+import { childCard } from "../../domain/retirement/premium-evidence";
 import { directGrantRuleContext } from "../../domain/retirement/direct-grant-rules";
 import { changeYear, euro, type GrantDraft } from "./direct-grant-adapter";
 import { conditionalBaseGrant, customerGrant, customerPayments, editCustomerCapital, editMonthlyContribution, paymentYear, type ChangeCustomerPlan, type CustomerPlan } from "./customer-plan-adapter";
+import { DEFAULT_TIMELINE_DRAFT, type TimelineDraft } from "./premium-timeline";
+import { PremiumTimelinePanel } from "./premium-timeline-panel";
 import { ContributionOptimizer } from "./contribution-optimizer";
 import type { CapitalDraft } from "./projection-adapter";
 
-export function RetirementCustomer({ plan, change, back, next }: {
+export function RetirementCustomer({ plan, change, back, next, fundingSelection = null, chooseFunding, timing = DEFAULT_TIMELINE_DRAFT, changeTiming }: {
   plan: CustomerPlan; change: ChangeCustomerPlan; back: () => void; next: () => boolean;
+  fundingSelection?: string | null; chooseFunding?: (month: string | null) => boolean;
+  timing?: TimelineDraft; changeTiming?: (value: TimelineDraft) => void;
 }) {
   const prefix = useId(), form = useRef<HTMLFormElement>(null);
+  const [modelBooking, setModelBooking] = useState<string | null>(fundingSelection);
+  const [bookingError, setBookingError] = useState(false);
   const id = (key: string) => `${prefix}-${key}`;
   const update = <K extends keyof CapitalDraft>(key: K, value: CapitalDraft[K]) => change(current => {
     const capital = { ...current.capital, [key]: value };
@@ -66,6 +73,15 @@ export function RetirementCustomer({ plan, change, back, next }: {
   };
   const grant = customerGrant(plan), possible = conditionalBaseGrant(plan), payments = customerPayments(plan);
   const year = plan.capital.start.slice(0, 4);
+  const availableChild = plan.evidence.children.some(child => {
+    const terms = { class: "S" as const, source: "A2-conditional-child", version: year };
+    return childCard({ caseId: "guided-case", personId: "primary", childId: child.id, year: Number(year),
+      childBenefit: plan.children === "yes" && child.status === "eligible_assigned_confirmed" ? { value: true, evidence: terms } : null,
+      assignment: child.status === "eligible_assigned_confirmed" ? { value: { personId: "primary", contractId: "planned" }, evidence: terms } : null,
+      contractPath: plan.evidence.contract === "single_eligible_confirmed" && plan.evidence.regime === "new_confirmed" ? { value: true, evidence: terms } : null,
+      contributionPath: grant.status === "calculated" ? { value: true, evidence: terms } : null,
+      inputRevision: year }).status === "S";
+  });
   const rules = year === "2027" || year === "2028" ? directGrantRuleContext(year === "2027" ? "estg-2027-v1" : "estg-2028-v1") : null;
   const text = (key: "monthly" | "start" | "end" | "oneOff" | "oneOffMonth", label: string, month = false) => {
     const error = payments.status === "invalid_input" && payments.field === key ? payments.message : null;
@@ -88,12 +104,19 @@ export function RetirementCustomer({ plan, change, back, next }: {
           <h2 id={id("inputs")}>Wie möchten Sie einzahlen?</h2>
           <form ref={form} className="retirement-form" noValidate onSubmit={e => {
             e.preventDefault();
-            if (!next()) requestAnimationFrame(() => form.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus());
+            if (!next()) requestAnimationFrame(() => {
+              const invalid = form.current?.querySelector<HTMLElement>('[aria-invalid="true"]');
+              if (!invalid) return;
+              for (let parent = invalid.parentElement; parent && parent !== form.current; parent = parent.parentElement)
+                if (parent instanceof HTMLDetailsElement) parent.open = true;
+              invalid.focus();
+            });
           }}>
             <div className="retirement-capital-grid">
               {text("start", "Ab wann möchten Sie sparen?", true)}
               {text("end", "Bis wann möchten Sie sparen?", true)}
             </div>
+            {changeTiming && <PremiumTimelinePanel plan={plan} draft={timing} change={changeTiming} />}
             <ContributionOptimizer plan={plan} change={change} />
             {text("monthly", "Wie viel möchten Sie monatlich einzahlen?")}
             <p className="retirement-year-equivalent" data-testid="customer-annual">{payments.status === "valid"
@@ -164,6 +187,20 @@ export function RetirementCustomer({ plan, change, back, next }: {
             <div><dt>Eigenbeitrag und modellierte Zulagen</dt><dd data-testid="total-inflow">{euro(grant.annualCents + grant.result.totalGrantCents)}</dd></div>
           </dl>
           <p>Die Modellrechnung enthält keinen Einmalbonus und keine Buchungszusage.</p>
+          {chooseFunding && <>
+          <label htmlFor={id("model-booking")}>Angenommener Buchungsmonat der Förderung</label>
+          <input id={id("model-booking")} type="month" value={modelBooking ?? `${Number(year) + 1}-06`}
+            aria-invalid={bookingError} onChange={event => {
+              setModelBooking(event.target.value); setBookingError(false);
+              if (fundingSelection) chooseFunding(null);
+            }} />
+          <button type="button" className="secondary" disabled={timing.mode === "holdings_only"} onClick={() => setBookingError(!chooseFunding(modelBooking ?? `${Number(year) + 1}-06`))}>
+            Förderannahme im Kapitalmodell verwenden
+          </button>
+          {fundingSelection && <button type="button" className="secondary" onClick={() => chooseFunding(null)}>Förderannahme abwählen</button>}
+          {bookingError && <p role="alert">Bitte einen Buchungsmonat ab dem Beitragsjahr wählen.</p>}
+          {fundingSelection && <p role="status">A4 übernimmt die gewählte Förderannahme.</p>}
+          </>}
         </div> : <>
           <p className="retirement-state" data-testid="customer-grant-status">Gemeinsam prüfen</p>
           {possible.status === "calculated" && payments.status === "valid" ? <div data-testid="conditional-funding">
@@ -172,6 +209,8 @@ export function RetirementCustomer({ plan, change, back, next }: {
             <p>Kinderzulagen und Einmalbonus werden gesondert geprüft. Das Kapitalmodell übernimmt dieses bedingte Szenario nicht automatisch.</p>
           </div> : <p data-testid="conditional-funding-status">{possible.status === "calculated" ? "Bitte prüfen Sie zuerst Ihren Zahlungsplan." : possible.message}</p>}
         </>}
+        {availableChild && <p data-testid="premium-child-card">Kinderzulage: Beitragsziel 300 € je zugeordnetem Kind im Modelljahr {year}. Die Annahme ist bedingt.</p>}
+        {plan.children === "yes" && !availableChild && <p>Kinderzulage prüfen. Förderjahr, Kindergeld und die Zuordnung zum Vertrag müssen zusammenpassen.</p>}
         <p>Für die Kapitalentwicklung zählen Zulagen erst als separat erfasstes Ereignis mit Förderjahr, Betrag und Buchungsmonat.</p>
       </section>
     </div>

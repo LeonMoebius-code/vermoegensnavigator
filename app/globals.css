@@ -7648,3 +7648,8 @@ body[data-print-mode="customer"] .internal-only {
 @container retirement-journey (max-width: 440px) {
   .retirement-ux2 .retirement-customer-chart svg text { font-size: 32px; }
 }
+
+/* AVD model preview has no public current output rights. */
+@media print {
+  .retirement-ux2[data-retirement-stage="a4"] { display: none !important; }
+}
