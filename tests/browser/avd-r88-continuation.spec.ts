@@ -67,13 +67,14 @@ test("R88-F02 FT-07/08/09: A1 orientation, A2 child scope and available targets"
   await retirementButton(page, "Weiter zum eigenen Sparplan").click();
   const goals = page.getByRole("group", { name: "Beitragsziele" });
   await expect(goals.getByRole("button", { name: /Förder-Mindestbeitrag/ })).toBeVisible();
-  await expect(goals.getByRole("button", { name: /Kinderzulage voll/ })).toHaveCount(0);
-  await page.getByText("Fachlicher Gesamtkatalog der Beitragsziele", { exact: true }).click();
-  await expect(page.getByText(/300,00 € Jahresziel für eine mögliche volle Kinderzulage/)).toBeVisible();
+  await expect(goals.getByRole("button", { name: /Kinderzulage voll/ })).toContainText("Der persönliche Kinderzulagenanspruch ist offen.");
   await openGrantEvidence(page);
   await retirementInput(page, "Gibt es Kinder, für die eine Kinderzulage infrage kommt?").selectOption("yes");
   await expect(page.getByText(/Kinderzulage prüfen. Förderjahr/)).toBeVisible();
   await expect(page.getByTestId("premium-child-card")).toHaveCount(0);
+  await expect(goals.getByRole("button", { name: /Kinderzulage voll/ })).toHaveCount(0);
+  await page.getByText("Fachlicher Gesamtkatalog der Beitragsziele", { exact: true }).click();
+  await expect(page.getByText(/300,00 € Jahresziel für eine mögliche volle Kinderzulage/)).toBeVisible();
   await retirementInput(page, "Gibt es Kinder, für die eine Kinderzulage infrage kommt?").selectOption("no");
   await expect(goals.getByRole("button", { name: /Kinderzulage voll/ })).toHaveCount(0);
   await expect(retirementButton(page, "Weiter zum Produktvergleich")).toBeEnabled();

@@ -7,12 +7,16 @@ export function ContributionOptimizer({ plan, change, childGoalAvailable = false
   const id = useId(), payments = customerPayments(plan);
   const annualGoal = plan.contribution?.annual ?? (payments.status === "valid" ? centsInput(payments.total) : "");
   const individual = plan.contribution?.kind !== "target";
+  // With no family answer yet, the catalogue value is a general savings
+  // orientation. An explicitly absent or unresolved child case moves it out
+  // of the personal target group until the component evidence is available.
+  const showChildTarget = childGoalAvailable || plan.children === "unknown";
   const error = payments.status === "invalid_input" && payments.field === "annual" ? payments : null;
   return <div className="retirement-optimizer" data-testid="contribution-optimizer">
     <h3>Wählen Sie Ihr Jahresziel</h3>
     <p>Für eine unmittelbar berechtigte Person im neuen Förderregime mit einem zulässigen Vertrag. Die Ziele sind keine Förderzusage. Geprüfte Regelstände: 2027 und 2028.</p>
     <div className="retirement-contribution-targets" role="group" aria-label="Beitragsziele">
-      {contributionTargets.filter(target => childGoalAvailable || target.cents !== 30000).map(target => {
+      {contributionTargets.filter(target => showChildTarget || target.cents !== 30000).map(target => {
         const selected = !individual && plan.contribution?.annual === centsInput(target.cents);
         // The active card uses the same actual plan as the funding overview.
         // Other cards are explicitly separate examples at the exact target amount.
@@ -27,10 +31,11 @@ export function ContributionOptimizer({ plan, change, childGoalAvailable = false
           <small>{selected ? "Für Ihren tatsächlichen Zahlungsplan · bedingter Standardfall" : `Orientierungsbeispiel bei exakt ${euro(target.cents)} Jahresbeitrag · kein individueller Förderanspruch`}</small>
           <small>{assumed.status === "calculated" ? `Mögliche Grundzulage · bedingt: ${euro(assumed.result.baseGrantCents)}` : "Grundzulage: Voraussetzungen gesondert prüfen"}</small>
           <small>{target.note}</small>
+          {target.cents === 30000 && !childGoalAvailable && <small>Fachliches Jahresziel. Der persönliche Kinderzulagenanspruch ist offen.</small>}
         </button>;
       })}
     </div>
-    {!childGoalAvailable && <details><summary>Fachlicher Gesamtkatalog der Beitragsziele</summary>
+    {!showChildTarget && <details><summary>Fachlicher Gesamtkatalog der Beitragsziele</summary>
       <p>300,00 € Jahresziel für eine mögliche volle Kinderzulage. Der persönliche Anspruch hängt von Kindergeld, Person und Förderjahr ab.</p>
     </details>}
     <p className="retirement-state" data-testid="contribution-mode">{individual ? "Individuell" : "Jahresziel gewählt"}</p>
