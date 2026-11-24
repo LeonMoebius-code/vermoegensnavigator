@@ -6,20 +6,28 @@ import type { CustomerPlan } from "./customer-plan-adapter";
 import { euro } from "./direct-grant-adapter";
 import { buildPremiumDraft, matchingFunding, type PremiumTerms, type SelectedFunding } from "./premium-plan-adapter";
 
-type ModelView = { revision: string; snapshot: Snapshot | null; issue: string | null };
-export const createModelController = () => ({ session: createPremiumSession({ rights: PUBLIC_MODEL_RIGHTS }), view: null as ModelView | null });
+import type { BoundFundingEvidence } from "./premium-funding-evidence-panel";
 
-export function PremiumModelPanel({ plan, caseId, caseRevision, terms, change, selection, editFunding, controller, timing }: {
+import { PremiumDocumentControls } from "./premium-document-controls";
+import type { PremiumWorkspace, ProductDraft } from "./premium-product-configuration";
+
+type ModelView = { revision: string; snapshot: Snapshot | null; issue: string | null };
+export const createModelController = (workspace: PremiumWorkspace | null = null) => ({
+  session: createPremiumSession({ rights: workspace?.rights ?? PUBLIC_MODEL_RIGHTS, scope: workspace?.scope, catalog: workspace?.catalog }),
+  view: null as ModelView | null,
+});
+
+export function PremiumModelPanel({ plan, caseId, caseRevision, terms, change, selection, editFunding, controller, timing, fundingEvidence = null, product = null, showDocuments = false }: {
   plan: CustomerPlan; caseId: string; caseRevision: string; terms: PremiumTerms;
   change: (terms: PremiumTerms) => void; selection: SelectedFunding | null; editFunding: () => void;
-  controller: ReturnType<typeof createModelController>; timing: TimelineDraft;
+  controller: ReturnType<typeof createModelController>; timing: TimelineDraft; fundingEvidence?: BoundFundingEvidence | null; product?: ProductDraft | null; showDocuments?: boolean;
 }) {
   const id = useId();
   const [view, setView] = useState(controller.view);
   const publish = (next: ModelView) => { controller.view = next; setView(next); };
   const selected = matchingFunding(plan, selection);
   const { totalReturn, valueBasis, compareWithout } = terms;
-  const key = JSON.stringify([caseRevision, terms, selection?.register.registerVersion, timing, plan]);
+  const key = JSON.stringify([caseRevision, terms, selection?.register.registerVersion, fundingEvidence?.data.register.registerVersion, fundingEvidence?.basis, timing, plan, product?.catalog.catalog.hash, product?.paths, product?.configurations]);
   // Do not display a previous result during the first render of a changed or
   // malformed input. Reserve the new revision before calculating it.
   const visible = view?.revision === key ? view : null;
@@ -27,7 +35,7 @@ export function PremiumModelPanel({ plan, caseId, caseRevision, terms, change, s
     const store = controller.session;
     if (controller.view?.revision === key) return;
     const edit = store.edit(caseId, caseRevision, plan, () => buildPremiumDraft(plan, caseId, caseRevision, terms, selection,
-      resolvePremiumTimeline(plan, timing, selected?.register.hypothesis?.lastYear ?? null)));
+      resolvePremiumTimeline(plan, timing, fundingEvidence ? null : selected?.register.hypothesis?.lastYear ?? null), fundingEvidence, product));
     const reservation = store.reserve();
     const snapshot = reservation ? store.commit(reservation) : null;
     publish({ revision: key, snapshot, issue: edit.issue?.reason ?? null });
@@ -51,10 +59,10 @@ export function PremiumModelPanel({ plan, caseId, caseRevision, terms, change, s
       <button type="button" className="secondary" aria-pressed={valueBasis === "real"}
         onClick={() => change({ ...terms, valueBasis: "real" })}>Kaufkraft</button>
     </div>
-    {selected ? <p>Förderannahme aus A2 · Buchungsmonat {selected.bookingMonth} · erstes Beitragsjahr.</p>
+    {fundingEvidence ? <p>Belegte Buchungen aus A2 sind automatisch berücksichtigt. Ein offener Förderteil bleibt getrennt.</p> : selected ? <p>Förderannahme aus A2 · Buchungsmonat {selected.bookingMonth} · erstes Beitragsjahr.</p>
       : <p>Förderung offen. Die Vorschau verwendet den Eigenbeitrag.</p>}
     <button type="button" className="secondary" onClick={editFunding}>Förderplan in A2 bearbeiten</button>
-    {selected && <label><input type="checkbox" checked={compareWithout}
+    {(selected || fundingEvidence) && <label><input type="checkbox" checked={compareWithout}
       onChange={event => change({ ...terms, compareWithout: event.target.checked })} /> Vergleich ohne Zulagen</label>}
     {invalidReturn && <p role="status">Bitte einen Wert von −10 bis +15 mit höchstens zwei Nachkommastellen eingeben.</p>}
     {!invalidReturn && visible?.issue && <p role="status">{visible.issue === "END_OVERRIDE_CONFLICT"
@@ -68,11 +76,16 @@ export function PremiumModelPanel({ plan, caseId, caseRevision, terms, change, s
           if (result.status !== "computed") return <tr key={item.subresultId}><th scope="row">Offen</th><td colSpan={2}>{result.reason}</td></tr>;
           const curve = result.value;
           const marketOffset = Number(curve.curveId.split(":").at(-1));
-          const rate = (slider + marketOffset) / 100;
-          const label = curve.modelMode === "ETF_BRUTTO" ? "ETF-Bruttoreferenz" : curve.fundingPerspective === "BEDINGT_KOMBINIERT"
-            ? "Mit gewählter Förderannahme" : "Ohne Zulagen";
-          return <tr key={item.subresultId}><th scope="row">{label}</th><td>{rate.toLocaleString("de-DE")} %</td>
+          const rate = curve.modelMode === "M1" ? Number(curve.marketBasis) / 100 : (slider + marketOffset) / 100;
+          const label = curve.label ?? (curve.modelMode === "ETF_BRUTTO" ? "ETF-Bruttoreferenz" : curve.fundingPerspective === "BEDINGT_KOMBINIERT"
+            ? "Mit gewählter Förderannahme" : curve.fundingPerspective === "NUR_BELEGTE_HISTORIE" ? "Nur belegte Förderbuchungen" : "Ohne Zulagen");
+          const last = curve.rows.at(-1);
+          const stress = curve.rows.find(row => "portfolio" in row && row.portfolio?.stress)?.portfolio?.stress;
+          return <tr key={item.subresultId}><th scope="row">{label}</th><td>{curve.modelMode === "M2" ? "Anlageklassen" : rate.toLocaleString("de-DE") + " %"}</td>
             <td>{curve.complete && curve.end.status === "computed" ? euro(curve.end.cents) : "Offen"}
+              {curve.profileIdentity && <small data-testid="premium-result-profile"> · Profil {curve.profileIdentity.version}</small>}
+              {stress && <small> · Aktienexponierung {euro(stress.exposedCents)} · unmittelbarer Verlust {euro(stress.lossCents)}</small>}
+              {last && "portfolio" in last && last.portfolio?.targetWeightsBps && <small> · Zielgewichte {last.portfolio.targetWeightsBps.map(w => w / 100).join(" / ")} %</small>}
               {curve.price && <small> · Preise von {curve.price.referenceMonth.slice(5)}/{curve.price.referenceMonth.slice(0, 4)}</small>}</td></tr>;
         })}</tbody>
       </table>
@@ -83,5 +96,6 @@ export function PremiumModelPanel({ plan, caseId, caseRevision, terms, change, s
       if (!ticket || !store.commitOperation(ticket)) return;
       publish({ revision: key, snapshot: store.current(), issue: null });
     }}>Modellvergleich fixieren</button>}
+    {showDocuments && <PremiumDocumentControls session={controller.session} snapshot={visible?.snapshot ?? null} caseId={caseId} />}
   </section>;
 }

@@ -33,3 +33,38 @@ ORG-O01 bleibt offen. Öffentliche Quellen, Build, Vorschau und Tests enthalten 
 `npm run test:avd-premium` führt fachliche und technische Gruppen aus. Die zugehörigen Grunddaten stehen in `tests/fixtures/avd-premium-model.synthetic.json`. `tests/browser/avd-premium-model.spec.ts` prüft den sichtbaren A2/A4-Förderübergang, Renditepräzision, den ungültigen Entwurf, das Fokusziel nach einem Einmalzahlungsfehler und den Browserdruck. Die bestehenden Berechnungs- und UI-Tests bleiben Teil des Vollgates.
 
 Die Folgeschnittstelle für die Premium-UX umfasst `TimelineDraft`, `SavingsInputs`, `AllocationProfile`, `CurveRequest`, `Snapshot` und die `Subresult`-Identitäten. Der vollständige nachfolgende Interaktions-, Desktop-, Zoom- und menschliche Screenreader-Nachweis gehört zum gesonderten UX-Auftrag. Fachliche Sollfallnummern verweisen auf den Originalkatalog mit seiner normativen Version und auf tatsächlich ausgeführte technische Fixtures.
+
+## Fachliche Fortsetzung R88-F01 bis F05
+
+### Förderakte in A2
+
+`avd.funding-evidence.v1` ist ein sitzungsgebundener Import für eine vorbereitete fachliche Förderakte. Die Datei wird lokal gelesen, strukturell geprüft und an den A2-Stand gebunden. Die Anwendung erzeugt aus den enthaltenen Referenzen keine eigene Echtheitsbestätigung.
+
+| Feld | Inhalt |
+| --- | --- |
+| `personYears` | Eine Zeile je Person und Förderjahr. Geprüftes oder ausdrücklich angenommenes Regime, förderfähige Beiträge je eindeutigem Vertrag, jahrbezogene Kinderzuordnung, Partnerprüfung, Nachweis zur Altersgrenze und zum Bonusvorbezug. `oldRiester` nimmt nur bei diesem Pfad Eingaben des bestehenden Alt-Riester-Rechenkerns an. |
+| `allocations` in `personYears` | Beträge je Grund-, Kind- oder Bonuskomponente und Vertrag. Unmittelbare Zuordnung bis zu zwei Verträgen, mittelbare Zuordnung höchstens zu einem Vertrag. Bei fehlender Aufteilung bleibt der personenbezogene Referenzbetrag getrennt sichtbar. Vertragsscharfe Zuflüsse entstehen erst mit einer wirksamen Aufteilung und einem Ereignis. |
+| `historicClaims` und `bookings` | Ursprüngliche Anspruchsversionen und B-Ereignisse mit externer Buchungs-ID, tatsächlichem Monat, Vorzeichen, Belegquelle und konkretem Anspruchs-/Vertragsteil. Ein negatives Ereignis verweist auf die ursprüngliche Buchung. Optional kann eine belegte Bausteinaufteilung mitgegeben werden. |
+| `chosenSchedule` | Optional ausdrücklich gewählte S-Ereignisse. Jedes Ereignis bindet Person, Jahr, Komponente, Vertrag, Betrag, Buchungsmonat und die bereits berücksichtigten Buchungs-IDs. Ein Import ohne gewählten Plan aktiviert keinen S-Zufluss. |
+| `opening` und `settlements` | Explizite Zuordnung bereits enthaltener Buchungen zum Startbestand sowie konkrete B-Ausgleichsnachweise für Altbuchungen bei Kinderumzuordnung. |
+| `ownPayments` | Getrennte datierte Eigenzahlungen je Vertrag. Bei vorhandenen Kalendern wird der jeweilige Jahresbeitrag abgeglichen. Fehlende Kalender bei mehreren Verträgen lassen den kombinierten Pfad offen. |
+
+`calculatePersonalFunding` verwendet die gemeinsame direkte Standardformel einmal auf den förderfähigen Personenjahresbeitrag. Zwei Verträge mit je 1.200 Euro ergeben im Originalfall D2-T25 insgesamt 540 Euro Grundzulage und 300 Euro Kinderzulage. Eine alte Buchung bleibt im ursprünglichen Monat erhalten. Änderungen an A2-Eingaben entwerten die betroffene S-Planung. A4 übernimmt die drei Förderperspektiven automatisch und erfragt keine zweite Förderauswahl. Kindergeld, Kindeszuordnung und Berufseinsteigerbonus behalten ihren Jahres- beziehungsweise Lebenszeitbezug.
+
+### Gemeinsame A3/A4-Konfiguration
+
+`RetirementEntry` hält die Konfiguration je Fall und exakter Produkt-/Tarifreferenz. A3 und A4 bearbeiten denselben Stand. Ein vertrauenswürdiger Host kann einen `PremiumWorkspace` mit validiertem Katalog, zugeordneten M1-/M2-Kosten, Monatsrenditepfaden, erlaubten Profiloptionen und Kanalrechten übergeben. Die öffentliche statische Anwendung übergibt keinen Arbeitskatalog und keine erweiterten Kanalrechte. Die in Playwright verwendete Host-Instanz wird ausschließlich für Tests synthetisch gebaut.
+
+Profilwechsel, Anfangsbestand, Zuflussgewichte, datierte Änderungen, modellierter Auszahlbeginn und Endrebalancing durchlaufen den bestehenden Profil- und Portfoliokern. M2 und M2 mit Stress verwenden dieselbe effektive Profilidentität. Der modellierte Auszahlbeginn ist beim Lifecycle Bestandteil dieser Identität. Ein geänderter Stressinput wirkt auf seine eigene Kurve. M1 und Neutral können ihre unveränderten Teilresultate in einer neuen Vergleichsrevision nachweisen.
+
+Weiche Garantie- und Auszahlwünsche beschreiben Orientierung. Der explizit bestätigte Tarifmerkmalabgleich bindet Tarifversion, Stichtag, Bezugsgröße und einschlägige Merkmalsquelle. Bankweg und Förderberechtigung bleiben eigenständige Aussagen.
+
+### Erzeugte Berichte
+
+`reserveOperation` und `commitDocument` begrenzen PDF und CSV auf den vollständigen fixierten Vergleich. Das Format erhält ausschließlich den reservierten Snapshot. Vergleichsrevision und Kanalrecht werden vor und nach der Dateierzeugung verglichen. Veraltete Ergebnisse gelangen weder ins Archiv noch in den Download. Ältere Dokumente enthalten ihren Zeit- und Revisionsbezug und sind als historisch gekennzeichnet. Ein erneuter Abruf verwendet die archivierten Bytes. Die Sitzungsablage endet mit dem Vorsorgeentwurf beziehungsweise einem vollständigen Neuladen der Anwendung. Heruntergeladene Dateien verbleiben beim Nutzer.
+
+Die Browserdrucksperre der Live-Vorschau bleibt aktiv. ORG-O01 bleibt offen. Geschützte Arbeitswerte und ihre abgeleiteten Ergebnisse werden vom öffentlichen Einstieg ferngehalten. Die organisatorische Zulassung eines internen Hosts und seiner Ausgabekanäle ist Voraussetzung für die Verwendung der dortigen Arbeitsdaten.
+
+### Nachprüfbare Gegenfälle
+
+`scripts/verify-avd-premium-continuation.ts` enthält fachliche Gegenrechnungen und Sperrfälle. `tests/browser/avd-r88-continuation.spec.ts` führt die integrierten A1/A2/A4-Übergänge, die zentrale A3/A4-Konfiguration und echte PDF-/CSV-Downloads aus. Die synthetische Fixture in `tests/browser/avd-r88-fixtures.ts` ermöglicht eine Reproduktion ohne Hersteller- oder Kundendaten.

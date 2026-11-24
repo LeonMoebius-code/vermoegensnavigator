@@ -4,6 +4,7 @@ import { modelCatalog } from "./model-catalog";
 import { PREMIUM_MODEL, PREMIUM_RULES, modelIssue, newPremiumIdentity, type Open } from "./premium-contract";
 import { BERLIN_CALENDAR, reservePrice, type Inflation, type PriceSelection, type ProjectCalendar } from "./premium-price";
 import { calculateCurve, type CurveRequest, type SavingsInputs } from "./premium-series";
+import { renderPremiumDocument, type DocumentChannel } from "./premium-document";
 import { productChannelAllowed } from "./premium-products";
 
 export type OutputChannel = "screen" | "print" | "pdf" | "csv" | "json";
@@ -19,6 +20,13 @@ export type Revision = Readonly<{ caseId: string; caseRevision: string; inputRev
 export type Reservation = Readonly<{ revision: Revision; comparisonRevision: string; reservedAt: string; token: string }>;
 export type Operation = "fix" | "confirm" | Exclude<OutputChannel, "screen">;
 export type OperationTicket = Readonly<{ operation: Operation; token: string }>;
+export interface ArchivedDocument {
+  readonly id: string;
+  readonly channel: DocumentChannel;
+  readonly createdAt: string;
+  readonly comparisonRevision: string;
+  readonly caseId: string;
+}
 export type Subresult = Readonly<{ subresultId: string; fingerprint: string; original: { readonly subresultId: string;
   readonly comparisonRevision: string; readonly fingerprint: string; readonly reason: "same_dependencies" } | null;
   result: ReturnType<typeof calculateCurve> }>;
@@ -67,18 +75,22 @@ export function createPremiumSession(options: { readonly rights: ChannelRights; 
   const retained = new Map<string, Snapshot>();
   const reusable = new Map<string, { original: Subresult; snapshot: Snapshot }>();
   const history: Array<Readonly<{ id: string; comparisonRevision: string; operation: Operation; createdAt: string; body: string }>> = [];
+  const documents = new Map<string, { info: ArchivedDocument; bytes: Uint8Array; product: boolean }>();
   const keyFor = (curve: CurveRequest) => `${curve.id}:${curve.valueBasis}`;
 
   function retire() {
     if (current) retained.set(current.id, current);
     current = null;
   }
-  function edit(caseId: string, caseRevision: string, input: unknown, validate: (input: unknown) => PremiumDraft) {
-    // Invalidation precedes validation. An invalid draft has its own identity.
-    revision = freeze({ caseId, caseRevision, inputRevision: token() });
+  function invalidate() {
     latest = null;
     draft = null;
     retire();
+  }
+  function edit(caseId: string, caseRevision: string, input: unknown, validate: (input: unknown) => PremiumDraft) {
+    // Invalidation precedes validation. An invalid draft has its own identity.
+    revision = freeze({ caseId, caseRevision, inputRevision: token() });
+    invalidate();
     try {
       const candidate = freeze(validate(input));
       requireAvd(candidate.caseRevision === caseRevision && candidate.savings.caseId === caseId
@@ -180,9 +192,14 @@ export function createPremiumSession(options: { readonly rights: ChannelRights; 
     if (snapshot.status === "live_preview") return false;
     if (operation === "confirm") return false; // Whole comparisons always include S returns. Component evidence is separate.
     if (!rights[operation].allowed) return false;
-    const includesProduct = snapshot.subresults.some(item => item.result.status === "computed"
+    return channelPermitted(operation, containsProduct(snapshot));
+  }
+  function containsProduct(snapshot: Snapshot) {
+    return snapshot.subresults.some(item => item.result.status === "computed"
       && (item.result.value.modelMode === "M1" || item.result.value.modelMode === "M2"));
-    return !includesProduct || Boolean(catalog && (scope === "internal" || productChannelAllowed(catalog, "export")));
+  }
+  function channelPermitted(channel: OutputChannel, product: boolean) {
+    return rights[channel].allowed && (!product || Boolean(catalog && (scope === "internal" || productChannelAllowed(catalog, "export"))));
   }
   function reserveOperation(operation: Operation): OperationTicket | null {
     if (!actionAllowed(operation, current)) return null;
@@ -208,6 +225,31 @@ export function createPremiumSession(options: { readonly rights: ChannelRights; 
     history.push(report);
     return report;
   }
-  return { edit, reserve, commit, replaceCalendar, replaceCatalog, replaceRights, reserveOperation, commitOperation,
-    current: () => current, historical: (id: string) => retained.get(id) ?? null, reports: () => history.slice() };
+  async function commitDocument(ticket: OperationTicket) {
+    const work = actions.get(ticket);
+    actions.delete(ticket);
+    const { operation } = ticket;
+    if (operation !== "pdf" && operation !== "csv" || !work) return null;
+    const authorized = () => current === work.snapshot && actionAllowed(operation, work.snapshot)
+      && jsonHash(work.channel) === jsonHash(rights[operation]);
+    if (!authorized()) return null;
+    const createdAt = clock();
+    const bytes = await renderPremiumDocument(operation, work.snapshot, createdAt);
+    if (!authorized()) return null;
+    const info = freeze({ id: token(), channel: operation, createdAt, comparisonRevision: work.snapshot.comparisonRevision,
+      caseId: work.snapshot.revision.caseId });
+    documents.set(info.id, { info, bytes: new Uint8Array(bytes), product: containsProduct(work.snapshot) });
+    return info;
+  }
+  function archiveForCase(caseId: string) {
+    return [...documents.values()].filter(entry => entry.info.caseId === caseId && channelPermitted(entry.info.channel, entry.product))
+      .map(entry => entry.info);
+  }
+  function readDocument(id: string, caseId: string) {
+    const entry = documents.get(id);
+    if (!entry || entry.info.caseId !== caseId || !channelPermitted(entry.info.channel, entry.product)) return null;
+    return { info: entry.info, bytes: new Uint8Array(entry.bytes) };
+  }
+  return { edit, invalidate, reserve, commit, replaceCalendar, replaceCatalog, replaceRights, reserveOperation, commitOperation,
+    commitDocument, canDocument: (channel: DocumentChannel) => actionAllowed(channel, current), archiveForCase, readDocument, current: () => current, historical: (id: string) => retained.get(id) ?? null, reports: () => history.slice() };
 }

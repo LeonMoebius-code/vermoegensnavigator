@@ -278,10 +278,9 @@ export function preferenceMatches(product: Product, answers: unknown) {
 }
 
 function protectionMatch(protection: Product["protection"], preference: ProductAnswers["protection"] | undefined): FeatureStatus | null {
-  if (preference === "" || preference === "open") return null;
-  if (preference !== "none" && preference !== "atLeast80" && preference !== "full") return "unknown";
+  if (preference === "" || preference === "open" || preference === "none") return null;
+  if (preference !== "atLeast80" && preference !== "full") return "unknown";
   if (protection.kind === "open") return "unknown";
-  if (preference === "none") return protection.kind === "guarantee" ? "absent" : "supported";
   if (protection.kind !== "guarantee") return "absent";
   return preference === "atLeast80" || (preference === "full" && protection.level === 100) ? "supported" : "absent";
 }

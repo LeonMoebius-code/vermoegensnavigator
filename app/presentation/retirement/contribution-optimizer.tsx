@@ -3,7 +3,7 @@ import { euro } from "./direct-grant-adapter";
 import { centsInput, conditionalBaseGrant, contributionTargets, customerPayments, setContributionGoal, type ChangeCustomerPlan, type CustomerPlan } from "./customer-plan-adapter";
 
 /** All amounts belong to CustomerPlan. No second payment state in this component. */
-export function ContributionOptimizer({ plan, change }: { plan: CustomerPlan; change: ChangeCustomerPlan }) {
+export function ContributionOptimizer({ plan, change, childGoalAvailable = false }: { plan: CustomerPlan; change: ChangeCustomerPlan; childGoalAvailable?: boolean }) {
   const id = useId(), payments = customerPayments(plan);
   const annualGoal = plan.contribution?.annual ?? (payments.status === "valid" ? centsInput(payments.total) : "");
   const individual = plan.contribution?.kind !== "target";
@@ -12,7 +12,7 @@ export function ContributionOptimizer({ plan, change }: { plan: CustomerPlan; ch
     <h3>Wählen Sie Ihr Jahresziel</h3>
     <p>Für eine unmittelbar berechtigte Person im neuen Förderregime mit einem zulässigen Vertrag. Die Ziele sind keine Förderzusage. Geprüfte Regelstände: 2027 und 2028.</p>
     <div className="retirement-contribution-targets" role="group" aria-label="Beitragsziele">
-      {contributionTargets.map(target => {
+      {contributionTargets.filter(target => childGoalAvailable || target.cents !== 30000).map(target => {
         const selected = !individual && plan.contribution?.annual === centsInput(target.cents);
         // The active card uses the same actual plan as the funding overview.
         // Other cards are explicitly separate examples at the exact target amount.
@@ -30,6 +30,9 @@ export function ContributionOptimizer({ plan, change }: { plan: CustomerPlan; ch
         </button>;
       })}
     </div>
+    {!childGoalAvailable && <details><summary>Fachlicher Gesamtkatalog der Beitragsziele</summary>
+      <p>300,00 € Jahresziel für eine mögliche volle Kinderzulage. Der persönliche Anspruch hängt von Kindergeld, Person und Förderjahr ab.</p>
+    </details>}
     <p className="retirement-state" data-testid="contribution-mode">{individual ? "Individuell" : "Jahresziel gewählt"}</p>
     <label htmlFor={`${id}-annual`}>Jahresziel für das erste Kalenderjahr in Euro</label>
     <input id={`${id}-annual`} data-testid="customer-annual-input" inputMode="decimal" value={annualGoal}

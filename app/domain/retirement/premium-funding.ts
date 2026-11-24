@@ -72,6 +72,8 @@ export interface FundingRegister {
     readonly lastYear: number;
     readonly events: readonly Hypothesis[];
   } | null;
+  readonly claimIssues?: readonly Open[];
+  readonly openingContextOpen?: boolean;
   readonly opening: { readonly id: string; readonly includedBookingIds: readonly string[]; readonly composition: "known" | "open" } | null;
   readonly disjointSettlements: readonly { readonly oldBookingId: string; readonly childYearKey: string; readonly evidence: Evidence & { readonly class: "B" }; readonly month: string }[];
 }
@@ -119,7 +121,7 @@ export function deriveFunding(input: FundingRegister, window: { from: string; th
   const booked = distinctRegister(register.booked, event => event.externalId, "booked.externalId");
   const ids = new Set<string>(), activeClaims = new Map<string, Claim>(), activeChildren = new Set<string>();
   const blockedChild = new Set<string>();
-  const historyIssues: Open[] = [], combinedIssues: Open[] = [];
+  const historyIssues: Open[] = register.openingContextOpen ? [open("OPENING_OVERLAP_OPEN", "funding.opening")] : [], combinedIssues: Open[] = [...(register.claimIssues ?? [])];
   const issues = (reason: string, path: string, month?: string) => combinedIssues.push(open(reason, path, month));
   for (const version of register.activeClaimVersions) {
     const claim = claims.get(version);

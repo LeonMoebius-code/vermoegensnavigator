@@ -93,19 +93,24 @@ function checkedDirectGrant(input: unknown): DirectGrantResult {
   }
   if (data.pendingEvidence?.some(item => item !== "bonus")) return stopped("review_required", "pending_evidence", "Ein erforderlicher Berechtigungs-, Regime-, Vertrags- oder Kindernachweis ist noch offen.", rules);
 
-  const cents = data.eligibleOwnContributionCents;
-  // Numerator is bounded by 216000. Integer quarter-cents avoid binary rounding.
-  const numerator = cents < 12000 ? 0 : 2 * Math.min(cents, 36000) + Math.min(Math.max(cents - 36000, 0), 144000);
-  if (numerator % 4 !== 0) {
+  const amounts = directGrantAmounts(data.eligibleOwnContributionCents, data.children.map(child => child.id));
+  if (amounts.numerator !== undefined) {
     return { ...context(rules), status: "review_required",
       issue: { code: "rounding_convention_required", message: "Grundzulage enthält Centbruchteil; endgültige Cent-/ZfA-Konvention ist nicht freigegeben." },
-      openRounding: { component: "baseGrant", unit: "cent", numerator, denominator: 4 } };
+      openRounding: { component: "baseGrant", unit: "cent", numerator: amounts.numerator, denominator: 4 } };
   }
+  return { ...context(rules), status: "calculated", scope: "confirmed_direct_single_contract_standard",
+    contributionYear: rules.contributionYear, ...amounts, roundingStatus: "exact_integer_cents" };
+}
+
+/** Amount formula shared by the checked single-contract and person-year boundaries. */
+export function directGrantAmounts(cents: number, childIds: readonly string[]) {
+  // Numerator is bounded by 216000. Integer quarter-cents avoid binary rounding.
+  const numerator = cents < 12000 ? 0 : 2 * Math.min(cents, 36000) + Math.min(Math.max(cents - 36000, 0), 144000);
+  if (numerator % 4 !== 0) return { numerator };
   const baseGrantCents = numerator / 4;
   const childCents = cents < 12000 ? 0 : Math.min(cents, 30000);
-  const childGrants = data.children.map(child => ({ childId: child.id, grantCents: childCents }));
+  const childGrants = childIds.map(childId => ({ childId, grantCents: childCents }));
   const childrenGrantCents = childCents * childGrants.length;
-  return { ...context(rules), status: "calculated", scope: "confirmed_direct_single_contract_standard",
-    contributionYear: rules.contributionYear, baseGrantCents, childGrants, childrenGrantCents,
-    totalGrantCents: baseGrantCents + childrenGrantCents, roundingStatus: "exact_integer_cents" };
+  return { baseGrantCents, childGrants, childrenGrantCents, totalGrantCents: baseGrantCents + childrenGrantCents };
 }

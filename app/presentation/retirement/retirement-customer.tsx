@@ -117,7 +117,7 @@ export function RetirementCustomer({ plan, change, back, next, fundingSelection 
               {text("end", "Bis wann möchten Sie sparen?", true)}
             </div>
             {changeTiming && <PremiumTimelinePanel plan={plan} draft={timing} change={changeTiming} />}
-            <ContributionOptimizer plan={plan} change={change} />
+            <ContributionOptimizer plan={plan} change={change} childGoalAvailable={availableChild} />
             {text("monthly", "Wie viel möchten Sie monatlich einzahlen?")}
             <p className="retirement-year-equivalent" data-testid="customer-annual">{payments.status === "valid"
               ? <><strong>{euro(payments.total)}</strong> Eigenbeitrag {year} · {payments.months} Monatsraten</>

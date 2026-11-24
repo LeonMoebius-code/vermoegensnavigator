@@ -7,12 +7,15 @@ import { DEFAULT_INFLATION } from "../../domain/retirement/premium-price";
 import type { PremiumDraft } from "../../domain/retirement/premium-session";
 import { CUSTOMER_RETURN, parseCustomerTotalReturn, type CurveRequest } from "../../domain/retirement/premium-series";
 import { customerGrant, customerPayments, type CustomerPlan } from "./customer-plan-adapter";
+import { fundingRegisterForCase } from "../../domain/retirement/premium-funding-input";
+import type { BoundFundingEvidence } from "./premium-funding-evidence-panel";
+import { productCurves, type ProductDraft } from "./premium-product-configuration";
 import { parseEuroCents } from "./direct-grant-adapter";
 
 export type SelectedFunding = { readonly basis: string; readonly caseId: string; readonly bookingMonth: string;
   readonly register: FundingRegister };
 
-function fundingBasis(plan: CustomerPlan) {
+export function fundingBasis(plan: CustomerPlan) {
   return jsonHash({ start: plan.capital.start, end: plan.capital.end, evidence: plan.evidence, birthYear: plan.birthYear,
     funding: plan.funding, children: plan.children, cashflows: customerPayments(plan) });
 }
@@ -56,9 +59,12 @@ export type PremiumTerms = { readonly totalReturn: string; readonly valueBasis: 
   readonly inflation: number; readonly compareWithout: boolean };
 
 export function buildPremiumDraft(plan: CustomerPlan, caseId: string, caseRevision: string, terms: PremiumTerms,
-  selection: SelectedFunding | null, dates?: Timeline): PremiumDraft {
+  selection: SelectedFunding | null, dates?: Timeline, bound: BoundFundingEvidence | null = null, product: ProductDraft | null = null): PremiumDraft {
   const start = plan.capital.start, end = plan.capital.end, selected = matchingFunding(plan, selection);
-  const activeFunding = selected?.caseId === caseId ? selected.register : null;
+  const evidenceCurrent = bound?.basis === fundingBasis(plan) && bound.opening === plan.capital.initial
+    && dates?.contributions.kind !== "holdings_only";
+  const activeFunding = bound ? fundingRegisterForCase(bound.data, evidenceCurrent, bound.opening === plan.capital.initial)
+    : selected?.caseId === caseId ? selected.register : null;
   const timeline = dates ?? { valuationStart: start, valuationEnd: end, contributions: { kind: "regular", first: start, last: end },
     finalFundingYear: activeFunding?.hypothesis?.lastYear ?? null, payoutStart: null };
   const first = timeline.contributions.kind === "regular" ? timeline.contributions.first : timeline.valuationStart;
@@ -72,7 +78,7 @@ export function buildPremiumDraft(plan: CustomerPlan, caseId: string, caseRevisi
   const initial = parseEuroCents(plan.capital.initial);
   requireAvd(initial !== null, "OPENING_INVALID", "initial");
   const paymentEvidence: Evidence = { class: "S", source: "A2-savings-plan", version: jsonHash([start, end, shared, plan.capital.oneOffMonth]) };
-  const own: Cashflow[] = [];
+  let own: Cashflow[] = [];
   const append = (month: string, cents: number, kind: Cashflow["kind"], id: string) => {
     own.push({ month, cents, kind, id, contractId: null, amountEvidence: paymentEvidence });
   };
@@ -85,6 +91,10 @@ export function buildPremiumDraft(plan: CustomerPlan, caseId: string, caseRevisi
     requireAvd(cents !== null, "OWN_PAYMENT_INVALID", "oneOff");
     append(plan.capital.oneOffMonth, cents, "special", "one-off");
   }
+  if (evidenceCurrent && bound.data.ownPayments) {
+    const period = new Set(months);
+    own = bound.data.ownPayments.filter(payment => period.has(payment.month));
+  }
   const rate = parseCustomerTotalReturn(terms.totalReturn);
   const marketVersion = jsonHash([rate, CUSTOMER_RETURN.offsetsBps]);
   const evidence = { class: "S" as const, source: "A4-total-return", version: marketVersion };
@@ -95,11 +105,15 @@ export function buildPremiumDraft(plan: CustomerPlan, caseId: string, caseRevisi
   };
   for (const offset of CUSTOMER_RETURN.offsetsBps) {
     add("NEUTRAL", activeFunding ? "BEDINGT_KOMBINIERT" : "OHNE_ZULAGEN", offset);
-    if (terms.compareWithout && activeFunding) add("NEUTRAL", "OHNE_ZULAGEN", offset);
+    if (activeFunding?.booked.length) add("NEUTRAL", "NUR_BELEGTE_HISTORIE", offset);
+    if (activeFunding && (terms.compareWithout || !activeFunding.hypothesis)) add("NEUTRAL", "OHNE_ZULAGEN", offset);
     if (plan.capital.referenceEnabled) add("ETF_BRUTTO", "OHNE_ZULAGEN", offset);
   }
+  const configured = product ? productCurves(product, timeline, caseId, { valueBasis: terms.valueBasis,
+    perspective: activeFunding ? "BEDINGT_KOMBINIERT" : "OHNE_ZULAGEN", scenarioVersion: marketVersion, returnEvidence: evidence }, rate) : null;
+  if (configured) curves.push(...configured.curves);
   const inflation = terms.inflation === DEFAULT_INFLATION.bps ? DEFAULT_INFLATION : { bps: terms.inflation,
     evidence: { class: "S" as const, source: "A4-price", version: jsonHash([terms.inflation]) } };
   return { caseRevision, savings: { caseId, timeline, openingCents: initial, openingVersion: jsonHash(initial), own,
-    funding: activeFunding, profiles: [] }, curves, price: { mode: "automatic" }, inflation };
+    funding: activeFunding, profiles: configured?.profiles ?? [] }, curves, price: { mode: "automatic" }, inflation };
 }

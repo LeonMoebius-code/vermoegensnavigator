@@ -35,6 +35,8 @@ export interface CurveRequest {
   readonly contractId: string | null;
   readonly valueBasis: "nominal" | "real";
   readonly model: CurveMode;
+  readonly label?: string;
+  readonly blocked?: Open;
 }
 export interface SavingsInputs {
   readonly caseId: string;
@@ -104,6 +106,7 @@ function singleRateRows(months: readonly string[], opening: bigint, annualBps: n
 export function calculateCurve(inputs: SavingsInputs, curve: CurveRequest, price: PriceReservation | null, catalog: ModelCatalog | null) {
   try {
     const { model } = curve;
+    if (curve.blocked) return curve.blocked;
     if ((model.mode === "NEUTRAL" || model.mode === "ETF_BRUTTO") && ("stress" in model || "cost" in model))
       return open("MODE_COST_OR_STRESS_OPEN", "model");
     if (model.mode === "M1" && "stress" in model) return open("M1_STRESS_OPEN", "model");
@@ -177,7 +180,7 @@ export function calculateCurve(inputs: SavingsInputs, curve: CurveRequest, price
     });
     const specifiedEnd = rows.at(-1)!.balance;
     const end = fundingIssues.at(0) ?? specifiedEnd;
-    const result = { modelMode: model.mode, marketBasis: model.mode === "M2" ? jsonHash(model.returns) : model.annualBps, costMode, costEvidence, curveId: curve.id, valueBasis: curve.valueBasis, profileIdentity,
+    const result = { modelMode: model.mode, marketBasis: model.mode === "M2" ? jsonHash(model.returns) : model.annualBps, costMode, costEvidence, curveId: curve.id, label: curve.label ?? null, valueBasis: curve.valueBasis, profileIdentity,
       returnEvidence: curve.returnEvidence, scenarioVersion: curve.scenarioVersion, fundingPerspective: curve.perspective,
       price: curve.valueBasis === "real" ? price : null, openingCents: inputs.openingCents, paymentDependency: dependency,
       ownPaymentHash: jsonHash(ownScoped), ownPaymentEvents: ownScoped, grantEvents: grants, fundingIssues, productGuarantee,

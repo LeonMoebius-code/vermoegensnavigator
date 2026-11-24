@@ -47,6 +47,7 @@
     "verify:development": "npm run test:avd-premium && npm run test:h2-financial-data && npm run test:p1-case-store && npm run test:p2-depot-integrity && npm run test:p3-plan-integrity && npm run test:p4-copy-contract && npm run test:h3-history-restore && npm run test:h4-installment-safety && npm run test:h5a-legacy-loss && npm run test:h5b-recovery && npm run test:p2-release-integrity && npm run test:risk-v2 && npm run test:ap01a-direct-grant && npm run test:ap01b-old-riester && npm run test:cp0a2 && npm run typecheck"
   },
   "dependencies": {
+    "pdf-lib": "1.17.1",
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "xlsx": "file:vendor/xlsx-0.20.3.tgz"
