@@ -1,7 +1,7 @@
 import { jsonHash } from "../../domain/case/recovery-hash";
 import { AvdError, requireAvd } from "../../domain/retirement/avd-data";
 import { monthIndex, valuationMonths, type Timeline } from "../../domain/retirement/premium-calendar";
-import type { Cashflow, Evidence, FundingPerspective } from "../../domain/retirement/premium-contract";
+import { newPremiumIdentity, type Cashflow, type Evidence, type FundingPerspective } from "../../domain/retirement/premium-contract";
 import { claimId, claimVersion, type Claim, type FundingRegister, type Hypothesis } from "../../domain/retirement/premium-funding";
 import { DEFAULT_INFLATION } from "../../domain/retirement/premium-price";
 import type { PremiumDraft } from "../../domain/retirement/premium-session";
@@ -26,7 +26,7 @@ export function selectScenarioFunding(plan: CustomerPlan, caseId: string, bookin
   try { monthIndex(bookingMonth); }
   catch (error) { if (error instanceof AvdError) return null; throw error; }
   if (Number(bookingMonth.slice(0, 4)) < input.contributionYear) return null;
-  const version = crypto.randomUUID(), caseContract = `${caseId}:planned-contract`;
+  const version = newPremiumIdentity(), caseContract = `${caseId}:planned-contract`;
   const evidence = { class: "S" as const, source: input.ruleContext, version };
   const claims: Claim[] = [], events: Hypothesis[] = [];
   const add = (component: "base" | "child", childId: string | null, cents: number) => {

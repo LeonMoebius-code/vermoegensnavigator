@@ -5,6 +5,18 @@ import type { Ref } from "./identity-contract";
 export const PREMIUM_MODEL = "avd.premium-model.v1";
 export const PREMIUM_RULES = "FE-01-D4/2026-11-24";
 
+/** Opaque, non-reused identifiers also work in embedded browser contexts. */
+export function newPremiumIdentity(): string {
+  const crypto = globalThis.crypto;
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const buffer = crypto.getRandomValues(new Uint8Array(16));
+  buffer[6] = (buffer[6] & 0x0f) | 0x40;
+  buffer[8] = (buffer[8] & 0x3f) | 0x80;
+  const hex = Array.from(buffer, byte => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+
 export type Evidence = Readonly<{ class: Exclude<ParameterClass, "O">; source: string; version: string }>;
 export type DateWindow = Readonly<{ fromMonth: string; toMonthExclusive: string | null }>;
 export type FundingPerspective = "OHNE_ZULAGEN" | "NUR_BELEGTE_HISTORIE" | "BEDINGT_KOMBINIERT";

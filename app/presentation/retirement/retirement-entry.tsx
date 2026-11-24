@@ -1,3 +1,4 @@
+import { newPremiumIdentity } from "../../domain/retirement/premium-contract";
 import { forwardRef, useEffect, useId, useImperativeHandle, useRef, useState, type ReactNode } from "react";
 import { directGrantRuleContext } from "../../domain/retirement/direct-grant-rules";
 import { changeYear, euro } from "./direct-grant-adapter";
@@ -41,8 +42,8 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
   const [step, setStep] = useState<Step>("choice");
   const [intro, setIntro] = useState(true);
   const [plan, setPlan] = useState(emptyCustomerPlan);
-  const [premiumId, setPremiumId] = useState(() => crypto.randomUUID());
-  const [premiumRevision, setPremiumRevision] = useState(() => crypto.randomUUID());
+  const [premiumId, setPremiumId] = useState(() => newPremiumIdentity());
+  const [premiumRevision, setPremiumRevision] = useState(() => newPremiumIdentity());
   const [premiumController, setPremiumController] = useState(createModelController);
   const [premiumTiming, setPremiumTiming] = useState<TimelineDraft>(DEFAULT_TIMELINE_DRAFT);
   const [premiumTerms, setPremiumTerms] = useState<PremiumTerms>(DEFAULT_PREMIUM_TERMS);
@@ -71,7 +72,7 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
   const storePlan = (next: CustomerPlan) => {
     currentPlan.current = next;
     setPlan(next);
-    setPremiumRevision(crypto.randomUUID());
+    setPremiumRevision(newPremiumIdentity());
     setPremiumFunding(prior => matchingFunding(next, prior));
   };
   const storeAnswers = (next: RetirementAnswers) => {
@@ -188,7 +189,7 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
   const restart = () => {
     if (!confirmDiscard()) return;
     setDirty(false); setStep("choice"); setIntro(true);
-    setPremiumId(crypto.randomUUID()); setPremiumController(createModelController()); setPremiumTerms(DEFAULT_PREMIUM_TERMS); setPremiumTiming(DEFAULT_TIMELINE_DRAFT); setPremiumFunding(null);
+    setPremiumId(newPremiumIdentity()); setPremiumController(createModelController()); setPremiumTerms(DEFAULT_PREMIUM_TERMS); setPremiumTiming(DEFAULT_TIMELINE_DRAFT); setPremiumFunding(null);
     setBDraft(emptyOldDraft()); setBPreview(null); setBJourney(emptyRiesterJourney());
     storeProductFinder({ selected: [], answers: emptyProductAnswers }); setProductStep(0);
     setResult(null); setRefresh("none"); setCapitalView("neutral");
@@ -245,7 +246,7 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
         back={() => setIntro(true)} next={() => navigateA("a2")} riester={enterB} />
       : step === "a2" ? <RetirementCustomer plan={plan} change={updatePlan} back={() => navigateA("a1")}
         timing={premiumTiming} changeTiming={value => {
-          setPremiumTiming(value); setPremiumRevision(crypto.randomUUID()); setDirty(true);
+          setPremiumTiming(value); setPremiumRevision(newPremiumIdentity()); setDirty(true);
           if (value.mode === "holdings_only") setPremiumFunding(null);
           try {
             const t = resolvePremiumTimeline(currentPlan.current, value, null);
@@ -255,7 +256,7 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
         }} fundingSelection={premiumFunding?.bookingMonth ?? null} chooseFunding={month => {
           const choice = month === null ? null : selectScenarioFunding(currentPlan.current, premiumId, month);
           if (month !== null && !choice) return false;
-          setPremiumFunding(choice); setPremiumRevision(crypto.randomUUID()); setDirty(true);
+          setPremiumFunding(choice); setPremiumRevision(newPremiumIdentity()); setDirty(true);
           return true;
         }} next={() => {
         if (!yearIsBound() || customerPayments(currentPlan.current).status !== "valid") return false;

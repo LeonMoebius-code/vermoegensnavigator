@@ -1,7 +1,7 @@
 import { jsonHash } from "../case/recovery-hash";
 import { copyAvd, requireAvd } from "./avd-data";
 import { modelCatalog } from "./model-catalog";
-import { PREMIUM_MODEL, PREMIUM_RULES, modelIssue, type Open } from "./premium-contract";
+import { PREMIUM_MODEL, PREMIUM_RULES, modelIssue, newPremiumIdentity, type Open } from "./premium-contract";
 import { BERLIN_CALENDAR, reservePrice, type Inflation, type PriceSelection, type ProjectCalendar } from "./premium-price";
 import { calculateCurve, type CurveRequest, type SavingsInputs } from "./premium-series";
 import { productChannelAllowed } from "./premium-products";
@@ -42,7 +42,7 @@ function freezeResult<T>(value: T): T {
   }
   return value;
 }
-const token = () => globalThis.crypto.randomUUID();
+const token = newPremiumIdentity;
 
 export const PUBLIC_MODEL_RIGHTS = Object.freeze({
   screen: Object.freeze({ allowed: true, version: "public-1" }),

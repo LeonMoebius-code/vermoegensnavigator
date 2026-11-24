@@ -1,3 +1,4 @@
+import { newPremiumIdentity } from "../../domain/retirement/premium-contract";
 import { useId, useState } from "react";
 import { AvdError } from "../../domain/retirement/avd-data";
 import { overrideRegularEnd, regularEnd } from "../../domain/retirement/premium-calendar";
@@ -15,7 +16,7 @@ export function PremiumTimelinePanel({ plan, draft, change }: { plan: CustomerPl
   }
   const commitOverride = (month: string) => {
     if (!month || !status) return;
-    change({ ...draft, override: overrideRegularEnd(basis, month, crypto.randomUUID()) });
+    change({ ...draft, override: overrideRegularEnd(basis, month, newPremiumIdentity()) });
   };
   return <details><summary>Sparende und Bewertung getrennt festlegen</summary>
     <div className="retirement-capital-grid">
