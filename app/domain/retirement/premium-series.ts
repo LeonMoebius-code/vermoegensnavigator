@@ -180,7 +180,10 @@ export function calculateCurve(inputs: SavingsInputs, curve: CurveRequest, price
     });
     const specifiedEnd = rows.at(-1)!.balance;
     const end = fundingIssues.at(0) ?? specifiedEnd;
-    const result = { modelMode: model.mode, marketBasis: model.mode === "M2" ? jsonHash(model.returns) : model.annualBps, costMode, costEvidence, curveId: curve.id, label: curve.label ?? null, valueBasis: curve.valueBasis, profileIdentity,
+    const stressComparisonBasis = model.mode === "M2" ? jsonHash([inputs.caseId, inputs.timeline, inputs.openingVersion,
+      inputs.openingCents, dependency, profileIdentity, model.product, model.cost, costEvidence, model.returns,
+      model.cashflowOrders, curve.scenarioVersion, curve.returnEvidence, curve.valueBasis, curve.valueBasis === "real" ? price : null]) : null;
+    const result = { stressComparisonBasis, stressEventId: model.mode === "M2" ? model.stress?.id ?? null : null, modelMode: model.mode, marketBasis: model.mode === "M2" ? jsonHash(model.returns) : model.annualBps, costMode, costEvidence, curveId: curve.id, label: curve.label ?? null, valueBasis: curve.valueBasis, profileIdentity,
       returnEvidence: curve.returnEvidence, scenarioVersion: curve.scenarioVersion, fundingPerspective: curve.perspective,
       price: curve.valueBasis === "real" ? price : null, openingCents: inputs.openingCents, paymentDependency: dependency,
       ownPaymentHash: jsonHash(ownScoped), ownPaymentEvents: ownScoped, grantEvents: grants, fundingIssues, productGuarantee,
@@ -210,8 +213,22 @@ export function calculateStressPair(inputs: SavingsInputs, stressed: CurveReques
   const unstressed = { ...stressed, model: { ...stressed.model, stress: null } };
   const base = calculateCurve(inputs, unstressed, price, catalog);
   const stress = calculateCurve(inputs, stressed, price, catalog);
-  const difference = base.status === "computed" && stress.status === "computed" && base.value.complete && stress.value.complete
-    && base.value.end.status === "computed" && stress.value.end.status === "computed"
-    ? base.value.end.cents - stress.value.end.cents : null;
-  return { base, stress, endDifferenceCents: difference, stressEventId: stressed.model.stress.id };
+  return { base, stress, endDifferenceCents: stressEndDifference(base, stress), stressEventId: stressed.model.stress.id };
+}
+
+type CurveResult = ReturnType<typeof calculateCurve>;
+
+export function stressEndDifference(base: CurveResult | undefined, stress: CurveResult) {
+  if (base?.status !== "computed" || stress.status !== "computed") return null;
+  const a = base.value, b = stress.value;
+  if (!a.stressComparisonBasis || a.stressComparisonBasis !== b.stressComparisonBasis
+    || a.stressEventId || !b.stressEventId || !a.complete || !b.complete
+    || a.end.status !== "computed" || b.end.status !== "computed") return null;
+  return a.end.cents - b.end.cents;
+}
+
+export function productStressDifference(results: readonly { readonly result: CurveResult }[], stress: CurveResult) {
+  if (stress.status !== "computed" || !stress.value.stressEventId || !stress.value.curveId.endsWith(":M2:stress")) return null;
+  const baseId = stress.value.curveId.slice(0, -":stress".length);
+  return stressEndDifference(results.find(item => item.result.status === "computed" && item.result.value.curveId === baseId)?.result, stress);
 }

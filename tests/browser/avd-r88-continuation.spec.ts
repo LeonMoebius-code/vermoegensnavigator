@@ -98,7 +98,9 @@ test("R88-F03 X03/X13: A3 and A4 share one profile and stress does not change M1
   const model1 = comparison.getByRole("row", { name: /M1 · Artificial tariff 1/ });
   const model2 = comparison.getByRole("row", { name: /M2 · Artificial tariff 1/ });
   const stress = comparison.getByRole("row", { name: /M2 mit Stress · Artificial tariff 1/ });
+  const difference = stress.getByTestId("premium-stress-end-difference");
   await expect(stress).toContainText("unmittelbarer Verlust");
+  await expect(difference).toContainText("Endwertdifferenz ohne Stress minus mit Stress");
   const resultProfile = await model2.getByTestId("premium-result-profile").textContent();
   await expect(stress.getByTestId("premium-result-profile")).toHaveText(resultProfile!);
   const stable = await model1.textContent();
@@ -113,6 +115,14 @@ test("R88-F03 X03/X13: A3 and A4 share one profile and stress does not change M1
   await retirementInput(page, "Aktienverlust im Stressmonat").fill("+40 % Gewinn");
   await expect(comparison.getByText("STRESS_LOSS_INVALID", { exact: true })).toBeVisible();
   await expect(model2).toBeVisible();
+  await retirementInput(page, "Aktienverlust im Stressmonat").fill("0 %");
+  await expect(difference).toHaveText(/0,00\s*€/);
+  await expect(stress).toContainText(/unmittelbarer Verlust 0,00\s*€/);
+  await retirementInput(page, "Aktienverlust im Stressmonat").fill("-0 %");
+  await expect(difference).toHaveText(/0,00\s*€/);
+  await enterStep(page, "A3");
+  await enterStep(page, "A4");
+  await expect(difference).toHaveText(/0,00\s*€/);
 });
 
 test("R88-F04 D2-T46/T47: download real PDF and CSV, preserve prior bytes after invalidation", async ({ page }) => {

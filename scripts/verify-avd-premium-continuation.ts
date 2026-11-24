@@ -3,12 +3,12 @@ import { test } from "node:test";
 import { PDFDocument } from "pdf-lib";
 import { calculatePersonalFunding, type PersonYearInput } from "../app/domain/retirement/premium-entitlement";
 import { fundingRegisterForCase, readFundingEvidence } from "../app/domain/retirement/premium-funding-input";
-import { claimId, claimVersion, deriveFunding, type Booking } from "../app/domain/retirement/premium-funding";
-import { historicalReport } from "../app/domain/retirement/premium-document";
+import { claimId, claimVersion, childYearKey, deriveFunding, settlementReference, type Booking } from "../app/domain/retirement/premium-funding";
+import { historicalReport, renderPremiumDocument } from "../app/domain/retirement/premium-document";
 import { createPremiumSession, PUBLIC_MODEL_RIGHTS, type PremiumDraft } from "../app/domain/retirement/premium-session";
 import { modelCatalog } from "../app/domain/retirement/model-catalog";
 import { childCard, assessPreference, type Preference } from "../app/domain/retirement/premium-evidence";
-import { calculateCurve, type CurveRequest } from "../app/domain/retirement/premium-series";
+import { calculateCurve, productStressDifference, stressEndDifference, type CurveRequest } from "../app/domain/retirement/premium-series";
 import { DEFAULT_INFLATION } from "../app/domain/retirement/premium-price";
 import { reference } from "../app/domain/retirement/identity-contract";
 import { parseStressLoss, productCurves, productPathKey, selectProductOption, tariffFeature } from "../app/presentation/retirement/premium-product-configuration";
@@ -60,7 +60,7 @@ test("D2-T26: § 90 partner path remains separately evidenced and neutral amount
   assert.equal(deriveFunding(book.register, window).perspectives.OHNE_ZULAGEN.issues.length, 0);
 });
 
-test("D2-T24 and FT-12: transferred child, dated old reversals and annual evidence scope", () => {
+test("N1-01 / D2-T24 / D4-T89–T91: transferred child needs a renewed matured selection", () => {
   const a = personYear({ personId: "A", year: 2028, ruleVersion: "estg-2028-v1",
     children: [{ ...personYear().children[0], assignedPerson: { value: "A", evidence: B } }],
     allocations: [allocation("child", "V1", 10000, "K"), allocation("child", "V2", 20000, "K")] });
@@ -81,15 +81,116 @@ test("D2-T24 and FT-12: transferred child, dated old reversals and annual eviden
   const blocked = deriveFunding(before.register, window);
   assert.deepEqual(blocked.perspectives.BEDINGT_KOMBINIERT.payments, ledger);
   assert.ok(blocked.perspectives.BEDINGT_KOMBINIERT.issues.some(i => i.reason === "AUSGLEICH_OFFEN"));
-  const reversals = ledger.map(event => ({ ...event, id: "reversal-" + event.id, externalId: "refund-" + event.externalId,
-    month: "2029-09", reverses: event.id, cents: -event.cents }));
-  const after = deriveFunding(readFundingEvidence({ ...next, bookings: reversals }, before).register, window);
-  assert.deepEqual(after.ledger.slice(0, 2), ledger);
-  const active = after.perspectives.BEDINGT_KOMBINIERT.payments;
-  assert.equal(active.reduce((n, e) => n + e.cents, 0), 30000);
-  assert.deepEqual(active.map(e => e.month), ["2029-06", "2029-06", "2029-09", "2029-09", "2029-10", "2029-10"]);
-  const unknown = personYear({ year: 2028, ruleVersion: "estg-2028-v1", children: [{ ...personYear().children[0], benefit: null }] });
-  assert.equal(calculatePersonalFunding([personYear(), unknown])[1].claims[1].amount, null);
+  const throughJanuary = { ...window, through: "2030-01" };
+  for (const month of ["2029-09", "2029-10", "2029-12"]) {
+    const reversals = ledger.map(event => ({ ...event, id: "reversal-" + event.id, externalId: "refund-" + event.externalId,
+      month, reverses: event.id, cents: -event.cents }));
+    const partial = readFundingEvidence({ ...next, bookings: [reversals[0]] }, before);
+    const derive = (input: ReturnType<typeof readFundingEvidence>) => deriveFunding(input.register, throughJanuary);
+    assert.ok(derive(partial).perspectives.BEDINGT_KOMBINIERT.issues.some(i => i.reason === "AUSGLEICH_OFFEN"));
+    const submitted = readFundingEvidence({ ...next, bookings: reversals }, partial);
+    const expected = [...ledger, ...reversals];
+    const after = derive(submitted);
+    assert.deepEqual(after.ledger, expected);
+    assert.deepEqual(after.perspectives.BEDINGT_KOMBINIERT.payments, expected);
+    assert.equal(expected.reduce((n, e) => n + e.cents, 0), 0);
+    assert.ok(after.perspectives.BEDINGT_KOMBINIERT.issues.some(i => i.reason === "CLAIM_REMAINDER_OPEN"));
+    assert.notEqual(submitted.register.registerVersion, before.register.registerVersion);
+    assert.deepEqual(derive(readFundingEvidence({ ...next, bookings: reversals }, submitted)), after);
+    const renew = (selectedMonth: string, version: string) => ({ ...next, chosenSchedule: { ...next.chosenSchedule, version,
+      events: next.chosenSchedule.events.map(event => ({ ...event, month: selectedMonth, confirmedBookingIds: expected.map(e => e.id) })) } });
+    assert.throws(() => readFundingEvidence(renew(month, "next-v1"), submitted), /SCHEDULE_VERSION_REUSED/);
+    for (const tooEarly of ["2029-08", month])
+      assert.deepEqual(derive(readFundingEvidence(renew(tooEarly, "early-" + tooEarly), submitted)).perspectives.BEDINGT_KOMBINIERT.payments, expected);
+    const renewed = readFundingEvidence(renew("2030-01", "next-v2"), submitted);
+    assert.deepEqual(derive(renewed).perspectives.BEDINGT_KOMBINIERT.payments.slice(4).map(e => [e.contractId, e.month, e.cents]),
+      [["V3", "2030-01", 15000], ["V4", "2030-01", 15000]]);
+    assert.notEqual(renewed.register.registerVersion, submitted.register.registerVersion);
+    const successor = calculatePersonalFunding([b])[0].claims[1];
+    const actual = successor.parts.map((p, i): Booking => ({ ...ledger[i], id: "new-" + i, externalId: "new-statement-" + i,
+      claim: claimId(successor.key), claimVersion: claimVersion(successor), contractId: p.contractId, partId: p.id, allocationId: p.allocationId,
+      month: "2030-01", cents: p.cents }));
+    assert.deepEqual(derive(readFundingEvidence({ ...next, bookings: actual }, renewed)).perspectives.BEDINGT_KOMBINIERT.payments, [...expected, ...actual]);
+  }
+  const settlements = ledger.map(e => ({ oldBookingId: e.id, childYearKey: childYearKey(old.key)!, month: "2029-07", evidence: B }));
+  const disjoint = readFundingEvidence({ ...next, settlements }, before);
+  assert.deepEqual(deriveFunding(disjoint.register, window).perspectives.BEDINGT_KOMBINIERT.payments, ledger);
+  const newPlan = { ...next, chosenSchedule: { ...next.chosenSchedule, version: "disjoint-v2",
+    events: next.chosenSchedule.events.map(event => ({ ...event,
+      confirmedBookingIds: [...ledger.map(e => e.id), ...settlements.map(settlementReference)] })) } };
+  assert.equal(deriveFunding(readFundingEvidence(newPlan, disjoint).register, window).perspectives.BEDINGT_KOMBINIERT.payments.length, 4);
+});
+
+test("FT-12: first entitlement period in 2027, last in 2028, adult child and open benefit year", () => {
+  // Synthetic reviewed fact pattern. Two eligible, unmarried recipients in both years.
+  // A is awarded Jan–Jun, B Jul–Dec. K turns 18 in July 2028 and child benefit continues.
+  const periods = [{ months: "01–06", person: "A" }, { months: "07–12", person: "B" }];
+  const p = (year: 2027 | 2028, personId: string, known = true) => {
+    const award = year === 2027 ? periods[0] : periods[1];
+    const evidence = { ...B, source: year === 2027 ? "synthetic reviewed first period" : "synthetic reviewed last period",
+      version: String(year) + "-" + award.person };
+    return personYear({ year, personId, ruleVersion: year === 2027 ? "estg-2027-v1" : "estg-2028-v1",
+      contracts: [{ id: "V-" + personId, ownCents: 120000, eligibility: B }],
+      children: [{ id: "K", benefit: known ? { value: "yes", evidence } : null,
+        assignedPerson: known ? { value: award.person, evidence } : null, supersedesPerson: null }],
+      allocations: [allocation("base", "V-" + personId, 39000),
+        ...(known && award.person === personId ? [allocation("child", "V-" + personId, 30000, "K")] : [])] });
+  };
+  const people = [p(2027, "A"), p(2027, "B"), p(2028, "A"), p(2028, "B")];
+  const child = calculatePersonalFunding(people).flatMap(r => r.claims.filter(c => c.key.component === "child"));
+  assert.deepEqual(child.map(c => [c.key.personId, c.key.year, c.regimeVersion, c.amount?.cents]),
+    [["A", 2027, "estg-2027-v1", 30000], ["B", 2028, "estg-2028-v1", 30000]]);
+  const first = child[0], part = first.parts[0];
+  const booked: Booking = { ...confirmedTransfer(people[0], 39000, "V-A"), claim: claimId(first.key), claimVersion: claimVersion(first),
+    id: "FT12-B", externalId: "FT12-proof", month: "2028-06", partId: part.id, allocationId: part.allocationId, cents: 30000 };
+  const selected = readFundingEvidence({ ...fundingFile(people, [booked]), chosenSchedule: { version: "ft12-2028", firstYear: 2028, lastYear: 2028,
+    events: [{ personId: "B", year: 2028, component: "child", childId: "K", contractId: "V-B", month: "2029-06", cents: 30000, confirmedBookingIds: [] }] } });
+  const combined = (input: typeof selected) => deriveFunding(input.register, window).perspectives.BEDINGT_KOMBINIERT;
+  assert.deepEqual(combined(selected).payments.map(e => [e.contractId, e.month, e.cents, e.amountEvidence.class]),
+    [["V-A", "2028-06", 30000, "B"], ["V-B", "2029-06", 30000, "S"]]);
+  const open = readFundingEvidence(fundingFile([people[0], people[1], p(2028, "A", false), p(2028, "B", false)]), selected);
+  assert.deepEqual(combined(open).payments, [booked]);
+  assert.ok(combined(open).issues.some(i => i.reason === "CHILD_YEAR_OPEN"));
+  assert.notEqual(open.register.registerVersion, selected.register.registerVersion);
+});
+
+test("D2-T19–T21 / D3-T65–T67 / N1-02: B/S replay with disjoint active parts on the same contract", () => {
+  const firstPart = allocation("base", "V1", 24000);
+  const p = personYear({ children: [], contracts: [{ id: "V1", ownCents: 60000, eligibility: B },
+    { id: "V2", ownCents: 60000, eligibility: B }], allocations: [firstPart, allocation("base", "V2", 15000)] });
+  const revised = { ...p, allocations: [firstPart, { ...allocation("base", "V2", 10000), part: "posted" },
+    { ...allocation("base", "V2", 5000), part: "residual" }] };
+  const booked240 = confirmedTransfer(p, 24000, "V1", "2028-08");
+  const claim = calculatePersonalFunding([revised])[0].claims[0];
+  const bookPart = (index: number, month: string): Booking => {
+    const part = claim.parts[index];
+    return { ...booked240, id: "booking-" + index, externalId: "evidence-" + index, claimVersion: claimVersion(claim),
+      contractId: part.contractId, partId: part.id, allocationId: part.allocationId, cents: part.cents, month };
+  };
+  const booked100 = bookPart(1, "2028-12"), booked50 = bookPart(2, "2029-02");
+  const event = { personId: p.personId, year: 2027, component: "base", childId: null, contractId: "V2" };
+  const plan150 = { version: "opening-plan", firstYear: 2027, lastYear: 2027, events: [{ ...event,
+    cents: 15000, month: "2028-11", confirmedBookingIds: [booked240.id] }] };
+  const stage1 = readFundingEvidence({ ...fundingFile([p], [booked240]), chosenSchedule: plan150 });
+  const stage2 = readFundingEvidence({ ...fundingFile([revised], [booked100]), chosenSchedule: plan150 }, stage1);
+  const plan50 = { ...plan150, version: "new-plan", events: [{ ...event,
+    cents: 5000, month: "2029-01", confirmedBookingIds: [booked240.id, booked100.id] }] };
+  assert.throws(() => readFundingEvidence({ ...fundingFile([revised]), chosenSchedule: plan50 }, stage2), /SCHEDULE_PART_OPEN/);
+  const chosen50 = { ...plan50, events: [{ ...plan50.events[0], part: "residual" }] };
+  const stage3 = readFundingEvidence({ ...fundingFile([revised]), chosenSchedule: chosen50 }, stage2);
+  const actual = { ...fundingFile([revised], [booked50]), chosenSchedule: chosen50 };
+  const stage4 = readFundingEvidence(actual, stage3);
+  const repeat = readFundingEvidence(actual, stage4);
+  const results = [stage1, stage2, stage3, stage4, repeat].map(input => deriveFunding(input.register, window).perspectives.BEDINGT_KOMBINIERT);
+  assert.deepEqual(results.map(r => r.payments.map(e => [e.amountEvidence.class, e.cents, e.contractId, e.month])), [
+    [["B", 24000, "V1", "2028-08"], ["S", 15000, "V2", "2028-11"]],
+    [["B", 24000, "V1", "2028-08"], ["B", 10000, "V2", "2028-12"]],
+    [["B", 24000, "V1", "2028-08"], ["B", 10000, "V2", "2028-12"], ["S", 5000, "V2", "2029-01"]],
+    [["B", 24000, "V1", "2028-08"], ["B", 10000, "V2", "2028-12"], ["B", 5000, "V2", "2029-02"]],
+    [["B", 24000, "V1", "2028-08"], ["B", 10000, "V2", "2028-12"], ["B", 5000, "V2", "2029-02"]],
+  ]);
+  assert.deepEqual(results.map(r => r.issues.map(i => i.reason)), [[], ["CLAIM_REMAINDER_OPEN"], [], [], []]);
+  assert.deepEqual(stage4.register.booked, [booked240, booked100, booked50]);
 });
 
 test("D2-T30, FT-11 and D3-T84: first proposed bonus cannot recur or equal evidence of prior payment", () => {
@@ -130,10 +231,11 @@ function fixed(store: ReturnType<typeof createPremiumSession>) {
   assert.ok(store.commitOperation(store.reserveOperation("fix")!));
 }
 
-test("D2-T36 and X03/X13: same profile and one stress loss without M1 or neutral invalidation", () => {
-  assert.equal(parseStressLoss("−40 %"), 4000);
-  assert.throws(() => parseStressLoss("-101 %"));
-  assert.throws(() => parseStressLoss("+40 % Gewinn"));
+test("D2-T36 and X03/X13: same profile and one stress loss without M1 or neutral invalidation", async () => {
+  for (const [input, expected] of [["0 %", 0], ["-0 %", 0], ["−0,00 %", 0], ["−40 %", 4000], ["-100 %", 10000]] as const)
+    assert.equal(parseStressLoss(input), expected);
+  for (const invalid of ["", "-101 %", "40 %", "+40 % Gewinn", "-0,001 %"])
+    assert.throws(() => parseStressLoss(invalid), /STRESS_LOSS_INVALID/);
   const ws = syntheticPremiumWorkspace(), catalog = modelCatalog(ws.catalog, "internal"), path = ws.paths[0];
   const key = productPathKey(path), first = selectProductOption(path, 0);
   const draft = (changes = first) => {
@@ -150,6 +252,31 @@ test("D2-T36 and X03/X13: same profile and one stress loss without M1 or neutral
   assert.ok(regular.status === "computed" && stress.status === "computed");
   assert.deepEqual(regular.value.profileIdentity, stress.value.profileIdentity);
   assert.equal(stress.value.rows.filter(row => "portfolio" in row && row.portfolio?.stress).length, 1);
+
+  assert.ok(regular.value.end.status === "computed" && stress.value.end.status === "computed");
+  const difference = regular.value.end.cents - stress.value.end.cents;
+  assert.notEqual(difference, stress.value.rows[0].portfolio?.stress?.lossCents);
+  assert.equal(productStressDifference(b.subresults, stress), difference);
+  const prepared = draft({ ...first, stressLoss: "−40 %", stressMonth: "2027-01" });
+  const other = calculateCurve(prepared.savings, { ...prepared.curves[2], scenarioVersion: "other" }, null, catalog);
+  assert.equal(stressEndDifference(other, stress), null);
+  fixed(session);
+  const snapshot = session.current()!;
+  const csv = new TextDecoder().decode(await renderPremiumDocument("csv", snapshot, snapshot.reservedAt));
+  assert.match(csv, /"Unmittelbarer Verlust EUR";"[0-9]+,\d{2}"/);
+  assert.ok(csv.includes('"Endwertdifferenz ohne Stress minus mit Stress EUR";"' + (difference / 100).toFixed(2).replace(".", ",") + '"'));
+  const pdf = await PDFDocument.load(await renderPremiumDocument("pdf", snapshot, snapshot.reservedAt));
+  assert.equal(pdf.getSubject(), snapshot.comparisonRevision);
+  const zero = publish(session, draft({ ...first, stressLoss: "0", stressMonth: "2027-01" }));
+  const zeroModel = zero.subresults.at(-1)!.result;
+  assert.ok(zeroModel.status === "computed" && zeroModel.value.stressEventId);
+  assert.notEqual(zeroModel.value.stressEventId, stress.value.stressEventId);
+  assert.deepEqual(zeroModel.value.rows.map(row => row.balance), regular.value.rows.map(row => row.balance));
+  assert.equal(productStressDifference(zero.subresults, zeroModel), 0);
+  const signed = publish(session, draft({ ...first, stressLoss: "-0", stressMonth: "2027-01" }));
+  assert.deepEqual(signed.subresults.at(-1)!.result, zeroModel);
+  assert.notEqual(zero.comparisonRevision, a.comparisonRevision);
+  assert.equal(a.subresults.length, 3);
 
   const next = publish(session, draft({ ...first, opening: ["40", "60"], version: "weights-v2" }));
   assert.equal(next.subresults[0].original?.subresultId, a.subresults[0].subresultId);
@@ -275,8 +402,8 @@ test("D2-T58–T61, D3-T85 and FT-17–19: hard tariff evidence is time and scop
   const ws = syntheticPremiumWorkspace();
   const source = reference(record(ws.catalog, "synthetic-algorithm", "source"));
   const date = "2027-12-31";
-  const fact = (criterion: "fund_plan" | "life_annuity" | "value_protection_only" | "contribution_guarantee", dateRef = date) =>
-    ({ criterion, established: true, date: dateRef, source });
+  const fact = (tariff: typeof ws.paths[0]["product"]["tariff"], criterion: "fund_plan" | "life_annuity" | "value_protection_only" | "contribution_guarantee", dateRef = date) =>
+    ({ criterion, established: true, date: dateRef, source, tariff });
   const productFor = (kind: "contribution_guarantee" | "value_protection_target", rate: number, basis: "own_and_grants" | "dated_value") => {
     const raw = structuredClone(ws.catalog);
     const item = record(raw, "synthetic-product-1", "product");
@@ -289,8 +416,9 @@ test("D2-T58–T61, D3-T85 and FT-17–19: hard tariff evidence is time and scop
     item.citations.push({ source, locator: "Fixture guarantee evidence" });
     item.data.guarantee = { kind, rate: reference(parameter), basis, appliesAt: "contract_maturity", referenceDate: kind === "value_protection_target" ? date : null, evidence: source };
     const parsed = reseal(raw);
-    return { m: modelCatalog(parsed, "internal"), path: { ...ws.paths[0], facts: [fact("contribution_guarantee")], product: {
-      product: reference(record(parsed, "synthetic-product-1", "product")), tariff: reference(record(parsed, "synthetic-tariff-1", "tariff")),
+    const tariff = reference(record(parsed, "synthetic-tariff-1", "tariff"));
+    return { m: modelCatalog(parsed, "internal"), path: { ...ws.paths[0], facts: [fact(tariff, "contribution_guarantee")], product: {
+      product: reference(record(parsed, "synthetic-product-1", "product")), tariff,
     } } };
   };
   const guarantee = productFor("contribution_guarantee", 1, "own_and_grants");
@@ -309,19 +437,23 @@ test("D2-T58–T61, D3-T85 and FT-17–19: hard tariff evidence is time and scop
   assert.equal(assess({ ...request, hardness: "revoked", revision: "p2" }, guarantee.path, guarantee.m).status, "orientation");
   const minimum = { ...request, criterion: "minimum_guarantee" as const };
   assert.equal(assess(minimum, pro.path, pro.m).status, "O");
-  assert.equal(assess(minimum, { ...pro.path, facts: [fact("value_protection_only")] }, pro.m).status, "B_MISMATCH");
+  assert.equal(assess(minimum, { ...pro.path, facts: [fact(pro.path.product.tariff, "value_protection_only")] }, pro.m).status, "B_MISMATCH");
   assert.equal(assess(minimum, guarantee80.path, guarantee80.m).status, "B_MATCH");
   assert.equal(assess(minimum, guarantee80.path, guarantee80.m, "another-tariff-hash").status, "O");
   assert.equal(assess({ ...minimum, stichtag: "2028-12-31" }, guarantee80.path, guarantee80.m).status, "O");
   const payout = { ...request, criterion: "both_payouts_same_tariff" as const, requiredScope: "same_tariff", requirementBasis: "fund_plan_and_life_annuity" };
-  const incomplete = { ...guarantee.path, facts: [fact("life_annuity")] };
+  const tariff = guarantee.path.product.tariff;
+  const incomplete = { ...guarantee.path, facts: [fact(tariff, "life_annuity")] };
   assert.equal(assess({ ...payout, answer: "compare", hardness: "soft" }, incomplete, guarantee.m).status, "orientation");
   assert.equal(assess(payout, incomplete, guarantee.m).status, "O");
-  const complete = { ...guarantee.path, facts: [fact("life_annuity"), fact("fund_plan")] };
+  const complete = { ...guarantee.path, facts: [fact(tariff, "life_annuity"), fact(tariff, "fund_plan")] };
   const paths = assess(payout, complete, guarantee.m);
   assert.equal(paths.status, "B_MATCH");
   assert.equal(paths.bankChannel, "open");
-  assert.equal(assess(payout, { ...complete, facts: [fact("life_annuity"), fact("fund_plan", "2026-12-31")] }, guarantee.m).status, "O");
+  assert.equal(assess(payout, { ...complete, facts: [fact(tariff, "life_annuity"), fact(tariff, "fund_plan", "2026-12-31")] }, guarantee.m).status, "O");
+  assert.equal(assess(minimum, { ...guarantee80.path, facts: guarantee.path.facts }, guarantee80.m).status, "O");
+  assert.equal(assess(minimum, { ...guarantee80.path, facts: [{ ...guarantee80.path.facts[0], source: { ...source, hash: "stale" } }] }, guarantee80.m).status, "O");
+  assert.equal(assess(payout, { ...complete, facts: [fact(tariff, "life_annuity"), fact(guarantee80.path.product.tariff, "fund_plan")] }, guarantee.m).status, "O");
   assert.equal(preferenceMatches(products.find(p => p.id === "garantie")!, { ...emptyProductAnswers, protection: "none" }).protection, null);
   assert.equal(calculateCurve(initial.savings, scenario, null, null).status, "computed");
 });

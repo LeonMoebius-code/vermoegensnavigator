@@ -142,6 +142,37 @@ test("D3-T68: same amount, separate contracts and booking months", () => {
   assert.deepEqual(payments.map(x => [x.contractId, x.month, x.cents]), [["V1", "2028-01", 19000], ["V2", "2028-06", 19000]]);
 });
 
+test("N1-02 / D2-T25 and FT-16: equal total cannot cover mismatched contract parts", () => {
+  const c = claim("P", 2028, 30000, [{ id: "A", contract: "V1", cents: 10000 }, { id: "B", contract: "V2", cents: 20000 }]);
+  const v1 = book(c, "A", "first", "2029-04", 10000);
+  const v2 = book(c, "B", "second", "2029-06", 20000);
+  const half = { ...v2, cents: 10000 };
+  const remainder = book(c, "B", "part-two", "2029-08", 10000);
+  const run = (entries: Booking[], current = c) =>
+    deriveFunding(register(current === c ? [c] : [c, current], entries, [], { activeClaimVersions: [claimVersion(current)] }), fundingWindow);
+  for (const entries of [[{ ...v1, cents: 20000 }, half], [v1, half], [{ ...v1, cents: 12000 }, v2]]) {
+    const actual = run(entries);
+    assert.deepEqual(actual.ledger, entries);
+    assert.deepEqual(actual.perspectives.NUR_BELEGTE_HISTORIE.payments, entries);
+    assert.deepEqual(actual.perspectives.BEDINGT_KOMBINIERT.payments, entries);
+    assert.equal(actual.perspectives.BEDINGT_KOMBINIERT.issues[0].reason, "CLAIM_REMAINDER_OPEN");
+    assert.equal(actual.perspectives.NUR_BELEGTE_HISTORIE.issues.length, 0);
+  }
+  const multiple = run([v1, half, remainder, half]);
+  assert.deepEqual(multiple.perspectives.BEDINGT_KOMBINIERT.payments, [v1, half, remainder]);
+  assert.equal(multiple.perspectives.BEDINGT_KOMBINIERT.issues.length, 0);
+  const reversal = book(c, "B", "correction", "2029-10", -5000, { reverses: remainder.id });
+  const restored = book(c, "B", "replacement", "2029-12", 5000);
+  assert.equal(run([v1, half, remainder, reversal]).perspectives.BEDINGT_KOMBINIERT.issues[0].reason, "CLAIM_REMAINDER_OPEN");
+  assert.equal(run([v1, half, remainder, reversal, restored]).perspectives.BEDINGT_KOMBINIERT.issues.length, 0);
+  const current = { ...c, claimRevision: "new-version", parts: c.parts.map(part => ({ ...part, allocationVersion: "allocation-v2" })) };
+  const old = run([v1, v2], current);
+  assert.deepEqual(old.ledger, [v1, v2]);
+  assert.equal(old.perspectives.BEDINGT_KOMBINIERT.issues[0].reason, "CLAIM_REMAINDER_OPEN");
+  assert.equal(run([book(current, "A", "new-a", "2029-08", 10000), book(current, "B", "new-b", "2029-10", 20000)],
+    current).perspectives.BEDINGT_KOMBINIERT.issues.length, 0);
+});
+
 test("D3-T69–T70 / FT-13–FT-15: B and S years, three perspectives and explicit horizon", () => {
   const part = [{ id: "one", contract: "V1", cents: 39000 }];
   const v1 = claim("P", 2027, 39000, part), v2 = claim("P", 2028, 39000, part), future = claim("P", 2029, 39000, part);

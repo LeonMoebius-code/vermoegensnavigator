@@ -26,6 +26,7 @@ export interface PremiumProductPath {
     readonly criterion: "no_contribution_guarantee" | "contribution_guarantee" | "value_protection_only" | "fund_plan" | "life_annuity";
     readonly established: boolean;
     readonly date: string;
+    readonly tariff: Ref<"tariff">;
     readonly source: Ref<"source">;
   }[];
 }
@@ -79,6 +80,7 @@ function parseWeights(values: readonly string[], count: number) {
 
 export function parseStressLoss(input: string): number {
   const text = input.trim().replace(/^−/, "-").replace(/\s*%$/, "");
+  if (/^-?0(?:[.,]0{1,2})?$/.test(text)) return 0;
   requireAvd(/^-(?:\d{1,2}(?:[.,]\d{1,2})?|100(?:[.,]0{1,2})?)$/.test(text), "STRESS_LOSS_INVALID", "stress.loss");
   const [whole, fraction = ""] = text.slice(1).split(/[.,]/);
   const loss = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
@@ -175,20 +177,30 @@ export function productCurves(context: ProductDraft, timeline: Timeline, caseId:
 }
 
 export function tariffFeature(path: PremiumProductPath, catalog: ModelCatalog, preference: Preference) {
-  const makeEvidence = (ref: NonNullable<PremiumProductPath["facts"]>[number]["source"]) => {
-    const source = catalog.get(ref, "preference source");
-    return source.data.authority === "manufacturer_final" ? { class: "B" as const, source: source.id, version: source.hash } : null;
-  };
   const date = preference.stichtag;
+  if (!date) return null;
+  const current = (ref: Ref) => catalog.catalog.current.some(item => item.kind === ref.kind && item.id === ref.id
+    && item.revision === ref.revision && item.hash === ref.hash);
+  const activeOn = (record: { validFrom: string; validTo: string | null }) =>
+    date >= record.validFrom && (record.validTo === null || date <= record.validTo);
+  if (!current(path.product.tariff) || !current(path.product.product)) return null;
   const tariff = catalog.get(path.product.tariff, "preference tariff");
+  const product = catalog.get(path.product.product, "preference product");
+  if (tariff.data.product.hash !== path.product.product.hash || !activeOn(tariff) || !activeOn(product)) return null;
+  const makeEvidence = (ref: NonNullable<PremiumProductPath["facts"]>[number]["source"]) => {
+    if (!current(ref)) return null;
+    const source = catalog.get(ref, "preference source");
+    return activeOn(source) && source.data.authority === "manufacturer_final"
+      ? { class: "B" as const, source: source.id, version: source.hash } : null;
+  };
   const facts = (criterion: NonNullable<PremiumProductPath["facts"]>[number]["criterion"]) => {
-    const matches = path.facts?.filter(fact => fact.criterion === criterion && fact.date === date) ?? [];
+    const matches = path.facts?.filter(fact => fact.criterion === criterion && fact.date === date
+      && fact.tariff?.hash === tariff.hash && fact.tariff.id === tariff.id && fact.tariff.revision === tariff.revision) ?? [];
     const [fact] = matches;
     if (matches.length !== 1 || !fact) return null;
     const evidence = makeEvidence(fact.source);
     return evidence ? { value: fact.established, evidence } : null;
   };
-  if (!date || date < tariff.validFrom || tariff.validTo !== null && date > tariff.validTo) return null;
   if (preference.criterion === "both_payouts_same_tariff") {
     const fund = facts("fund_plan"), annuity = facts("life_annuity");
     if (fund?.value === false) return fund;
@@ -210,6 +222,8 @@ export function tariffFeature(path: PremiumProductPath, catalog: ModelCatalog, p
   const maturity = facts("contribution_guarantee");
   if (maturity?.value !== true || guarantee.basis !== "own_and_grants"
     || !guarantee.evidence || typeof guarantee.rate !== "number") return null;
+  if (product.data.guarantee.kind !== "contribution_guarantee" || !makeEvidence(product.data.guarantee.evidence)
+    || !activeOn(catalog.get(product.data.guarantee.rate, "preference guarantee"))) return null;
   return { value: preference.criterion === "exclude_guarantee" ? false : guarantee.rate >= .8,
     evidence: guarantee.evidence };
 }

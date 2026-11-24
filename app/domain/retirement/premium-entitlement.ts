@@ -18,7 +18,13 @@ const child = shape({ id, benefit: nullable(fact(oneOf("yes", "no"))),
 const bonus = shape({ beforeAgeLimit: nullable(fact(oneOf("yes", "no"))),
   priorReceipt: nullable(fact(oneOf("paid", "not_paid"))) });
 const component = oneOf("base", "child", "bonus");
-const allocation = shape({ component, childId: nullable(id), contractId: id, cents: money, evidence: grantEvidence });
+const allocationFields = { component, childId: nullable(id), contractId: id, cents: money, evidence: grantEvidence };
+const wholeAllocation = shape(allocationFields);
+const distinctAllocation = shape({ ...allocationFields, part: id });
+const allocation = (input: unknown, at: string) => input && typeof input === "object" && Object.hasOwn(input, "part")
+  ? distinctAllocation(input, at) : wholeAllocation(input, at);
+export const allocationPartId = (claim: string, contract: string, part?: string) =>
+  jsonHash(part ? [claim, contract, part] : [claim, contract]);
 const person = shape({ personId: id, year, ruleVersion: oneOf("estg-2027-v1", "estg-2028-v1",
     "alt-2026-checked-20261028", "alt-bestand-2027-checked-20261028", "alt-bestand-2028-checked-20261028"),
   situation: nullable(fact(oneOf("direct_new", "direct_old", "indirect", "ineligible"))),
@@ -99,16 +105,16 @@ export function calculatePersonalFunding(input: unknown) {
       const key: ClaimKey = { personId: p.personId, year: p.year, component: kind, childId,
         bonusLifetimeKey: kind === "bonus" ? jsonHash([p.personId, "entry-bonus"]) : null };
       const all = p.allocations.filter(a => a.component === kind && a.childId === childId);
-      const destinations = new Set(all.map(a => a.contractId));
+      const ids = all.map(a => allocationPartId(claimId(key), a.contractId, "part" in a && typeof a.part === "string" ? a.part : undefined));
+      const mixed = all.some(a => !("part" in a) && all.some(other => other !== a && other.contractId === a.contractId));
       const partitionComplete = cents !== null && all.reduce((total, a) => total + BigInt(a.cents), 0n) === BigInt(cents);
-      const partitionSafe = limitValid && destinations.size === all.length && cents !== null
+      const partitionSafe = limitValid && all.length <= 10 && !mixed && new Set(ids).size === ids.length && cents !== null
         && all.reduce((total, a) => total + BigInt(a.cents), 0n) <= BigInt(cents);
       if (cents === null) issues.push(open(reason, claimId(key)));
       else if (!partitionComplete || !partitionSafe) issues.push(open("ALLOCATION_OPEN", claimId(key)));
-      const parts: ClaimPart[] = !partitionSafe ? [] : all.filter(a => a.cents > 0).map(a => {
-        const id = jsonHash([claimId(key), a.contractId]);
-        return { id, contractId: a.contractId, allocationId: id, allocationVersion: jsonHash(a), cents: a.cents, evidence: a.evidence };
-      });
+      const parts: ClaimPart[] = !partitionSafe ? [] : all.flatMap((a, index) => a.cents === 0 ? [] : [{
+        id: ids[index], contractId: a.contractId, allocationId: ids[index], allocationVersion: jsonHash(a), cents: a.cents, evidence: a.evidence,
+      }]);
       const claimEvidence: Evidence | null = evidence;
       const claim: Claim = { key, claimRevision: jsonHash([p, kind, childId, cents, evidence]), regimeVersion: rules.id,
         sourceVersion: evidence?.version ?? jsonHash([rules.id, reason]), amount: cents === null || !evidence ? null : { cents, evidence },

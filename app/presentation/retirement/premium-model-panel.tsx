@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from "react";
 import { createPremiumSession, PUBLIC_MODEL_RIGHTS, type Snapshot } from "../../domain/retirement/premium-session";
-import { CUSTOMER_RETURN, parseCustomerTotalReturn } from "../../domain/retirement/premium-series";
+import { CUSTOMER_RETURN, parseCustomerTotalReturn, productStressDifference } from "../../domain/retirement/premium-series";
 import { resolvePremiumTimeline, type TimelineDraft } from "./premium-timeline";
 import type { CustomerPlan } from "./customer-plan-adapter";
 import { euro } from "./direct-grant-adapter";
@@ -81,10 +81,12 @@ export function PremiumModelPanel({ plan, caseId, caseRevision, terms, change, s
             ? "Mit gewählter Förderannahme" : curve.fundingPerspective === "NUR_BELEGTE_HISTORIE" ? "Nur belegte Förderbuchungen" : "Ohne Zulagen");
           const last = curve.rows.at(-1);
           const stress = curve.rows.find(row => "portfolio" in row && row.portfolio?.stress)?.portfolio?.stress;
+          const endDifference = productStressDifference(visible.snapshot!.subresults, result);
           return <tr key={item.subresultId}><th scope="row">{label}</th><td>{curve.modelMode === "M2" ? "Anlageklassen" : rate.toLocaleString("de-DE") + " %"}</td>
             <td>{curve.complete && curve.end.status === "computed" ? euro(curve.end.cents) : "Offen"}
               {curve.profileIdentity && <small data-testid="premium-result-profile"> · Profil {curve.profileIdentity.version}</small>}
               {stress && <small> · Aktienexponierung {euro(stress.exposedCents)} · unmittelbarer Verlust {euro(stress.lossCents)}</small>}
+              {endDifference !== null && <small data-testid="premium-stress-end-difference"> · Endwertdifferenz ohne Stress minus mit Stress {euro(endDifference)}</small>}
               {last && "portfolio" in last && last.portfolio?.targetWeightsBps && <small> · Zielgewichte {last.portfolio.targetWeightsBps.map(w => w / 100).join(" / ")} %</small>}
               {curve.price && <small> · Preise von {curve.price.referenceMonth.slice(5)}/{curve.price.referenceMonth.slice(0, 4)}</small>}</td></tr>;
         })}</tbody>

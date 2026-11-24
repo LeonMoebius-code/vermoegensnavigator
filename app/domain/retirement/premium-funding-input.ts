@@ -1,7 +1,7 @@
 import { jsonHash } from "../case/recovery-hash";
 import { copyAvd, description, id, integer, list, nullable, oneOf, requireAvd, shape } from "./avd-data";
 import { monthIndex } from "./premium-calendar";
-import { calculatePersonalFunding, grantEvidence, personYearList } from "./premium-entitlement";
+import { allocationPartId, calculatePersonalFunding, grantEvidence, personYearList } from "./premium-entitlement";
 import { claimId, claimVersion, deriveFunding, distinctRegister, type FundingRegister, type Hypothesis } from "./premium-funding";
 import { open, type Cashflow } from "./premium-contract";
 
@@ -27,9 +27,13 @@ function booking(input: unknown, at: string) {
   return input && typeof input === "object" && Object.hasOwn(input, "allocation")
     ? bookingWithAllocation(input, at) : bookingWithoutAllocation(input, at);
 }
-const schedule = nullable(shape({ version: id, firstYear: year, lastYear: year,
-  events: list(shape({ personId: id, year, component: oneOf("base", "child", "bonus"), childId: nullable(id),
-    contractId: id, month, cents, confirmedBookingIds: list(id, 500) }), 1000) }));
+const scheduleEventFields = { personId: id, year, component: oneOf("base", "child", "bonus"), childId: nullable(id),
+  contractId: id, month, cents, confirmedBookingIds: list(id, 500) };
+const wholeScheduleEvent = shape(scheduleEventFields);
+const partScheduleEvent = shape({ ...scheduleEventFields, part: id });
+const scheduleEvent = (input: unknown, at: string) => input && typeof input === "object" && Object.hasOwn(input, "part")
+  ? partScheduleEvent(input, at) : wholeScheduleEvent(input, at);
+const schedule = nullable(shape({ version: id, firstYear: year, lastYear: year, events: list(scheduleEvent, 1000) }));
 const payment = shape({ id, contractId: id, month, cents, kind: oneOf("regular", "special"), amountEvidence: grantEvidence });
 const dossier = shape({ format: oneOf("avd.funding-evidence.v1"), personYears: personYearList,
   historicClaims: list(claim, 500), bookings: list(booking, 2000), chosenSchedule: schedule,
@@ -41,6 +45,7 @@ export interface FundingEvidence {
   readonly people: ReturnType<typeof calculatePersonalFunding>;
   readonly register: FundingRegister;
   readonly ownPayments: readonly Cashflow[] | null;
+  readonly selectedSchedules: ReadonlyMap<string, NonNullable<FundingRegister["hypothesis"]>>;
 }
 
 export function readFundingEvidence(input: unknown, previous: FundingEvidence | null = null): FundingEvidence {
@@ -53,18 +58,24 @@ export function readFundingEvidence(input: unknown, previous: FundingEvidence | 
   const settlements = distinctRegister([...(previous?.register.disjointSettlements ?? []), ...data.settlements],
     s => jsonHash([s.oldBookingId, s.childYearKey]), "settlements");
   const s = data.chosenSchedule;
-  const hypothesis = s ? { version: s.version, scheduleRevision: jsonHash(s), firstYear: s.firstYear, lastYear: s.lastYear,
+  const selectedSchedules = new Map(previous?.selectedSchedules);
+  const prior = s && selectedSchedules.get(s.version);
+  requireAvd(!prior || prior.scheduleRevision === jsonHash(s), "SCHEDULE_VERSION_REUSED", "chosenSchedule.version");
+  const hypothesis = prior ?? (s ? { version: s.version, scheduleRevision: jsonHash(s), firstYear: s.firstYear, lastYear: s.lastYear,
     events: s.events.map((event): Hypothesis => {
       const c = active.find(c => c.key.personId === event.personId && c.key.year === event.year
         && c.key.component === event.component && c.key.childId === event.childId);
-      const part = c?.parts.find(p => p.contractId === event.contractId);
-      requireAvd(c && part && event.cents <= part.cents, "SCHEDULE_PART_OPEN", event.contractId);
+      requireAvd(c, "SCHEDULE_PART_OPEN", event.contractId);
+      const partId = "part" in event && typeof event.part === "string" ? allocationPartId(claimId(c.key), event.contractId, event.part) : null;
+      const [part, ...others] = c.parts.filter(p => p.contractId === event.contractId && (!partId || p.id === partId));
+      requireAvd(part && others.length === 0 && event.cents <= part.cents, "SCHEDULE_PART_OPEN", event.contractId);
       return { id: jsonHash([s.version, event]), month: event.month, kind: "grant", cents: event.cents,
         contractId: part.contractId, claim: claimId(c.key), claimVersion: claimVersion(c), partId: part.id,
         allocationId: part.allocationId, allocationVersion: part.allocationVersion, hypothesisVersion: s.version,
         scheduleRevision: jsonHash(s), confirmedBookingIds: event.confirmedBookingIds,
         amountEvidence: { class: "S", source: "Ausdrücklich eingereichter Förderplan", version: s.version } };
-    }) } : null;
+    }) } : null);
+  if (hypothesis) selectedSchedules.set(hypothesis.version, hypothesis);
   const ownPayments = data.ownPayments === null ? null : distinctRegister(data.ownPayments, p => p.id, "ownPayments");
   if (ownPayments) for (const p of data.personYears) {
     for (const contract of p.contracts) {
@@ -82,7 +93,7 @@ export function readFundingEvidence(input: unknown, previous: FundingEvidence | 
   const window = { from: "0100-01", through: "9999-12", lastFundingYear: null };
   deriveFunding(register, window); // Reject malformed historical identities before adopting any part.
   if (ownPayments) for (const event of ownPayments) monthIndex(event.month);
-  return { people, register, ownPayments: ownPayments as readonly Cashflow[] | null };
+  return { people, register, ownPayments: ownPayments as readonly Cashflow[] | null, selectedSchedules };
 }
 
 /** Posted evidence survives changes of assumptions, contribution inputs and legal context. */

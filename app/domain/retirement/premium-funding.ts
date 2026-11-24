@@ -13,6 +13,9 @@ export interface ClaimKey {
 export const claimId = (key: ClaimKey) => jsonHash([key.personId, key.year, key.component, key.childId, key.bonusLifetimeKey]);
 export const childYearKey = (key: ClaimKey) => key.childId === null ? null : jsonHash([key.childId, key.year]);
 
+export const settlementReference = (entry: FundingRegister["disjointSettlements"][number]) =>
+  jsonHash(["child-settlement", entry]);
+
 export interface ClaimPart {
   readonly id: string;
   readonly contractId: string;
@@ -135,10 +138,19 @@ export function deriveFunding(input: FundingRegister, window: { from: string; th
   const bookingById = new Map(booked.map(event => [event.id, event]));
   const reversed = new Map<string, bigint>();
   const reversedInWindow = new Map<string, bigint>();
+  const lastReversalInWindow = new Map<string, string>();
+  const attachedReversals = new Map<string, bigint>();
+  const bookedPart = (event: Booking) => {
+    const part = claims.get(event.claimVersion)?.parts.find(item => item.id === event.partId);
+    return part?.contractId === event.contractId && part?.allocationId === event.allocationId ? part : undefined;
+  };
   const attached = (event: Booking) => {
-    const claim = claims.get(event.claimVersion);
-    const part = claim?.parts.find(item => item.id === event.partId);
-    return Boolean(part && part.contractId === event.contractId && part.allocationId === event.allocationId);
+    const part = bookedPart(event);
+    if (!part || event.cents >= 0) return Boolean(part);
+    const prior = bookingById.get(event.reverses!);
+    const original = prior && bookedPart(prior);
+    return original?.id === part.id && original.allocationId === part.allocationId
+      && original.allocationVersion === part.allocationVersion;
   };
   const openingIds = new Set(register.opening?.includedBookingIds ?? []);
   for (const event of booked) {
@@ -155,7 +167,11 @@ export function deriveFunding(input: FundingRegister, window: { from: string; th
       const amount = (reversed.get(original.id) ?? 0n) - BigInt(event.cents);
       requireAvd(amount <= BigInt(original.cents), "REVERSAL_EXCEEDS_BOOKING", "booked.cents");
       reversed.set(original.id, amount);
-      if (event.month <= through) reversedInWindow.set(original.id, (reversedInWindow.get(original.id) ?? 0n) - BigInt(event.cents));
+      if (attached(event)) attachedReversals.set(original.id, (attachedReversals.get(original.id) ?? 0n) - BigInt(event.cents));
+      if (event.month <= through) {
+        reversedInWindow.set(original.id, (reversedInWindow.get(original.id) ?? 0n) - BigInt(event.cents));
+        if (event.month > (lastReversalInWindow.get(original.id) ?? "")) lastReversalInWindow.set(original.id, event.month);
+      }
     }
     if (event.month >= from && event.month <= through && !attached(event))
       historyIssues.push(open("BOOKING_ALLOCATION_OPEN", event.id, event.month));
@@ -170,7 +186,22 @@ export function deriveFunding(input: FundingRegister, window: { from: string; th
   const history = booked.filter(event => inWindow(event) && attached(event) && !(event.month <= from && openingIds.has(event.id)));
   const positives = booked.filter(event => event.cents > 0);
   const byClaim = new Map<string, Booking[]>();
-  for (const event of booked) byClaim.set(event.claim, [...(byClaim.get(event.claim) ?? []), event]);
+  const childReferences = new Map<string, string[]>();
+  const childSettledThrough = new Map<string, string>();
+  for (const event of booked) {
+    byClaim.set(event.claim, [...(byClaim.get(event.claim) ?? []), event]);
+    const child = childYearKey(claims.get(event.claimVersion)!.key);
+    if (child) childReferences.set(child, [...(childReferences.get(child) ?? []), event.id]);
+  }
+  const settlementsByBooking = new Map<string, FundingRegister["disjointSettlements"][number]>();
+  for (const settlement of register.disjointSettlements) {
+    const original = bookingById.get(settlement.oldBookingId);
+    if (!original || original.cents <= 0 || childYearKey(claims.get(original.claimVersion)!.key) !== settlement.childYearKey
+      || settlement.evidence.class !== "B" || monthIndex(settlement.month) < monthIndex(original.month)) continue;
+    settlementsByBooking.set(original.id, settlement);
+    const child = settlement.childYearKey;
+    childReferences.set(child, [...(childReferences.get(child) ?? []), settlementReference(settlement)]);
+  }
   const drawnBonus = new Set<string>();
   for (const event of positives) {
     const previous = claims.get(event.claimVersion)!;
@@ -180,10 +211,13 @@ export function deriveFunding(input: FundingRegister, window: { from: string; th
     const successor = [...activeClaims.values()].find(c => childYearKey(c.key) === child);
     if (!successor || claimId(successor.key) === event.claim) continue;
     const linked = successor.supersedes === event.claim && successor.reconciliationGroup === child;
-    const settled = reversedInWindow.get(event.id) === BigInt(event.cents) || register.disjointSettlements.some(item =>
-      item.oldBookingId === event.id && item.childYearKey === child && item.evidence.class === "B"
-      && monthIndex(item.month) >= monthIndex(event.month) && item.month <= through);
+    const reversalMonth = reversedInWindow.get(event.id) === BigInt(event.cents) ? lastReversalInWindow.get(event.id) : undefined;
+    const documented = settlementsByBooking.get(event.id)?.month;
+    const disjointMonth = documented && documented <= through ? documented : undefined;
+    const settled = reversalMonth && disjointMonth
+      ? (reversalMonth < disjointMonth ? reversalMonth : disjointMonth) : reversalMonth ?? disjointMonth;
     if (!linked || !settled) blockedChild.add(child);
+    else if (settled > (childSettledThrough.get(child) ?? "")) childSettledThrough.set(child, settled);
   }
   for (const child of blockedChild) issues("AUSGLEICH_OFFEN", child);
   const selected = register.hypothesis;
@@ -191,7 +225,8 @@ export function deriveFunding(input: FundingRegister, window: { from: string; th
   const projected: Hypothesis[] = [];
   const seenParts = new Set<string>();
   const plannedBonus = new Map<string, string>();
-  const allocated = new Map<string, bigint>();
+  const plannedByPart = new Map<string, bigint>();
+  const plannedByClaim = new Map<string, bigint>();
   if (selected) requireAvd(Number.isInteger(selected.firstYear) && Number.isInteger(selected.lastYear)
     && selected.firstYear <= selected.lastYear && Boolean(selected.version && selected.scheduleRevision), "HYPOTHESIS_HORIZON_OPEN", "hypothesis");
   for (const event of hypotheses) {
@@ -201,10 +236,11 @@ export function deriveFunding(input: FundingRegister, window: { from: string; th
     const child = childYearKey(claim.key), part = claim.parts.find(item => item.id === event.partId);
     if (child && blockedChild.has(child) || claim.key.component === "bonus" && drawnBonus.has(claim.key.personId)) continue;
     const group = byClaim.get(event.claim) ?? [];
-    const knownBookings = new Set(event.confirmedBookingIds);
-    // Bind the complete selected claim ledger. A later import, allocation or
-    // reversal requires a newly selected residual, even after a mixed B/S run.
-    if (group.some(item => !knownBookings.has(item.id)) || group.length !== knownBookings.size) continue;
+    const basis = child ? childReferences.get(child) ?? [] : group.map(item => item.id);
+    const known = new Set(event.confirmedBookingIds);
+    const settledThrough = child ? childSettledThrough.get(child) : undefined;
+    // A month alone cannot establish that a same-month hypothesis follows an actual settlement.
+    if (basis.length !== known.size || basis.some(id => !known.has(id)) || settledThrough && event.month <= settledThrough) continue;
     const knownPositive = group.filter(item => item.cents > 0);
     const key = partKey(event.claim, event.partId, event.contractId);
     if (knownPositive.some(item => item.partId === event.partId && item.contractId === event.contractId)) continue;
@@ -220,7 +256,7 @@ export function deriveFunding(input: FundingRegister, window: { from: string; th
     }
     monthIndex(event.month);
     const already = knownPositive.reduce((sum, item) => sum + BigInt(item.cents), 0n);
-    const total = (allocated.get(event.claim) ?? 0n) + BigInt(event.cents);
+    const total = (plannedByClaim.get(event.claim) ?? 0n) + BigInt(event.cents);
     if (total + already > BigInt(claim.amount.cents)) {
       issues("HYPOTHESIS_EXCEEDS_REMAINDER", event.id);
       continue;
@@ -231,14 +267,27 @@ export function deriveFunding(input: FundingRegister, window: { from: string; th
       plannedBonus.set(claim.key.personId, event.claim);
     }
     seenParts.add(key);
-    allocated.set(event.claim, total);
+    plannedByClaim.set(event.claim, total);
+    plannedByPart.set(key, BigInt(event.cents));
     projected.push(event);
   }
   for (const [id, claim] of activeClaims) {
     if (lastFundingYear !== null && claim.key.year > lastFundingYear) continue;
-    const actual = (byClaim.get(id) ?? []).filter(event => attached(event)).reduce((sum, item) => sum + BigInt(item.cents), 0n);
-    const total = actual + (allocated.get(id) ?? 0n);
-    if (!claim.amount || !claim.eligibility || total !== BigInt(claim.amount.cents)) issues("CLAIM_REMAINDER_OPEN", id);
+    const coverage = new Map<string, bigint>();
+    let unmapped = 0n;
+    for (const event of byClaim.get(id) ?? []) {
+      if (event.cents <= 0) continue;
+      const net = BigInt(event.cents) - (attachedReversals.get(event.id) ?? 0n);
+      const original = bookedPart(event);
+      const current = claim.parts.find(part => part.id === original?.id && part.contractId === original.contractId
+        && part.allocationId === original.allocationId && part.allocationVersion === original.allocationVersion);
+      if (!current || claims.get(event.claimVersion)!.regimeVersion !== claim.regimeVersion) unmapped += net;
+      else coverage.set(current.id, (coverage.get(current.id) ?? 0n) + net);
+    }
+    const allocated = claim.parts.reduce((total, part) => total + BigInt(part.cents), 0n);
+    if (!claim.amount || !claim.eligibility || allocated !== BigInt(claim.amount.cents) || unmapped !== 0n
+      || claim.parts.some(part => (coverage.get(part.id) ?? 0n) + (plannedByPart.get(partKey(id, part.id, part.contractId)) ?? 0n) !== BigInt(part.cents)))
+      issues("CLAIM_REMAINDER_OPEN", id);
   }
   if (register.activeClaimVersions.length === 0) issues("FUNDING_SELECTION_OPEN", "funding");
   const perspectives: Record<FundingPerspective, { readonly payments: readonly Cashflow[]; readonly issues: readonly Open[] }> = {
