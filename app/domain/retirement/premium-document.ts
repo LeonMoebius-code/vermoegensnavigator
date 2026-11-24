@@ -1,7 +1,7 @@
 import { requireAvd } from "./avd-data";
 import { PREMIUM_MODEL, PREMIUM_RULES } from "./premium-contract";
 import type { Snapshot } from "./premium-session";
-import { productStressDifference } from "./premium-series";
+import { productStressDifference, requiresStressComparison } from "./premium-series";
 
 export type DocumentChannel = "pdf" | "csv";
 export const historicalReport = "Historischer Bericht – nicht aktueller Beratungsstand";
@@ -39,6 +39,7 @@ function documentRows(snapshot: Snapshot, createdAt: string): string[][] {
     const stressRow = curve.rows.find(row => "portfolio" in row && row.portfolio?.stress);
     const stress = stressRow?.portfolio?.stress;
     const difference = productStressDifference(snapshot.subresults, result);
+    requireAvd(!requiresStressComparison(curve.curveId) || difference !== null, "STRESS_COMPARISON_OPEN", curve.curveId);
     if (stress) rows.push(["Stressmonat", stressRow.month, "Aktienexponierung EUR", amount(stress.exposedCents), "Unmittelbarer Verlust EUR", amount(stress.lossCents)]);
     if (difference !== null) rows.push(["Endwertdifferenz ohne Stress minus mit Stress EUR", amount(difference)]);
     rows.push(["Monat", "Kapital EUR", "Eigene Zahlungen kumuliert EUR", "Förderung kumuliert EUR"]);

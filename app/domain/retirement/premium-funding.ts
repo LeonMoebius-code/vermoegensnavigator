@@ -15,6 +15,7 @@ export const childYearKey = (key: ClaimKey) => key.childId === null ? null : jso
 
 export const settlementReference = (entry: FundingRegister["disjointSettlements"][number]) =>
   jsonHash(["child-settlement", entry]);
+export const bookingAssignmentReference = (assignment: BookingAssignment) => jsonHash(["booking-assignment", assignment]);
 
 export interface ClaimPart {
   readonly id: string;
@@ -63,6 +64,18 @@ export type Hypothesis = Cashflow & {
   readonly confirmedBookingIds: readonly string[];
   readonly amountEvidence: Evidence & { readonly class: "S" };
 };
+/** Evidence for the current coverage only. The historical cashflow retains its original reference. */
+export interface BookingAssignment {
+  readonly bookingId: string;
+  readonly bookingVersion: string;
+  readonly sourceClaimVersion: string;
+  readonly claimVersion: string;
+  readonly partId: string;
+  readonly allocationId: string;
+  readonly allocationVersion: string;
+  readonly effectiveMonth: string;
+  readonly evidence: Evidence & { readonly class: "B" };
+}
 export interface FundingRegister {
   readonly registerVersion: string;
   readonly claims: readonly Claim[];
@@ -79,6 +92,7 @@ export interface FundingRegister {
   readonly openingContextOpen?: boolean;
   readonly opening: { readonly id: string; readonly includedBookingIds: readonly string[]; readonly composition: "known" | "open" } | null;
   readonly disjointSettlements: readonly { readonly oldBookingId: string; readonly childYearKey: string; readonly evidence: Evidence & { readonly class: "B" }; readonly month: string }[];
+  readonly bookingAssignments?: readonly BookingAssignment[];
 }
 
 export function distinctRegister<T>(items: readonly T[], identity: (item: T) => string, at: string): T[] {
@@ -136,7 +150,6 @@ export function deriveFunding(input: FundingRegister, window: { from: string; th
     if (child) activeChildren.add(child);
   }
   const bookingById = new Map(booked.map(event => [event.id, event]));
-  const reversed = new Map<string, bigint>();
   const reversedInWindow = new Map<string, bigint>();
   const lastReversalInWindow = new Map<string, string>();
   const attachedReversals = new Map<string, bigint>();
@@ -148,9 +161,11 @@ export function deriveFunding(input: FundingRegister, window: { from: string; th
     const part = bookedPart(event);
     if (!part || event.cents >= 0) return Boolean(part);
     const prior = bookingById.get(event.reverses!);
-    const original = prior && bookedPart(prior);
-    return original?.id === part.id && original.allocationId === part.allocationId
-      && original.allocationVersion === part.allocationVersion;
+    if (!prior) return false;
+    const original = bookedPart(prior);
+    return original?.id === part.id && original.contractId === part.contractId
+      && original.allocationId === part.allocationId && original.allocationVersion === part.allocationVersion
+      && claims.get(prior.claimVersion)?.regimeVersion === claims.get(event.claimVersion)?.regimeVersion;
   };
   const openingIds = new Set(register.opening?.includedBookingIds ?? []);
   for (const event of booked) {
@@ -160,20 +175,24 @@ export function deriveFunding(input: FundingRegister, window: { from: string; th
     requireAvd(Number(event.month.slice(0, 4)) >= claim.key.year && monthIndex(event.month) >= 0,
       "BOOKING_BEFORE_FUNDING_YEAR", "booked.month");
     ids.add(event.id);
+    const allocated = attached(event);
     if (event.cents < 0) {
       const original = event.reverses && bookingById.get(event.reverses);
-      requireAvd(original && original.cents > 0 && original.month <= event.month && original.claim === event.claim
-        && original.contractId === event.contractId, "REVERSAL_REFERENCE_OPEN", "booked.reverses");
-      const amount = (reversed.get(original.id) ?? 0n) - BigInt(event.cents);
-      requireAvd(amount <= BigInt(original.cents), "REVERSAL_EXCEEDS_BOOKING", "booked.cents");
-      reversed.set(original.id, amount);
-      if (attached(event)) attachedReversals.set(original.id, (attachedReversals.get(original.id) ?? 0n) - BigInt(event.cents));
-      if (event.month <= through) {
-        reversedInWindow.set(original.id, (reversedInWindow.get(original.id) ?? 0n) - BigInt(event.cents));
-        if (event.month > (lastReversalInWindow.get(original.id) ?? "")) lastReversalInWindow.set(original.id, event.month);
+      requireAvd(original && original.cents > 0 && original.month <= event.month && original.claim === event.claim,
+        "REVERSAL_REFERENCE_OPEN", "booked.reverses");
+      if (allocated) {
+        const amount = (attachedReversals.get(original.id) ?? 0n) - BigInt(event.cents);
+        requireAvd(amount <= BigInt(original.cents), "REVERSAL_EXCEEDS_BOOKING", "booked.cents");
+        attachedReversals.set(original.id, amount);
+        if (event.month <= through) {
+          reversedInWindow.set(original.id, (reversedInWindow.get(original.id) ?? 0n) - BigInt(event.cents));
+          if (event.month > (lastReversalInWindow.get(original.id) ?? "")) lastReversalInWindow.set(original.id, event.month);
+        }
+      } else if (event.month < from && activeClaims.has(event.claim)) {
+        issues("BOOKING_ALLOCATION_OPEN", event.id, event.month);
       }
     }
-    if (event.month >= from && event.month <= through && !attached(event))
+    if (event.month >= from && event.month <= through && !allocated)
       historyIssues.push(open("BOOKING_ALLOCATION_OPEN", event.id, event.month));
     if (event.openingInclusion !== null && (!register.opening || event.openingInclusion !== register.opening.id || !openingIds.has(event.id) || event.month > from)
       || openingIds.has(event.id) && event.openingInclusion !== register.opening?.id)
@@ -185,6 +204,39 @@ export function deriveFunding(input: FundingRegister, window: { from: string; th
   const inWindow = (e: Cashflow) => e.month >= from && e.month <= through;
   const history = booked.filter(event => inWindow(event) && attached(event) && !(event.month <= from && openingIds.has(event.id)));
   const positives = booked.filter(event => event.cents > 0);
+  const assignmentCandidates = new Map<string, BookingAssignment[]>();
+  for (const assignment of distinctRegister(register.bookingAssignments ?? [], bookingAssignmentReference, "booking assignments")) {
+    monthIndex(assignment.effectiveMonth);
+    if (assignment.effectiveMonth > through) continue;
+    const key = jsonHash([assignment.bookingId, assignment.claimVersion]);
+    assignmentCandidates.set(key, [...(assignmentCandidates.get(key) ?? []), assignment]);
+  }
+  const currentPartByBooking = new Map<string, ClaimPart>();
+  const assignmentsByClaim = new Map<string, BookingAssignment[]>();
+  const unmatchedContracts = new Map<string, Set<string | null>>();
+  for (const event of positives) {
+    const claim = activeClaims.get(event.claim);
+    if (!claim) continue;
+    const original = bookedPart(event);
+    const source = claims.get(event.claimVersion)!;
+    const [proof, ...alternatives] = assignmentCandidates.get(jsonHash([event.id, claimVersion(claim)])) ?? [];
+    const direct = original && claim.parts.find(part => part.id === original.id && part.contractId === original.contractId
+      && part.allocationId === original.allocationId && part.allocationVersion === original.allocationVersion);
+    const linked = original && proof && alternatives.length === 0 && proof.evidence.class === "B"
+      && proof.bookingVersion === event.bookingVersion && proof.sourceClaimVersion === event.claimVersion
+      && proof.effectiveMonth >= event.month && claim.parts.find(part => part.id === proof.partId
+        && part.contractId === event.contractId && part.allocationId === proof.allocationId
+        && part.allocationVersion === proof.allocationVersion && part.evidence.class === "B");
+    const current = source.regimeVersion === claim.regimeVersion && (proof ? linked : direct);
+    if (current) {
+      currentPartByBooking.set(event.id, current);
+      if (proof) assignmentsByClaim.set(event.claim, [...(assignmentsByClaim.get(event.claim) ?? []), proof]);
+    } else if (BigInt(event.cents) !== (attachedReversals.get(event.id) ?? 0n)) {
+      const contracts = unmatchedContracts.get(event.claim) ?? new Set<string | null>();
+      contracts.add(event.contractId);
+      unmatchedContracts.set(event.claim, contracts);
+    }
+  }
   const byClaim = new Map<string, Booking[]>();
   const childReferences = new Map<string, string[]>();
   const childSettledThrough = new Map<string, string>();
@@ -236,14 +288,18 @@ export function deriveFunding(input: FundingRegister, window: { from: string; th
     const child = childYearKey(claim.key), part = claim.parts.find(item => item.id === event.partId);
     if (child && blockedChild.has(child) || claim.key.component === "bonus" && drawnBonus.has(claim.key.personId)) continue;
     const group = byClaim.get(event.claim) ?? [];
-    const basis = child ? childReferences.get(child) ?? [] : group.map(item => item.id);
+    const assignments = assignmentsByClaim.get(event.claim) ?? [];
+    const basis = [...(child ? childReferences.get(child) ?? [] : group.map(item => item.id)), ...assignments.map(bookingAssignmentReference)];
     const known = new Set(event.confirmedBookingIds);
     const settledThrough = child ? childSettledThrough.get(child) : undefined;
     // A month alone cannot establish that a same-month hypothesis follows an actual settlement.
-    if (basis.length !== known.size || basis.some(id => !known.has(id)) || settledThrough && event.month <= settledThrough) continue;
+    if (basis.length !== known.size || basis.some(id => !known.has(id)) || settledThrough && event.month <= settledThrough
+      || assignments.some(proof => proof.effectiveMonth > event.month)) continue;
     const knownPositive = group.filter(item => item.cents > 0);
     const key = partKey(event.claim, event.partId, event.contractId);
-    if (knownPositive.some(item => item.partId === event.partId && item.contractId === event.contractId)) continue;
+    const unmatched = unmatchedContracts.get(event.claim);
+    if (unmatched?.has(null) || unmatched?.has(event.contractId)
+      || knownPositive.some(item => currentPartByBooking.get(item.id)?.id === event.partId)) continue;
     if (!selected || event.hypothesisVersion !== selected.version || event.scheduleRevision !== selected.scheduleRevision
       || claim.key.year < selected.firstYear || claim.key.year > selected.lastYear
       || lastFundingYear !== null && claim.key.year > lastFundingYear || !claim.amount || !claim.eligibility
@@ -278,10 +334,8 @@ export function deriveFunding(input: FundingRegister, window: { from: string; th
     for (const event of byClaim.get(id) ?? []) {
       if (event.cents <= 0) continue;
       const net = BigInt(event.cents) - (attachedReversals.get(event.id) ?? 0n);
-      const original = bookedPart(event);
-      const current = claim.parts.find(part => part.id === original?.id && part.contractId === original.contractId
-        && part.allocationId === original.allocationId && part.allocationVersion === original.allocationVersion);
-      if (!current || claims.get(event.claimVersion)!.regimeVersion !== claim.regimeVersion) unmapped += net;
+      const current = currentPartByBooking.get(event.id);
+      if (!current) unmapped += net;
       else coverage.set(current.id, (coverage.get(current.id) ?? 0n) + net);
     }
     const allocated = claim.parts.reduce((total, part) => total + BigInt(part.cents), 0n);

@@ -2,8 +2,8 @@ import { jsonHash } from "../case/recovery-hash";
 import { copyAvd, requireAvd } from "./avd-data";
 import { modelCatalog } from "./model-catalog";
 import { PREMIUM_MODEL, PREMIUM_RULES, modelIssue, newPremiumIdentity, type Open } from "./premium-contract";
-import { BERLIN_CALENDAR, reservePrice, type Inflation, type PriceSelection, type ProjectCalendar } from "./premium-price";
-import { calculateCurve, type CurveRequest, type SavingsInputs } from "./premium-series";
+import { BERLIN_CALENDAR, priceComparisonBasis, reservePrice, type Inflation, type PriceSelection, type ProjectCalendar } from "./premium-price";
+import { calculateCurve, productStressDifference, requiresStressComparison, type CurveRequest, type SavingsInputs } from "./premium-series";
 import { renderPremiumDocument, type DocumentChannel } from "./premium-document";
 import { productChannelAllowed } from "./premium-products";
 
@@ -37,6 +37,7 @@ export interface Snapshot {
   readonly reservedAt: string;
   readonly status: "live_preview" | "fixed_conditionally" | "fixed";
   readonly complete: boolean;
+  readonly comparisonIssues: readonly Open[];
   readonly fingerprint: string;
   readonly subresults: readonly Subresult[];
 }
@@ -139,7 +140,7 @@ export function createPremiumSession(options: { readonly rights: ChannelRights; 
       const real = curve.valueBasis === "real";
       const product = curve.model.mode === "M1" || curve.model.mode === "M2";
       const basisForReuse = real && !('status' in priceContext)
-        ? { ...priceContext, reservedAt: null } : real ? priceContext : null;
+        ? priceComparisonBasis(priceContext) : real ? priceContext : null;
       const blockedPublication = product && scope === "public" && reserved.catalog && !productChannelAllowed(reserved.catalog, "display");
       const fingerprint = blockedPublication ? jsonHash([curve.id, curve.model.mode, "ORG-O01"])
         : fingerprintFor(reserved.draft, curve, basisForReuse, catalogHash);
@@ -163,9 +164,12 @@ export function createPremiumSession(options: { readonly rights: ChannelRights; 
     // The calculation and this compare-and-write execute in the same JS task.
     // A stale promise can call commit, but cannot reattach itself to a newer draft.
     if (latest !== reservation || draft !== reserved.draft || !rights.screen.allowed) return null;
-    const complete = subresults.every(item => item.result.status === "computed" && item.result.value.complete);
+    const comparisonIssues = curves.flatMap((curve, i) => requiresStressComparison(curve.id)
+      && productStressDifference(subresults, subresults[i].result) === null
+      ? [modelIssueFor("STRESS_COMPARISON_OPEN", curve.id)] : []);
+    const complete = comparisonIssues.length === 0 && subresults.every(item => item.result.status === "computed" && item.result.value.complete);
     current = freezeResult({ id: token(), revision, comparisonRevision: reservation.comparisonRevision, reservedAt: reservation.reservedAt,
-      status: "live_preview" as const, complete, fingerprint: fullFingerprint, subresults });
+      status: "live_preview" as const, complete, comparisonIssues, fingerprint: fullFingerprint, subresults });
     subresults.forEach((item, i) => {
       if (item.result.status === "computed") reusable.set(`${savings.caseId}:${keyFor(curves[i])}`, { original: item, snapshot: current! });
     });

@@ -3,7 +3,7 @@ import { requireAvd } from "./avd-data";
 import { advanceSavingsMonth, basisPoints, euros, monthlyFactor, outputCents, signedOutputCents } from "./model-decimal";
 import { SCALE } from "./projection-decimal";
 import { valuationMonths, type Timeline } from "./premium-calendar";
-import { deflatorFor, type PriceReservation } from "./premium-price";
+import { deflatorFor, priceComparisonBasis, type PriceReservation } from "./premium-price";
 import { modelIssue, open, type Cashflow, type Evidence, type FundingPerspective, type Open, type Outcome, type ProductVersion } from "./premium-contract";
 import { deriveFunding, type FundingRegister } from "./premium-funding";
 import { portfolioRows, type AllocationProfile, type CashflowOrder, type MonthlyReturnPath, type StressEvent } from "./premium-portfolio";
@@ -182,7 +182,8 @@ export function calculateCurve(inputs: SavingsInputs, curve: CurveRequest, price
     const end = fundingIssues.at(0) ?? specifiedEnd;
     const stressComparisonBasis = model.mode === "M2" ? jsonHash([inputs.caseId, inputs.timeline, inputs.openingVersion,
       inputs.openingCents, dependency, profileIdentity, model.product, model.cost, costEvidence, model.returns,
-      model.cashflowOrders, curve.scenarioVersion, curve.returnEvidence, curve.valueBasis, curve.valueBasis === "real" ? price : null]) : null;
+      model.cashflowOrders, curve.contractId, curve.scenarioVersion, curve.returnEvidence, curve.valueBasis,
+      curve.valueBasis === "real" ? priceComparisonBasis(price) : null, catalog?.catalog.hash ?? null]) : null;
     const result = { stressComparisonBasis, stressEventId: model.mode === "M2" ? model.stress?.id ?? null : null, modelMode: model.mode, marketBasis: model.mode === "M2" ? jsonHash(model.returns) : model.annualBps, costMode, costEvidence, curveId: curve.id, label: curve.label ?? null, valueBasis: curve.valueBasis, profileIdentity,
       returnEvidence: curve.returnEvidence, scenarioVersion: curve.scenarioVersion, fundingPerspective: curve.perspective,
       price: curve.valueBasis === "real" ? price : null, openingCents: inputs.openingCents, paymentDependency: dependency,
@@ -228,7 +229,10 @@ export function stressEndDifference(base: CurveResult | undefined, stress: Curve
 }
 
 export function productStressDifference(results: readonly { readonly result: CurveResult }[], stress: CurveResult) {
-  if (stress.status !== "computed" || !stress.value.stressEventId || !stress.value.curveId.endsWith(":M2:stress")) return null;
+  if (stress.status !== "computed" || !stress.value.stressEventId || !requiresStressComparison(stress.value.curveId)) return null;
   const baseId = stress.value.curveId.slice(0, -":stress".length);
-  return stressEndDifference(results.find(item => item.result.status === "computed" && item.result.value.curveId === baseId)?.result, stress);
+  const [baseline, ...duplicates] = results.filter(item => item.result.status === "computed" && item.result.value.curveId === baseId);
+  return duplicates.length === 0 ? stressEndDifference(baseline?.result, stress) : null;
 }
+
+export const requiresStressComparison = (curveId: string) => curveId.endsWith(":M2:stress");

@@ -2,7 +2,7 @@ import { jsonHash } from "../case/recovery-hash";
 import { copyAvd, description, id, integer, list, nullable, oneOf, requireAvd, shape } from "./avd-data";
 import { monthIndex } from "./premium-calendar";
 import { allocationPartId, calculatePersonalFunding, grantEvidence, personYearList } from "./premium-entitlement";
-import { claimId, claimVersion, deriveFunding, distinctRegister, type FundingRegister, type Hypothesis } from "./premium-funding";
+import { bookingAssignmentReference, claimId, claimVersion, deriveFunding, distinctRegister, type FundingRegister, type Hypothesis } from "./premium-funding";
 import { open, type Cashflow } from "./premium-contract";
 
 const cents = integer(0, Number.MAX_SAFE_INTEGER);
@@ -35,11 +35,15 @@ const scheduleEvent = (input: unknown, at: string) => input && typeof input === 
   ? partScheduleEvent(input, at) : wholeScheduleEvent(input, at);
 const schedule = nullable(shape({ version: id, firstYear: year, lastYear: year, events: list(scheduleEvent, 1000) }));
 const payment = shape({ id, contractId: id, month, cents, kind: oneOf("regular", "special"), amountEvidence: grantEvidence });
-const dossier = shape({ format: oneOf("avd.funding-evidence.v1"), personYears: personYearList,
+const dossierFields = { format: oneOf("avd.funding-evidence.v1"), personYears: personYearList,
   historicClaims: list(claim, 500), bookings: list(booking, 2000), chosenSchedule: schedule,
   opening: nullable(shape({ id, includedBookingIds: list(id, 500), composition: oneOf("known", "open") })),
   settlements: list(shape({oldBookingId: id, childYearKey: id, evidence: bookedEvidence, month}), 500),
-  ownPayments: nullable(list(payment, 3500)) });
+  ownPayments: nullable(list(payment, 3500)) };
+const bookingAssignments = list(shape({ bookingId: id, bookingVersion: id, sourceClaimVersion: id,
+  claimVersion: id, partId: id, allocationId: id, allocationVersion: id, effectiveMonth: month, evidence: bookedEvidence }), 2000);
+const dossier = shape(dossierFields);
+const dossierWithAssignments = shape({ ...dossierFields, bookingAssignments });
 
 export interface FundingEvidence {
   readonly people: ReturnType<typeof calculatePersonalFunding>;
@@ -49,7 +53,10 @@ export interface FundingEvidence {
 }
 
 export function readFundingEvidence(input: unknown, previous: FundingEvidence | null = null): FundingEvidence {
-  const data = dossier(copyAvd(input), "förderakte");
+  const payload = copyAvd(input);
+  const { bookingAssignments: incomingAssignments, ...data } =
+    payload && typeof payload === "object" && Object.hasOwn(payload, "bookingAssignments")
+      ? dossierWithAssignments(payload, "förderakte") : { ...dossier(payload, "förderakte"), bookingAssignments: [] };
   const people = calculatePersonalFunding(data.personYears);
   const active = people.flatMap(p => p.claims);
   const historic = previous?.register.claims ?? [];
@@ -57,6 +64,8 @@ export function readFundingEvidence(input: unknown, previous: FundingEvidence | 
   const booked = distinctRegister([...(previous?.register.booked ?? []), ...data.bookings], b => b.externalId, "bookings");
   const settlements = distinctRegister([...(previous?.register.disjointSettlements ?? []), ...data.settlements],
     s => jsonHash([s.oldBookingId, s.childYearKey]), "settlements");
+  const assignments = distinctRegister([...(previous?.register.bookingAssignments ?? []), ...incomingAssignments],
+    bookingAssignmentReference, "booking assignments");
   const s = data.chosenSchedule;
   const selectedSchedules = new Map(previous?.selectedSchedules);
   const prior = s && selectedSchedules.get(s.version);
@@ -84,9 +93,9 @@ export function readFundingEvidence(input: unknown, previous: FundingEvidence | 
       requireAvd(sum === BigInt(contract.ownCents), "CONTRACT_PAYMENTS_DIFFER", contract.id);
     }
   }
-  const register: FundingRegister = { registerVersion: jsonHash([data, booked, settlements]), claims,
+  const register: FundingRegister = { registerVersion: jsonHash([data, booked, settlements, assignments]), claims,
     activeClaimVersions: active.map(claimVersion), booked, hypothesis, opening: data.opening ?? previous?.register.opening ?? null,
-    disjointSettlements: settlements, claimIssues: [
+    disjointSettlements: settlements, bookingAssignments: assignments, claimIssues: [
       ...people.flatMap(p => p.issues),
       ...(ownPayments === null && data.personYears.some(p => p.contracts.length > 1) ? [open("OWN_CONTRACT_PLAN_OPEN", "ownPayments")] : []),
     ] };

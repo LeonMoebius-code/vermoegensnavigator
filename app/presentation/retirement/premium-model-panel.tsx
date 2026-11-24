@@ -70,6 +70,7 @@ export function PremiumModelPanel({ plan, caseId, caseRevision, terms, change, s
       : "Aktuelle Vergleichszahl offen. Bitte Anfangskapital und Zahlungsplan prüfen."}</p>}
     {visible?.snapshot && <section aria-label="Aktuelle Modellvorschau" data-testid="premium-comparison">
       <p>{visible.snapshot.status === "fixed_conditionally" ? "Fixierter bedingter Modellvergleich in dieser Sitzung" : "Bedingte Modellvorschau"}</p>
+      {visible.snapshot.comparisonIssues.length > 0 && <p role="status">Die Endwertdifferenz ist offen. Für den Stressvergleich fehlt eine vollständige Rechnung auf derselben Grundlage.</p>}
       <table><thead><tr><th scope="col">Modell</th><th scope="col">Rendite p. a.</th><th scope="col">Kapital am Bewertungsende</th></tr></thead>
         <tbody>{visible.snapshot.subresults.map(item => {
           const result = item.result;

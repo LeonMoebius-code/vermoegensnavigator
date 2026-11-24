@@ -19,6 +19,13 @@ export type PriceReservation = {
   readonly inflation: Inflation;
 };
 
+/** The reservation timestamp identifies the original result; only its price month affects valuation. */
+export function priceComparisonBasis(price: PriceReservation | null) {
+  if (!price) return null;
+  const { reservedAt: _reservedAt, ...basis } = price;
+  return basis;
+}
+
 export function reservePrice(selection: PriceSelection, calendar: ProjectCalendar, reservedAt: string, inflation: Inflation): PriceReservation {
   stamp(reservedAt, "reservedAt");
   requireAvd(inflation.evidence.class === "S" && inflation.evidence.version && Number.isSafeInteger(inflation.bps)

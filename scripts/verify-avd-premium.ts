@@ -1,4 +1,5 @@
 import "./verify-avd-premium-continuation";
+import "./verify-avd-premium-n2";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
