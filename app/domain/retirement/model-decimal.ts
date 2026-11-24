@@ -24,6 +24,16 @@ export function outputCents(value: bigint, at: string) {
   return Number(round(round(value, OUTPUT_UNIT) * OUTPUT_UNIT, CENT));
 }
 
+/** Signed model cashflows use the same fixed-point and half-up output contract. */
+export function signedOutputCents(value: bigint, at: string) {
+  return value < 0n ? -outputCents(-value, at) || 0 : outputCents(value, at);
+}
+
+/** Apply a monthly growth factor before one or more month-end cashflows. */
+export function advanceSavingsMonth(balance: bigint, factor: bigint, monthEndCashflow: bigint) {
+  return applyFactor(balance, factor) + monthEndCashflow;
+}
+
 export function splitBalance(value: bigint, weights: readonly number[]) {
   // Carry the fixed-point remainder through the cumulative targets. Shares
   // are nonnegative and sum to the original balance even for tiny amounts.

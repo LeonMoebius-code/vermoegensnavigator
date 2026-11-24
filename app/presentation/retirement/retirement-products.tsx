@@ -42,7 +42,7 @@ function Preferences({ product, answers }: { product: Product; answers: ProductA
   const unionCombinationMissing = answers.payout === "both" && product.annuity.status === "absent" && product.plan.kind === "fund";
   return <ul className="retirement-product-facts">
     {rows.map(([label, match]) => <li key={label}>{label}: <strong>{match ? featureLabels[match] : "Keine Präferenz angegeben"}</strong>
-      {label === "Auszahlung" && unionCombinationMissing && <>. Die Kombination fehlt. Union bietet hier einen Fondsauszahlplan an.</>}
+      {label === "Auszahlung" && unionCombinationMissing && <>. Die Kombination fehlt. Union bietet hier einen Fondsauszahlplan an. Das Vergleichsinteresse schließt dieses Produkt nicht aus.</>}
     </li>)}
   </ul>;
 }

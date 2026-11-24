@@ -1,4 +1,5 @@
-import { forwardRef, useEffect, useId, useImperativeHandle, useRef, useState, type ReactNode } from "react";
+import { newPremiumIdentity } from "../../domain/retirement/premium-contract";
+import { forwardRef, useEffect, useId, useImperativeHandle, useMemo, useRef, useState, type ReactNode } from "react";
 import { directGrantRuleContext } from "../../domain/retirement/direct-grant-rules";
 import { changeYear, euro } from "./direct-grant-adapter";
 import { oldRiesterRuleContext } from "../../domain/retirement/old-riester-grant-rules";
@@ -12,6 +13,17 @@ import { bindCapitalConfirmations, customerPayments, editCustomerCapital, emptyC
 import { RetirementCustomer } from "./retirement-customer";
 import { emptyRetirementAnswers, invalidateAnswer, RetirementInformation, RetirementQuestions, type RetirementAnswers } from "./retirement-questions";
 import type { CapitalRun } from "./projection-adapter";
+import { DEFAULT_TIMELINE_DRAFT, resolvePremiumTimeline, type TimelineDraft } from "./premium-timeline";
+import { PremiumModelPanel, createModelController } from "./premium-model-panel";
+import { DEFAULT_PREMIUM_TERMS, fundingBasis, matchingFunding, selectScenarioFunding, type PremiumTerms, type SelectedFunding } from "./premium-plan-adapter";
+
+import { jsonHash } from "../../domain/case/recovery-hash";
+import { modelCatalog } from "../../domain/retirement/model-catalog";
+import { productChannelAllowed } from "../../domain/retirement/premium-products";
+import { PUBLIC_MODEL_RIGHTS } from "../../domain/retirement/premium-session";
+import { PremiumProductPanel } from "./premium-product-panel";
+import { type Configurations, type PremiumWorkspace, type ProductConfiguration } from "./premium-product-configuration";
+import { FundingEvidencePanel, type BoundFundingEvidence } from "./premium-funding-evidence-panel";
 
 export interface RetirementNavigation { confirmDiscard: () => boolean }
 const discardMessage = "Ungespeicherten Altersvorsorgeentwurf verwerfen? Alle Vorsorgeeingaben gehen verloren. Allgemeine Vermögensfälle bleiben erhalten.";
@@ -34,10 +46,20 @@ type Step = AStep | "choice" | "b1" | "b2";
 const formatMonth = (month: string) => /^\d{4}-\d{2}$/.test(month) ? `${month.slice(5)}/${month.slice(0, 4)}` : "offen";
 
 /** The entire draft lives here; unmount discards it. */
-export const RetirementEntry = forwardRef<RetirementNavigation>(function RetirementEntry(_, ref) {
+export const RetirementEntry = forwardRef<RetirementNavigation, { workspace?: PremiumWorkspace }>(function RetirementEntry({ workspace }, ref) {
+  const catalog = useMemo(() => workspace ? modelCatalog(workspace.catalog, "internal") : null, [workspace?.catalog]);
+  const allowedWorkspace = workspace && catalog && (workspace.scope === "internal" || productChannelAllowed(catalog, "display")) ? workspace : null;
   const [step, setStep] = useState<Step>("choice");
   const [intro, setIntro] = useState(true);
   const [plan, setPlan] = useState(emptyCustomerPlan);
+  const [premiumId, setPremiumId] = useState(() => newPremiumIdentity());
+  const [premiumRevision, setPremiumRevision] = useState(() => newPremiumIdentity());
+  const [premiumController, setPremiumController] = useState(() => createModelController(allowedWorkspace));
+  const [configurations, setConfigurations] = useState<Configurations>({});
+  const [premiumTiming, setPremiumTiming] = useState<TimelineDraft>(DEFAULT_TIMELINE_DRAFT);
+  const [premiumTerms, setPremiumTerms] = useState<PremiumTerms>(DEFAULT_PREMIUM_TERMS);
+  const [premiumFunding, setPremiumFunding] = useState<SelectedFunding | null>(null);
+  const [fundingEvidence, setFundingEvidence] = useState<BoundFundingEvidence | null>(null);
   const currentPlan = useRef(plan);
   const [answers, setAnswers] = useState(() => ({ ...emptyRetirementAnswers(), year: paymentYear(plan.capital.start) }));
   const currentAnswers = useRef(answers);
@@ -45,6 +67,24 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
   const [yearFocus, setYearFocus] = useState(0);
   const [productFinder, setProductFinder] = useState({ selected: [] as readonly ProductId[], answers: emptyProductAnswers });
   const currentFinder = useRef(productFinder);
+  const activePaths = allowedWorkspace?.paths.filter(path => productFinder.selected.includes(path.selection)) ?? [];
+  const premiumProducts = catalog && activePaths.length ? { catalog, paths: activePaths, configurations } : null;
+  const changePremiumConfiguration = (key: string, next: ProductConfiguration | null) => {
+    premiumController.session.invalidate();
+    setConfigurations(prior => {
+      const own = { ...prior };
+      const before = own[key];
+      if (!next) delete own[key];
+      else {
+        const profileContent = ({ stressLoss: _loss, stressMonth: _month, version: _version, ...profile }: ProductConfiguration) => profile;
+        const sameProfile = before && jsonHash(profileContent(before)) === jsonHash(profileContent(next));
+        own[key] = { ...next, version: sameProfile ? before.version : newPremiumIdentity() };
+      }
+      return own;
+    });
+    setPremiumRevision(newPremiumIdentity());
+    setDirty(true);
+  };
   const [productStep, setProductStep] = useState<ProductFinderStep>(0);
   const [result, setResult] = useState<CapitalRun | null>(null);
   const [refresh, setRefresh] = useState<"none" | "calculated" | "products" | "inputs">("none");
@@ -60,8 +100,11 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
     setRefresh(status => status === "none" ? "none" : cause);
   };
   const storePlan = (next: CustomerPlan) => {
+    premiumController.session.invalidate();
     currentPlan.current = next;
     setPlan(next);
+    setPremiumRevision(newPremiumIdentity());
+    setPremiumFunding(prior => matchingFunding(next, prior));
   };
   const storeAnswers = (next: RetirementAnswers) => {
     currentAnswers.current = next;
@@ -165,9 +208,21 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
     setBPreview(null);
     setStep("b1");
   };
+  const configureProducts = (showPreference: boolean) => premiumProducts && <PremiumProductPanel
+    paths={activePaths} catalog={premiumProducts.catalog} values={configurations} change={changePremiumConfiguration} payoutMonth={premiumTiming.payoutMonth}
+    setPayoutMonth={payoutMonth => {
+      premiumController.session.invalidate();
+      setPremiumTiming(p => ({ ...p, payoutMonth }));
+      setPremiumRevision(newPremiumIdentity());
+      setDirty(true);
+    }} showPreference={showPreference} />;
   const confirmDiscard = () => !dirty || window.confirm(discardMessage);
   useImperativeHandle(ref, () => ({ confirmDiscard }), [dirty]);
   useEffect(() => { title.current?.focus(); }, [step, intro]);
+  useEffect(() => {
+    premiumController.session.replaceCatalog(allowedWorkspace?.catalog ?? null);
+    premiumController.session.replaceRights(allowedWorkspace?.rights ?? PUBLIC_MODEL_RIGHTS);
+  }, [allowedWorkspace, premiumController]);
   useEffect(() => {
     if (!dirty) return;
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
@@ -177,6 +232,7 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
   const restart = () => {
     if (!confirmDiscard()) return;
     setDirty(false); setStep("choice"); setIntro(true);
+    setPremiumId(newPremiumIdentity()); setPremiumController(createModelController(allowedWorkspace)); setConfigurations({}); setPremiumTerms(DEFAULT_PREMIUM_TERMS); setPremiumTiming(DEFAULT_TIMELINE_DRAFT); setPremiumFunding(null); setFundingEvidence(null);
     setBDraft(emptyOldDraft()); setBPreview(null); setBJourney(emptyRiesterJourney());
     storeProductFinder({ selected: [], answers: emptyProductAnswers }); setProductStep(0);
     setResult(null); setRefresh("none"); setCapitalView("neutral");
@@ -191,7 +247,7 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
     ? (result.mode === "comparison" ? result.responses[0].projectionResults[2] : result.responses[1].projectionResults[0])
     : null;
   const middleValue = middle && middle.status !== "review_required" ? metricCents(middle.summary.specifiedEndBalance) : null;
-  return <div className="tool-view retirement-view retirement-ux2">
+  return <div className="tool-view retirement-view retirement-ux2" data-retirement-stage={step}>
     {guided && <button className="retirement-route-back" onClick={() => setStep("choice")}>A/B-Auswahl</button>}
     <header className="retirement-journey-header">
       <h1 ref={title} tabIndex={-1}>{guided?.title ?? (step === "choice" ? "Altersvorsorge" : step === "b1" ? "B1 – Bestandsaufnahme" : "B2 – Fördervergleich")}</h1>
@@ -231,16 +287,41 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
         section={questionSection} setSection={setQuestionSection}
         birth={changeBirth} yearFocus={yearFocus}
         back={() => setIntro(true)} next={() => navigateA("a2")} riester={enterB} />
-      : step === "a2" ? <RetirementCustomer plan={plan} change={updatePlan} back={() => navigateA("a1")} next={() => {
+      : step === "a2" ? <><RetirementCustomer plan={plan} change={updatePlan} back={() => navigateA("a1")}
+        timing={premiumTiming} changeTiming={value => {
+          premiumController.session.invalidate();
+          setPremiumTiming(value); setPremiumRevision(newPremiumIdentity()); setDirty(true);
+          if (value.mode === "holdings_only") setPremiumFunding(null);
+          try {
+            const t = resolvePremiumTimeline(currentPlan.current, value, null);
+            if (t.contributions.kind === "regular" && value.mode === "end_age") updatePlan(p =>
+              editCustomerCapital(p, { ...p.capital, end: t.contributions.kind === "regular" ? t.contributions.last : p.capital.end }));
+          } catch (error) { if (!(error instanceof Error) || error.name !== "AvdError") throw error; }
+        }} fundingSelection={premiumFunding?.bookingMonth ?? null} chooseFunding={month => {
+          const choice = month === null ? null : selectScenarioFunding(currentPlan.current, premiumId, month);
+          if (month !== null && !choice) return false;
+          premiumController.session.invalidate();
+          setPremiumFunding(choice); setPremiumRevision(newPremiumIdentity()); setDirty(true);
+          return true;
+        }} next={() => {
         if (!yearIsBound() || customerPayments(currentPlan.current).status !== "valid") return false;
         navigateA("a3");
         return true;
-      }} />
+      }} /><FundingEvidencePanel value={fundingEvidence}
+        isCurrent={fundingEvidence?.basis === fundingBasis(plan) && fundingEvidence.opening === plan.capital.initial}
+        bind={(data, previous) => {
+          premiumController.session.invalidate();
+          setFundingEvidence(data ? { data, basis: fundingBasis(plan), opening: plan.capital.initial }
+            : previous ? { ...previous, basis: "" } : null);
+          setPremiumFunding(null);
+          setPremiumRevision(newPremiumIdentity());
+          setDirty(true);
+        }} /></>
       : <div className="retirement-stage">
         <div className="retirement-stage-main">
-          {step === "a3" ? <RetirementProducts selected={productFinder.selected} toggleSelection={toggleProduct} answers={productFinder.answers}
-            changeAnswers={changeProductAnswers} step={productStep} navigate={setProductStep} next={() => navigateA("a4")} />
-          : <RetirementCapital plan={plan} change={updatePlan} result={result}
+          {step === "a3" ? <><RetirementProducts selected={productFinder.selected} toggleSelection={toggleProduct} answers={productFinder.answers}
+            changeAnswers={changeProductAnswers} step={productStep} navigate={setProductStep} next={() => navigateA("a4")} />{configureProducts(true)}</>
+          : <><RetirementCapital plan={plan} change={updatePlan} result={result}
             stale={refresh === "products" ? "Produktwahl oder Orientierung geändert. Die bisherige Vorschau ist veraltet. Bestätigen Sie Ihre Modellannahmen für eine neue Berechnung."
               : refresh === "inputs" ? "Die bisherige Vorschau ist veraltet. Berechnen Sie die Kapitalentwicklung mit den aktuellen Angaben erneut." : null}
             view={capitalView} setView={setCapitalView} selected={productFinder.selected}
@@ -252,7 +333,12 @@ export const RetirementEntry = forwardRef<RetirementNavigation>(function Retirem
                 setRefresh("calculated");
               setDirty(true);
               return next;
-            }} />}
+            }} />
+            {configureProducts(false)}
+            {(capitalView === "neutral" || premiumProducts) && <PremiumModelPanel plan={plan} caseId={premiumId} caseRevision={premiumRevision}
+              controller={premiumController} timing={premiumTiming} terms={premiumTerms} selection={premiumFunding} fundingEvidence={fundingEvidence} product={premiumProducts} showDocuments={Boolean(allowedWorkspace)} editFunding={() => navigateA("a2")}
+              change={terms => { premiumController.session.invalidate(); setPremiumTerms(terms); setDirty(true); }} />}
+          </>}
         </div>
         <aside className="panel retirement-stage-summary" aria-label="Aktueller Beratungsstand">
           <h2>Ihr Sparplan</h2>

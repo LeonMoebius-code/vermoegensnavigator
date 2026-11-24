@@ -1,6 +1,6 @@
 import { requireAvd } from "./avd-data";
 import type { ValidatedCatalog } from "./catalog-contract";
-import { publicCatalog } from "./catalog-validation";
+import { parseCatalog, publicCatalog } from "./catalog-validation";
 import { MODEL_VERSIONS, reference, refKey, type Kind, type Ref } from "./identity-contract";
 import type { ModelPath } from "./model-input";
 import { catalogRatio } from "./model-decimal";
@@ -8,8 +8,10 @@ import { catalogRatio } from "./model-decimal";
 type RecordOf<K extends Kind> = Extract<ValidatedCatalog["records"][number], { kind: K }>;
 const sameRef = (a: Ref, b: Ref) => refKey(a) === refKey(b) && a.hash === b.hash;
 
-export function modelCatalog(input: unknown) {
-  const released = publicCatalog(input, "display");
+/** Keep the legacy public boundary while allowing a private calculation to
+ * validate working data without treating the publication decision as evidence. */
+export function modelCatalog(input: unknown, scope: "public" | "internal" = "public") {
+  const released = scope === "public" ? publicCatalog(input, "display") : parseCatalog(input);
   // Avoid returning a denied catalog's metadata or reference IDs in a public error.
   requireAvd(released.ok, released.ok ? "" : released.issue.code, "$.catalog");
   const catalog = released.value;

@@ -126,7 +126,7 @@ export function RetirementCapital({ plan, change, result, calculate, stale, view
         <p className="retirement-state" data-testid="model-blocked">Nicht berechenbar · Kosten offen (O)</p>
         <h2>{view === "M1" ? "Kostenvergleich mit gemeinsamer Bruttobasis" : "Anlageportfolio im Monatsmodell"}</h2>
         <p>Version {MODEL_VERSIONS[view]} · {view === "M1" ? "K1-M1" : "K1-M2"}. {conventions[view]}</p>
-        <p>Für alle sechs Herstelleralternativen fehlen verifiziert freigegebene Tarif- und Kostendaten im P1-Anzeigekanal{view === "M2" ? " sowie ein freigegebenes Anlageprofil je Tarif" : ""}. Der Anzeigestatus und die modellierbare Kostenbasis müssen vor einer Produktrechnung belegt sein.</p>
+        <p>Für alle sechs Herstelleralternativen fehlen verifiziert freigegebene Tarif- und Kostendaten im P1-Anzeigekanal{view === "M2" ? " sowie ein freigegebenes Anlageprofil je Tarif" : ""}. Die öffentlichen Ausgaberechte sind offen (ORG-O01). Die interne Berechnung und die öffentliche Ausgabe werden getrennt geprüft.</p>
         {selected.length > 0 && <p>Ihre qualitative Auswahl: {products.filter(product => selected.includes(product.id)).map(product => product.name).join(", ")}.</p>}
         <button className="secondary" aria-expanded={demo} onClick={() => setDemo(value => !value)}>{demo ? "Synthetische Demonstration schließen" : "Synthetische Demonstration öffnen"}</button>
       </section>
