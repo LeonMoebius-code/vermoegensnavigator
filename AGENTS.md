@@ -103,6 +103,15 @@ vollständigen PR-Prüfung. Bis dahin gilt auf main das bisherige Modell.
 Settings ausschließlich lesen, Änderungen gesondert freigeben lassen.
 [CI-Modell und Schutzprüfung](docs/project/GOV04_CI_MODELL.md).
 
+Für GOV-05 gilt die [Übergangsgrenze](docs/project/OPERATING_MODEL.md#gov-05-übergang-und-wirksamkeit).
+Erst nach zwei vollständigen unabhängigen GO zum selben finalen Stand, Leons
+gesonderter Integrationsfreigabe und verifiziertem Merge gelten D-22 bis D-24.
+Dann umfasst der konkret autorisierte Featuretransport gebundene Fast-forward-
+Korrekturen, der PR-Abschluss prüft vier vollständige Browser-Shards und die
+Reviews können nach HOLD eigene belegbar gültige Teilnachweise übernehmen.
+Für GOV-05 selbst gelten die bisherigen vollständigen Review-Anforderungen.
+[Transport, CI und Abnahme](docs/project/GOV05_TRANSPORT_CI_REVIEW.md).
+
 Optionaler **Audit/Monitoring-Agent** liest ausschließlich; er implementiert,
 priorisiert und autorisiert keine Folgearbeiten. Es gilt der
 [inkrementelle Auditvertrag](docs/project/OPERATING_MODEL.md#inkrementelle-deep-audits).

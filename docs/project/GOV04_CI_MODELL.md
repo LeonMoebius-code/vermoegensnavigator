@@ -1,9 +1,12 @@
 # GOV-04: Entwicklungs-CI und vollständige Integrationsprüfung
 
-Status: zur Umsetzung freigegeben, noch nicht integriert. Kritische Governance-
+Historischer Vertrag zu GOV-04, integriert mit PR #77. Kritische Governance-
 und CI-Änderung. Zwei organisatorisch unabhängige vollständige Reviews und Leons
 gesonderte Integrationsentscheidung erforderlich. Es gilt die
 [Übergangsgrenze](OPERATING_MODEL.md#gov-04-übergang-und-wirksamkeit).
+Mit wirksamem D-23 hat die [verteilte Vollprüfung nach GOV-05](GOV05_TRANSPORT_CI_REVIEW.md#d-23--vollständige-pr-prüfung)
+Vorrang vor dem hier dokumentierten monolithischen PR-Job. D-21 bleibt für die
+Trennung von schneller Push-CI und verpflichtender vollständiger PR-CI maßgeblich.
 
 ## Ausführbarer Vertrag
 
