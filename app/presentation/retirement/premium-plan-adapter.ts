@@ -120,7 +120,7 @@ export function effectiveOwnPayments(plan: CustomerPlan, timeline: Timeline, bou
   // A dossier bound to the same draft remains the own-payment source in
   // holdings mode, but only dated special payments are active.
   if (horizon.kind === "holdings_only" && bound?.data.ownPayments
-    && (bound.basis === fundingBasis(plan) || bound.holdingsBasis === fundingBasis(effective))
+    && (bound.basis === fundingBasis(plan) || bound.holdingsBasis === fundingBasis(plan))
     && bound.opening === plan.capital.initial) {
     const period = new Set(months);
     return bound.data.ownPayments.filter(payment => period.has(payment.month)

@@ -323,7 +323,7 @@ export const RetirementEntry = forwardRef<RetirementNavigation, { workspace?: Pr
         bind={(data, previous) => {
           premiumController.session.invalidate();
           setFundingEvidence(data ? { data, basis: activePaymentBasis.effective && premiumTiming.mode !== "holdings_only" ? fundingBasis(activePaymentBasis.effective) : "",
-            holdingsBasis: activePaymentBasis.effective && premiumTiming.mode === "holdings_only" ? fundingBasis(activePaymentBasis.effective) : undefined,
+            holdingsBasis: activePaymentBasis.effective ? fundingBasis(plan) : undefined,
             opening: plan.capital.initial }
             : previous ? { ...previous, basis: "", holdingsBasis: undefined } : null);
           setPremiumFunding(null);
