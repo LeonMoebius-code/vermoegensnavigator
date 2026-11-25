@@ -67,6 +67,7 @@ test("UX1 S2: unselected answers; standard orientation, multiple times, no fabri
   await page.getByLabel(yearLabel, { exact: true }).fill("2027");
   await show(page, "Erwerb und Versicherung");
   await page.getByRole("radio", { name: employee, exact: true }).check();
+  await page.getByText("Weitere Versicherungs- und Sonderfälle", { exact: true }).click();
   await page.getByRole("checkbox", { name: "Kindererziehungszeiten", exact: true }).check();
   await page.getByRole("checkbox", { name: "Ich pflege Angehörige", exact: true }).check();
   await expect(page.getByRole("radio", { name: employee, exact: true })).toBeChecked();

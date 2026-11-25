@@ -115,10 +115,10 @@ export function RetirementCustomer({ plan, change, back, next, fundingSelection 
       inputRevision: year }).status === "S";
   });
   const rules = year === "2027" || year === "2028" ? directGrantRuleContext(year === "2027" ? "estg-2027-v1" : "estg-2028-v1") : null;
-  const text = (key: "monthly" | "start" | "end" | "oneOff" | "oneOffMonth", label: string, month = false) => {
+  const text = (key: "monthly" | "start" | "end" | "oneOff" | "oneOffMonth", label?: string, month = false) => {
     const error = payments.status === "invalid_input" && payments.field === key ? payments.message : null;
     return <div className="retirement-capital-field">
-      <label htmlFor={id(key)}>{label}</label>
+      {label && <label htmlFor={id(key)}>{label}</label>}
       <input id={id(key)} type={month ? "month" : "text"} inputMode={month ? undefined : "decimal"} value={plan.capital[key]}
         onChange={e => update(key, e.target.value)} aria-invalid={!!error} aria-describedby={error ? id(`${key}-error`) : undefined} />
       {error && <small id={id(`${key}-error`)} className="retirement-field-error">{error}</small>}
@@ -148,27 +148,22 @@ export function RetirementCustomer({ plan, change, back, next, fundingSelection 
             <dd className="avd-year-note">Außerhalb des Vertrags</dd></div>
         </dl>
       </section>
-    <div className="retirement-stage avd-contribution-layout">
+    <form ref={form} className="retirement-stage avd-contribution-layout" noValidate onSubmit={e => {
+      e.preventDefault();
+      if (!next()) requestAnimationFrame(() => {
+        const invalid = form.current?.querySelector<HTMLElement>('[aria-invalid="true"]:not(.avd-booking-panel *)');
+        if (!invalid) return;
+        for (let parent = invalid.parentElement; parent && parent !== form.current; parent = parent.parentElement)
+          if (parent instanceof HTMLDetailsElement) parent.open = true;
+        invalid.focus();
+      });
+    }}>
       <div className="retirement-stage-main">
-        <section className="retirement-customer-inputs" aria-labelledby={id("inputs")}>
-          <h2 id={id("inputs")}>Wie möchten Sie einzahlen?</h2>
-          <form ref={form} className="retirement-form" noValidate onSubmit={e => {
-            e.preventDefault();
-            if (!next()) requestAnimationFrame(() => {
-              const invalid = form.current?.querySelector<HTMLElement>('[aria-invalid="true"]');
-              if (!invalid) return;
-              for (let parent = invalid.parentElement; parent && parent !== form.current; parent = parent.parentElement)
-                if (parent instanceof HTMLDetailsElement) parent.open = true;
-              invalid.focus();
-            });
-          }}>
-            <div className="avd-pay-dates retirement-capital-grid">
-              {text("start", "Ab wann möchten Sie sparen?", true)}
-              {timing.mode === "dated" ? text("end", "Bis wann möchten Sie sparen?", true)
-                : <div><strong>Letzter regulärer Sparmonat</strong><p>{timing.mode === "holdings_only" ? "Bestandsprojektion" : endOpen ? "Offen" : plan.capital.end}</p></div>}
-            </div>
+        <section className="retirement-customer-inputs" aria-label="Beiträge festlegen">
+          <h2><label htmlFor={id("monthly")}>Wie viel möchten Sie monatlich einzahlen?</label></h2>
+          <div className="retirement-form">
             <div className="avd-contribution-rate">
-              {text("monthly", "Wie viel möchten Sie monatlich einzahlen?")}
+              {text("monthly")}
               <input type="range" aria-label="Monatsrate einstellen" min={0} max={Math.max(570, (parseEuroCents(plan.capital.monthly) ?? 0) / 100)}
                 step={5} value={(parseEuroCents(plan.capital.monthly) ?? 0) / 100}
                 aria-valuetext={payments.status === "valid" ? euro(payments.monthly) : "Offen"}
@@ -177,21 +172,101 @@ export function RetirementCustomer({ plan, change, back, next, fundingSelection 
                 ? <><strong>{euro(payments.total)}</strong> Eigenbeitrag {year} · {payments.months} Monatsraten</>
                 : "Der Jahresbeitrag erscheint, sobald Betrag und Zeitraum vollständig sind."}</p>
             </div>
-            {changeTiming && <PremiumTimelinePanel plan={plan} draft={timing} change={changeTiming} />}
-            <details><summary>Eigene Einmalzahlung ergänzen</summary>
-              <p>Die Zahlung fließt im gewählten Monat zu. Für das erste Jahresziel zählt sie nur im selben Kalenderjahr.</p>
-              <label className="retirement-checkbox"><input id={id("oneOffEnabled")} type="checkbox" checked={plan.capital.oneOffEnabled}
-                onChange={e => update("oneOffEnabled", e.target.checked)} />Zusätzliche eigene Einmalzahlung einplanen</label>
-              {plan.capital.oneOffEnabled && <div className="retirement-capital-grid">{text("oneOff", "Einmalzahlung in Euro")}{text("oneOffMonth", "Monat der Einmalzahlung", true)}
-                <button type="button" className="secondary" onClick={() => update("oneOffEnabled", false)}>Einmalzahlung verwerfen</button></div>}
-            </details>
             <ContributionOptimizer plan={plan} change={change} childGoalAvailable={availableChild} />
             <div className="retirement-action-row">
               <button className="secondary" type="button" onClick={back}>Zurück zu meinen Voraussetzungen</button>
               <button className="primary" type="submit">Weiter zum Produktvergleich</button>
             </div>
-          </form>
+          </div>
         </section>
+      </div>
+      <aside className="retirement-funding-card retirement-stage-summary">
+      <section aria-label="Ihre Förderung im Überblick" aria-live="polite">
+        <h3>Was in den Vertrag fließt</h3>
+        {boundFunding && <>
+          {!importedCurrent && <p className="avd-open" role="status">Die Förderprüfung ist veraltet. Belegte Buchungen bleiben erhalten.</p>}
+          {historical && <dl className="retirement-funding-totals">
+            <div><dt>Belegte Buchungen im Kalenderjahr</dt><dd>{historical.issues.length ? "Offen" : historical.payments.length ? sum(historical.payments) : "Keine Buchungen im Zeitraum"}</dd></div>
+            <div><dt>Vertragszulagen einschließlich gewählter Annahmen</dt><dd>{combined && combined.issues.length === 0 ? sum(combined.payments) + " · modelliert" : "Offen"}</dd></div>
+          </dl>}
+          {combined && combined.issues.length > 0 && <p className="avd-open" role="status">Der vollständige Förderzufluss bleibt offen. Prüfen Sie Anspruch, Vertragszuordnung und mögliche Rückbuchungen.</p>}
+          {importedCurrent && <ul className="avd-funding-components">{boundFunding.data.people.filter(person => String(person.year) === year).flatMap(person =>
+            person.claims.map((claim, i) => <li key={claimVersion(claim) + i}><strong>{components[claim.key.component]}</strong>
+              <span>{claim.amount ? euro(claim.amount.cents) + (claim.amount.evidence.class === "B" ? " · belegt" : " · bedingt") : "Offen"}</span>
+              <small>Personenbezogener Anspruch · {person.personId}</small></li>))}</ul>}
+          {historical && historical.payments.length > 0 && <details className="avd-disclosure"><summary>Belegter Anteil nach Buchungsmonat</summary>
+            <ul>{historical.payments.map(event => {
+              const claim = "claimVersion" in event ? claims.get(String(event.claimVersion)) : undefined;
+              return <li key={event.id}>{event.month} · {claim ? components[claim.key.component] : "Zulage"} · {event.contractId ?? "Vertrag offen"} · {euro(event.cents)}</li>;
+            })}</ul>
+          </details>}
+        </>}
+        {!boundFunding && (grant.status === "calculated" ? <div data-testid="grant-result">
+          {grant.annualCents + grant.result.totalGrantCents > 0 && <div
+            className="retirement-funding-bar" role="img"
+            aria-label={`Finanzierung: ${euro(grant.annualCents)} Eigenbeitrag und ${euro(grant.result.totalGrantCents)} modellierte Zulagen`}>
+            <span style={{ width: `${100 * grant.annualCents / (grant.annualCents + grant.result.totalGrantCents)}%` }} />
+          </div>}
+          <p className="retirement-state">Geprüfte Eingaben · regelbasiert modelliert</p>
+          <dl className="retirement-funding-totals">
+            <div><dt>Grundzulage</dt><dd data-testid="customer-base-grant">{euro(grant.result.baseGrantCents)}</dd></div>
+            {grant.result.childGrants.map((child, i) => <div key={child.childId}><dt>Kinderzulage Kind {i + 1}</dt><dd data-testid="child-grant">{euro(child.grantCents)}</dd></div>)}
+            <div><dt>Summe Kinderzulagen</dt><dd>{euro(grant.result.childrenGrantCents)}</dd></div>
+
+          </dl>
+          <dl className="retirement-funding-totals"><div><dt>Berufseinsteigerbonus · einmalig</dt><dd>Gesondert prüfen</dd></div></dl>
+          <p>Dieses Modell berücksichtigt keinen Einmalbonus.</p>
+          {chooseFunding && <details className="avd-disclosure avd-booking-panel" open={advisor || bookingError || undefined}>
+          <summary>Förderbuchung für die Kapitalentwicklung</summary>
+          <label htmlFor={id("model-booking")}>Angenommener Buchungsmonat der Förderung</label>
+          <input id={id("model-booking")} type="month" value={modelBooking ?? `${Number(year) + 1}-06`}
+            aria-invalid={bookingError} onChange={event => {
+              setModelBooking(event.target.value); setBookingError(false);
+              if (fundingSelection) chooseFunding(null);
+            }} />
+          <button type="button" className="secondary" disabled={timing.mode === "holdings_only"} onClick={() => setBookingError(!chooseFunding(modelBooking ?? `${Number(year) + 1}-06`))}>
+            Förderannahme im Kapitalmodell verwenden
+          </button>
+          {fundingSelection && <button type="button" className="secondary" onClick={() => chooseFunding(null)}>Förderannahme abwählen</button>}
+          {bookingError && <p role="alert">Bitte einen Buchungsmonat ab dem Beitragsjahr wählen.</p>}
+          </details>}
+          {fundingSelection && <p role="status">A4 übernimmt die gewählte Förderannahme · {fundingSelection}.</p>}
+        </div> : <>
+          <p className="retirement-state" data-testid="customer-grant-status">Gemeinsam prüfen</p>
+          {possible.status === "calculated" && payments.status === "valid" ? <div data-testid="conditional-funding">
+            <h3>Förderung · bedingtes Beispiel</h3>
+            <p>Bei unmittelbarer Berechtigung, neuem Förderregime und einem zulässigen Vertrag wären <strong data-testid="conditional-base-grant">{euro(possible.result.baseGrantCents)}</strong> Grundzulage möglich.</p>
+            <p>Kinderzulagen und Einmalbonus werden gesondert geprüft. Das Kapitalmodell übernimmt dieses bedingte Szenario nicht automatisch.</p>
+          </div> : <p data-testid="conditional-funding-status">{possible.status === "calculated" ? "Bitte prüfen Sie zuerst Ihren Zahlungsplan." : possible.message}</p>}
+        </>)}
+        {availableChild && <p data-testid="premium-child-card">Kinderzulage: Beitragsziel 300 € je zugeordnetem Kind im Modelljahr {year}. Die Annahme ist bedingt.</p>}
+        {plan.children === "yes" && !availableChild && <p>Kinderzulage prüfen. Förderjahr, Kindergeld und die Zuordnung zum Vertrag müssen zusammenpassen.</p>}
+        {(!boundFunding && grant.status === "calculated" && !fundingSelection) && <p className="avd-note">Mit einer ausdrücklich gewählten Förderbuchung fließt die Annahme in A4 ein.</p>}
+      </section>
+        <section className="retirement-form avd-payment-period" aria-labelledby={id("dates")}>
+        <h3 id={id("dates")}>Laufzeit und Termine</h3>
+        <div className="avd-pay-dates retirement-capital-grid">
+          {text("start", "Ab wann möchten Sie sparen?", true)}
+          {timing.mode === "dated" ? text("end", "Bis wann möchten Sie sparen?", true)
+            : <div><strong>Letzter regulärer Sparmonat</strong><p>{timing.mode === "holdings_only" ? "Bestandsprojektion" : endOpen ? "Offen" : plan.capital.end}</p></div>}
+        </div>
+        <p className="avd-note avd-period-summary">
+          {timing.mode === "end_age" && <>Spar-Endalter {timing.endAge || "offen"} · </>}
+          Auszahlbeginn {timing.payoutMonth ? timing.payoutMonth.slice(5) + "/" + timing.payoutMonth.slice(0, 4) : "offen"}
+        </p>
+        {endOpen && <p className="avd-open" role="status">{endIssue.message}</p>}
+        {changeTiming && <PremiumTimelinePanel plan={plan} draft={timing} change={changeTiming} />}
+        <details><summary>Eigene Einmalzahlung ergänzen</summary>
+          <p>Die Zahlung fließt im gewählten Monat zu. Für das erste Jahresziel zählt sie nur im selben Kalenderjahr.</p>
+          <label className="retirement-checkbox"><input id={id("oneOffEnabled")} type="checkbox" checked={plan.capital.oneOffEnabled}
+            onChange={e => update("oneOffEnabled", e.target.checked)} />Zusätzliche eigene Einmalzahlung einplanen</label>
+          {plan.capital.oneOffEnabled && <div className="retirement-capital-grid">{text("oneOff", "Einmalzahlung in Euro")}{text("oneOffMonth", "Monat der Einmalzahlung", true)}
+            <button type="button" className="secondary" onClick={() => update("oneOffEnabled", false)}>Einmalzahlung verwerfen</button></div>}
+        </details>
+        </section>
+      </aside>
+    </form>
+    <div className="avd-a2-support">
     <details className="retirement-customer-details" open={!advisor && onAdvisor ? false : undefined}>
       <summary onClick={e => {
         if (!advisor && onAdvisor) {
@@ -231,68 +306,6 @@ export function RetirementCustomer({ plan, change, back, next, fundingSelection 
       {rules ? <><p>Beitragsjahr {rules.contributionYear} · {rules.id} · geprüft am {rules.checkedOn} · {rules.calculationVersion}</p>
         <ul>{rules.sources.map(source => <li key={source}><a href={source} target="_blank" rel="noreferrer">{source}</a></li>)}</ul></> : <p>Für dieses Jahr liegt hier kein geprüfter Förderregelstand vor.</p>}
     </details>
-      </div>
-      <section className="retirement-funding-card retirement-stage-summary" aria-label="Ihre Förderung im Überblick" aria-live="polite">
-        <h3>Förderbausteine und Buchung</h3>
-        {boundFunding && <>
-          {!importedCurrent && <p className="avd-open" role="status">Die Förderprüfung ist veraltet. Belegte Buchungen bleiben erhalten.</p>}
-          {historical && <dl className="retirement-funding-totals">
-            <div><dt>Belegte Buchungen im Kalenderjahr</dt><dd>{historical.issues.length ? "Offen" : historical.payments.length ? sum(historical.payments) : "Keine Buchungen im Zeitraum"}</dd></div>
-            <div><dt>Vertragszulagen einschließlich gewählter Annahmen</dt><dd>{combined && combined.issues.length === 0 ? sum(combined.payments) + " · modelliert" : "Offen"}</dd></div>
-          </dl>}
-          {combined && combined.issues.length > 0 && <p className="avd-open" role="status">Der vollständige Förderzufluss bleibt offen. Prüfen Sie Anspruch, Vertragszuordnung und mögliche Rückbuchungen.</p>}
-          {importedCurrent && <ul className="avd-funding-components">{boundFunding.data.people.filter(person => String(person.year) === year).flatMap(person =>
-            person.claims.map((claim, i) => <li key={claimVersion(claim) + i}><strong>{components[claim.key.component]}</strong>
-              <span>{claim.amount ? euro(claim.amount.cents) + (claim.amount.evidence.class === "B" ? " · belegt" : " · bedingt") : "Offen"}</span>
-              <small>Personenbezogener Anspruch · {person.personId}</small></li>))}</ul>}
-          {historical && historical.payments.length > 0 && <details className="avd-disclosure"><summary>Belegter Anteil nach Buchungsmonat</summary>
-            <ul>{historical.payments.map(event => {
-              const claim = "claimVersion" in event ? claims.get(String(event.claimVersion)) : undefined;
-              return <li key={event.id}>{event.month} · {claim ? components[claim.key.component] : "Zulage"} · {event.contractId ?? "Vertrag offen"} · {euro(event.cents)}</li>;
-            })}</ul>
-          </details>}
-        </>}
-        {!boundFunding && (grant.status === "calculated" ? <div data-testid="grant-result">
-          {grant.annualCents + grant.result.totalGrantCents > 0 && <div
-            className="retirement-funding-bar" role="img"
-            aria-label={`Finanzierung: ${euro(grant.annualCents)} Eigenbeitrag und ${euro(grant.result.totalGrantCents)} modellierte Zulagen`}>
-            <span style={{ width: `${100 * grant.annualCents / (grant.annualCents + grant.result.totalGrantCents)}%` }} />
-          </div>}
-          <p className="retirement-state">Geprüfte Eingaben · regelbasiert modelliert</p>
-          <dl className="retirement-funding-totals">
-            <div><dt>Grundzulage</dt><dd data-testid="customer-base-grant">{euro(grant.result.baseGrantCents)}</dd></div>
-            {grant.result.childGrants.map((child, i) => <div key={child.childId}><dt>Kinderzulage Kind {i + 1}</dt><dd data-testid="child-grant">{euro(child.grantCents)}</dd></div>)}
-            <div><dt>Summe Kinderzulagen</dt><dd>{euro(grant.result.childrenGrantCents)}</dd></div>
-
-          </dl>
-          <dl className="retirement-funding-totals"><div><dt>Berufseinsteigerbonus · einmalig</dt><dd>Gesondert prüfen</dd></div></dl>
-          <p>Diese Modellrechnung enthält keinen Einmalbonus. Förderbuchungen werden mit ihrem eigenen Buchungsmonat erfasst.</p>
-          {chooseFunding && <>
-          <label htmlFor={id("model-booking")}>Angenommener Buchungsmonat der Förderung</label>
-          <input id={id("model-booking")} type="month" value={modelBooking ?? `${Number(year) + 1}-06`}
-            aria-invalid={bookingError} onChange={event => {
-              setModelBooking(event.target.value); setBookingError(false);
-              if (fundingSelection) chooseFunding(null);
-            }} />
-          <button type="button" className="secondary" disabled={timing.mode === "holdings_only"} onClick={() => setBookingError(!chooseFunding(modelBooking ?? `${Number(year) + 1}-06`))}>
-            Förderannahme im Kapitalmodell verwenden
-          </button>
-          {fundingSelection && <button type="button" className="secondary" onClick={() => chooseFunding(null)}>Förderannahme abwählen</button>}
-          {bookingError && <p role="alert">Bitte einen Buchungsmonat ab dem Beitragsjahr wählen.</p>}
-          {fundingSelection && <p role="status">A4 übernimmt die gewählte Förderannahme.</p>}
-          </>}
-        </div> : <>
-          <p className="retirement-state" data-testid="customer-grant-status">Gemeinsam prüfen</p>
-          {possible.status === "calculated" && payments.status === "valid" ? <div data-testid="conditional-funding">
-            <h3>Förderung · bedingtes Beispiel</h3>
-            <p>Bei unmittelbarer Berechtigung, neuem Förderregime und einem zulässigen Vertrag wären <strong data-testid="conditional-base-grant">{euro(possible.result.baseGrantCents)}</strong> Grundzulage möglich.</p>
-            <p>Kinderzulagen und Einmalbonus werden gesondert geprüft. Das Kapitalmodell übernimmt dieses bedingte Szenario nicht automatisch.</p>
-          </div> : <p data-testid="conditional-funding-status">{possible.status === "calculated" ? "Bitte prüfen Sie zuerst Ihren Zahlungsplan." : possible.message}</p>}
-        </>)}
-        {availableChild && <p data-testid="premium-child-card">Kinderzulage: Beitragsziel 300 € je zugeordnetem Kind im Modelljahr {year}. Die Annahme ist bedingt.</p>}
-        {plan.children === "yes" && !availableChild && <p>Kinderzulage prüfen. Förderjahr, Kindergeld und die Zuordnung zum Vertrag müssen zusammenpassen.</p>}
-        <p>Für die Kapitalentwicklung zählen Zulagen erst als separat erfasstes Ereignis mit Förderjahr, Betrag und Buchungsmonat.</p>
-      </section>
     </div>
     </div>
   </div>;

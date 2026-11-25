@@ -96,6 +96,7 @@ test("R87-01 A1 Orientierung erhält identische neutrale Kurven und Bestätigung
   const before = await result.textContent();
   await enterStep(page, "A1");
   await button(page, "Weiter").click();
+  await page.getByText("Weitere Versicherungs- und Sonderfälle", { exact: true }).click();
   await input(page, "Keine weiteren Situationen").check();
   await enterStep(page, "A4");
   await expect(input(page, confirmed)).toBeChecked();

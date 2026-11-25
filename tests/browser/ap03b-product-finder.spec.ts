@@ -261,6 +261,7 @@ for (const [preference, heading, status] of [
       await expect(payouts).toContainText("Lebenslange Rente: Nicht vorgesehen");
       await expect(payouts).toContainText("Fondsauszahlplan: Öffentlich belegt");
       await expect(payouts).toContainText("auch keine Übertragung an einen Versicherer zum Beginn der Auszahlphase");
+      await payouts.getByText("Auszahlungsdetails und Quelle", { exact: true }).click();
       await expect(payouts.getByRole("link")).toHaveAttribute("href", /wie-funktioniert-die-auszahlung-aus-dem-altersvorsorgedepot$/);
       const match = cell(page, "Abgleich mit Ihren Wünschen", id);
       await expect(match).toContainText(`Auszahlung: ${status}`);
@@ -290,6 +291,7 @@ for (const [preference, status] of [
       await expect(payouts).toContainText("Auszahlplan: Öffentlich belegt");
       await expect(payouts).not.toContainText("Fondsauszahlplan: Öffentlich belegt");
       await expect(payouts).toContainText("Die Fondsmechanik ist öffentlich nicht belegt");
+      await payouts.getByText("Auszahlungsdetails und Quelle", { exact: true }).click();
       await expect(payouts.getByRole("link")).toHaveAttribute("href", "https://www.ruv.de/altersvorsorge/private-rentenversicherung/altersvorsorgedepot");
       await expect(cell(page, "Abgleich mit Ihren Wünschen", id)).toContainText(`Auszahlung: ${status}`);
     }

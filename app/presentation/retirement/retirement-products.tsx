@@ -64,6 +64,26 @@ function ProtectionSummary({ product }: { product: Product }) {
   return <>Schutz offen</>;
 }
 
+function ProductDetails({ product, answers }: { product: Product; answers: ProductAnswers }) {
+  return <div className="avd-product-detail-body">
+    <p>{product.investment} {product.investmentDetails}</p>
+    <p><Protection product={product} /></p>
+    <dl className="avd-product-source">
+      <div><dt>Hersteller- und Datenstand</dt><dd>{product.manufacturerStatus}</dd></div>
+      <div><dt>Bankverfügbarkeit und Beratung</dt><dd>{product.bankStatus}</dd></div>
+      <div><dt>Kosten</dt><dd>{costLabel(product.costs)}</dd></div>
+    </dl>
+    <dl>
+      <dt>Auszahlungsarten</dt><dd><Payouts product={product} /></dd>
+      <dt>Tarifgrenzen</dt><dd>{product.limits}</dd>
+      <dt>Vorteil</dt><dd>{product.benefit}</dd>
+      <dt>Grenze oder Risiko</dt><dd>{product.risk}</dd>
+      <dt>Abgleich mit Ihren Wünschen</dt><dd><Preferences product={product} answers={answers} /></dd>
+    </dl>
+    <Sources product={product} />
+  </div>;
+}
+
 function ProductCard({ product, answers, checked, countId, toggle }: {
   product: Product; answers: ProductAnswers; checked: boolean; countId: string; toggle: () => void;
 }) {
@@ -82,38 +102,46 @@ function ProductCard({ product, answers, checked, countId, toggle }: {
     </div>
     <details className="retirement-help avd-product-detail">
       <summary aria-label={`Tarifdetails und Quellen zu ${product.name}`}>Details</summary>
-      <div className="avd-product-detail-body">
-        <p>{product.investment} {product.investmentDetails}</p>
-        <p><Protection product={product} /></p>
-        <dl className="avd-product-source">
-          <div><dt>Hersteller- und Datenstand</dt><dd>{product.manufacturerStatus}</dd></div>
-          <div><dt>Bankverfügbarkeit und Beratung</dt><dd>{product.bankStatus}</dd></div>
-          <div><dt>Kosten</dt><dd>{costLabel(product.costs)}</dd></div>
-        </dl>
-        <dl>
-          <dt>Auszahlungsarten</dt><dd><Payouts product={product} /></dd>
-          <dt>Tarifgrenzen</dt><dd>{product.limits}</dd>
-          <dt>Vorteil</dt><dd>{product.benefit}</dd>
-          <dt>Grenze oder Risiko</dt><dd>{product.risk}</dd>
-          <dt>Abgleich mit Ihren Wünschen</dt><dd><Preferences product={product} answers={answers} /></dd>
-        </dl>
-        <Sources product={product} />
-      </div>
+      <ProductDetails product={product} answers={answers} />
     </details>
   </article>;
 }
 
+function CompareProtection({ product }: { product: Product }) {
+  const protection = product.protection;
+  if (protection.kind === "target") return <>
+    <strong>Wertsicherungsziel</strong>
+    <small>{protection.basis} · zum Ende der Ansparphase</small>
+    <small>Keine Beitragsgarantie · Ziel kann unterschritten werden</small>
+  </>;
+  return <>
+    <ProtectionSummary product={product} />
+    {protection.kind === "guarantee" && <small>{protection.level === 80 ? "Kein garantierter Depotwert während der Laufzeit" : "Endgültige Vertragsbedingungen maßgeblich"}</small>}
+  </>;
+}
+
+function ComparePayout({ product }: { product: Product }) {
+  return <>
+    <strong>{product.plan.kind === "fund" ? "Fondsauszahlplan" : "Auszahlplan"}: {payoutLabels[product.plan.status]}</strong>
+    <small>Lebenslange Rente: {payoutLabels[product.annuity.status]}</small>
+    <small>{product.plan.kind === "fund" ? "Keine Übertragung an einen Versicherer zum Auszahlbeginn" : "Rentenhöhe und Fondsmechanik offen"}</small>
+    <details className="avd-compare-payout-detail">
+      <summary>Auszahlungsdetails und Quelle</summary>
+      <Payouts product={product} />
+    </details>
+  </>;
+}
+
 const comparisonRows: readonly { title: string; content: (product: Product, answers: ProductAnswers) => ReactNode }[] = [
   { title: "Anlage und ETF-Auswahl", content: product => <>
-    <p>{product.investment} {product.investmentDetails}</p>
-    <p>Eigene ETF-Auswahl: <strong>{featureLabels[product.etf]}</strong>.</p>
+    <strong>{investmentHeadlines[product.id]}</strong>
+    <small>Eigene ETF-Auswahl: {featureLabels[product.etf]}</small>
   </> },
-  { title: "Schutz zum Ablauf", content: product => <Protection product={product} /> },
-  { title: "Auszahlungsarten", content: product => <Payouts product={product} /> },
+  { title: "Schutz zum Ablauf", content: product => <CompareProtection product={product} /> },
+  { title: "Auszahlungsarten", content: product => <ComparePayout product={product} /> },
   { title: "Kosten und Datenstand", content: product => <>
-    <p>{costLabel(product.costs)}</p>
-    <p>Hersteller- und Datenstand: {product.manufacturerStatus}. Bankverfügbarkeit und Beratung: {product.bankStatus}.</p>
-    <Sources product={product} />
+    <strong>Tarifkosten öffentlich offen</strong>
+    <small>Bankverfügbarkeit: {product.bankStatus.toLocaleLowerCase("de-DE")}</small>
   </> },
   { title: "Tarifgrenzen", content: product => product.limits },
   { title: "Vorteile und Risiken", content: product => <><p>{product.benefit}</p><p>{product.risk}</p></> },
@@ -139,7 +167,7 @@ function ProductComparison({ selected, answers, toggle }: {
       </li>)}
     </ul>
     {selected.length >= 2 && <>
-      <h3 className="avd-compare-section">Tarifmerkmale und offene Punkte</h3>
+      <h3 className="avd-compare-section avd-visually-compact">Tarifmerkmale und offene Punkte</h3>
       {rows.map(row => <section key={row.title} className="retirement-product-row">
         <h3>{row.title}</h3>
         <dl className="retirement-product-columns">
@@ -149,10 +177,16 @@ function ProductComparison({ selected, answers, toggle }: {
         </dl>
       </section>)}
       <section className="avd-shared-facts"><h3>Gemeinsame belegte Rahmenbedingungen</h3>
-        <p>Alle gewählten Produkte sind öffentlich angekündigt. Die Produktdetails beziehen sich auf den jeweils ausgewiesenen Quellenstand.</p>
-        {confirmedSharedPayout && <p>Für alle gewählten Union-Produkte ist der Fondsauszahlplan angekündigt. Eine lebenslange Rente bietet Union für diese Produkte nicht an.</p>}
+        <ul><li>Alle gewählten Produkte sind öffentlich angekündigt.</li>
+        {confirmedSharedPayout && <li>Für alle gewählten Union-Produkte ist der Fondsauszahlplan angekündigt. Eine lebenslange Rente bietet Union für diese Produkte nicht an.</li>}</ul>
         {differences && <p>Offene Tarif-, Kosten- und Bankangaben bleiben sichtbar.</p>}
       </section>
+      <div className="retirement-product-columns avd-compare-sources">
+        {selected.map(product => <details className="retirement-help" key={product.id}>
+          <summary>Tarifdetails und Quellen · {product.name}</summary>
+          <ProductDetails product={product} answers={answers} />
+        </details>)}
+      </div>
     </>}
   </div>;
 }

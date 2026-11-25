@@ -8122,14 +8122,15 @@ body[data-print-mode="customer"] .internal-only {
 
 .avd-workspace .avd-check-sheet {
   grid-template-columns: minmax(0, 1.65fr) minmax(250px, 1fr);
-  gap: 0; align-items: stretch; overflow: clip;
+  gap: 0; align-items: stretch; overflow: clip; max-width: none;
 }
 .avd-workspace .avd-check-sheet .retirement-questionnaire { border: 0; padding: 22px 24px; }
-.avd-workspace .avd-check-sheet .retirement-question-progress { padding: 0; background: none; }
+.avd-workspace .avd-check-sheet .retirement-question-progress { padding: 0; margin-top: 10px; background: none; }
 .avd-workspace .avd-check-sheet .retirement-question-progress ol { display: flex; flex-wrap: wrap; gap: 4px; padding: 0; }
 .avd-workspace .avd-check-sheet .retirement-question-progress button { width: auto; min-height: 34px; text-align: left; border: 0; font-size: .87rem; border-radius: 6px; }
-.avd-check-sheet .retirement-question-progress button span { margin-right: .22em; font-weight: 750; }
-.avd-workspace .avd-check-sheet .retirement-question-progress [aria-current="step"] { color: white; background: var(--navy); }
+.avd-workspace .avd-check-sheet .retirement-question-progress [aria-current="step"] { color: var(--navy); background: #eaf3fa; border-bottom: 2px solid var(--navy-2); }
+.avd-workspace .avd-check-sheet .retirement-questionnaire h2 { margin-top: 0; }
+.avd-workspace .avd-check-sheet .retirement-questionnaire > .avd-note { margin: 5px 0; }
 .avd-check-sheet .avd-check-result { padding: 23px 22px; background: #edf4fa; border-left: 1px solid #dce7f1; }
 .avd-workspace .avd-check-result .retirement-orientation { border: 0; padding: 0; margin: 9px 0 0; background: none; box-shadow: none; }
 .avd-workspace .avd-check-result .retirement-orientation h2 { font-size: 1.52rem; }
@@ -8140,11 +8141,21 @@ body[data-print-mode="customer"] .internal-only {
 .avd-a1-person, .avd-a1-family { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .avd-a1-person label { display: block; font-weight: 700; margin-bottom: 5px; }
 .avd-a1-family > :not(fieldset) { grid-column: 1 / -1; }
-.avd-workspace .avd-check-sheet .avd-employment { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .avd-workspace .avd-check-sheet .retirement-answer-group { border: 0; padding: 0; margin: 0; }
 .avd-workspace .avd-check-sheet .retirement-answer-group legend { padding: 0; margin-bottom: 7px; }
 .avd-workspace .avd-check-sheet .retirement-answer { min-height: 40px; margin: 0; padding: 8px 11px; }
 .avd-workspace .avd-check-sheet .retirement-answer input { flex: 0 0 auto; }
+.avd-workspace .avd-check-sheet :is(.avd-employment,.avd-a1-family .retirement-answer-group) {
+  display: flex; flex-wrap: wrap; align-items: start; gap: 5px;
+}
+.avd-workspace .avd-check-sheet :is(.avd-employment,.avd-a1-family) .retirement-answer {
+  align-items: center; min-height: 38px; padding: 5px 9px; gap: 7px;
+}
+.avd-workspace .avd-check-sheet :is(.avd-employment,.avd-a1-family) .retirement-answer input { margin: 0; }
+.avd-workspace .avd-check-sheet .avd-a1-special { margin: 0; }
+.avd-a1-special > p { margin: 0 0 8px; }
+.avd-check-sheet .avd-special-action { align-self: start; }
+.avd-workspace .avd-check-sheet .retirement-question-actions > button { flex: 0 1 auto; }
 .avd-workspace .avd-check-sheet .avd-additional-answers { background: #f4f7fa; border-radius: 7px; padding: 7px 10px; }
 .avd-additional-answers > p { margin: 0 0 4px; color: var(--avd-subtle); font-size: .87rem; }
 .avd-check-sheet .retirement-question-actions { border-top: 1px solid var(--avd-edge); padding-top: 11px; margin-top: 2px; }
@@ -8165,18 +8176,38 @@ body[data-print-mode="customer"] .internal-only {
 .avd-workspace .avd-contribution-sheet .avd-contribution-layout { gap: 0; align-items: stretch; }
 .avd-contribution-sheet .retirement-stage-main { padding: 16px 22px; }
 .avd-workspace .avd-contribution-sheet .retirement-customer-inputs { padding: 0; }
+.avd-workspace .avd-contribution-sheet .retirement-customer-inputs h2 { margin: 0 0 8px; }
 .avd-workspace .avd-contribution-sheet .retirement-funding-card {
   position: static; align-self: stretch; border: 0; border-left: 1px solid var(--avd-edge); padding: 16px 19px; background: #fbfcfe;
 }
 .avd-contribution-sheet .retirement-funding-card h3 { margin-top: 0; }
 .avd-contribution-sheet .retirement-funding-card [data-testid="conditional-funding"] { padding: 8px 11px; background: #edf4fa; border-radius: 7px; }
 .avd-contribution-sheet .retirement-funding-card [data-testid="conditional-funding"] h3 { font-size: .97rem; margin: 0; }
-.avd-workspace .avd-contribution-sheet .retirement-contribution-targets { grid-template-columns: repeat(auto-fit,minmax(113px,1fr)); gap: 5px; }
-.avd-workspace .avd-contribution-sheet .retirement-contribution-targets button { min-height: 64px; padding: 7px 9px; justify-content: start; }
+.avd-workspace .avd-contribution-sheet .retirement-year-equivalent { background: transparent; border: 0; padding: 0; }
+.avd-target-heading, .avd-target-caption { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 3px 9px; }
+.avd-target-heading > .retirement-state { margin: 0 0 6px; }
+.avd-workspace .avd-contribution-sheet .retirement-contribution-targets { grid-template-columns: minmax(0,1fr); gap: 6px; margin-block: 6px; }
+.avd-workspace .avd-contribution-sheet .retirement-contribution-targets button {
+  display: grid; grid-template-columns: minmax(0,1.32fr) minmax(0,1fr);
+  min-height: 46px; padding: 7px 10px; align-items: center; gap: 5px 13px; line-height: 1.25;
+}
+.avd-target-caption { width: 100%; }
 .avd-target-amount { color: var(--navy-2); font-weight: 750; font-variant-numeric: tabular-nums; }
-.avd-target-explanation { display: none; margin-top: 5px; }
-.avd-workspace .retirement-contribution-targets button[aria-pressed="true"] .avd-target-explanation { display: block; }
-.avd-target-context { margin: 0 0 8px; font-size: .88rem; }
+.avd-target-effect { color: var(--avd-subtle); text-align: left; }
+.avd-target-context { margin: 3px 0 0; font-size: .88rem; }
+.avd-target-examples > div { border-top: 1px solid var(--avd-edge); padding-block: 6px; }
+.avd-target-examples dt { font-weight: 700; }
+.avd-target-examples dd { margin: 0; }
+.avd-annual-target { display: grid; grid-template-columns: minmax(0,auto) minmax(6em,9em); align-items: center; gap: 3px 9px; margin-top: 10px; }
+.avd-annual-target small { grid-column: 1 / -1; color: var(--avd-subtle); }
+.avd-contribution-explanation p { margin: 5px 0; }
+.avd-payment-period { margin: 15px 0 0; padding-top: 12px; gap: 6px; border-top: 1px solid var(--avd-edge); }
+.avd-payment-period h3 { margin: 0 0 6px; }
+.avd-payment-period .avd-pay-dates { margin-top: 0; }
+.avd-period-summary { margin: 6px 0 0; }
+.avd-contribution-sheet .avd-booking-panel { border-top: 1px solid var(--avd-edge); }
+.avd-booking-panel :is(label,input) { display: block; max-width: 100%; }
+.avd-a2-support { padding: 0 20px 12px; border-top: 1px solid var(--avd-edge); }
 
 .avd-product-command { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0 12px; }
 .avd-product-command .retirement-product-toolbar { border: 0; background: transparent; padding: 0; }
@@ -8203,15 +8234,33 @@ body[data-print-mode="customer"] .internal-only {
 .avd-workspace .avd-product-detail summary { font-size: .87rem; color: var(--navy-2); }
 .avd-workspace .avd-product-source { font-size: .88rem; margin-block: 9px 13px; }
 .avd-workspace .avd-product-source > div { display: block; }
-.avd-workspace .avd-direct-compare { --avd-matrix-label: clamp(95px, 14%, 160px); }
-.avd-workspace .avd-direct-compare .retirement-product-selection { margin-inline-start: calc(var(--avd-matrix-label) + 12px); }
-.avd-workspace .avd-direct-compare .retirement-product-selection > li { border-radius: 6px; }
+.avd-workspace .avd-direct-compare { --avd-matrix-label: clamp(120px, 16%, 175px); padding: 0; }
+.avd-workspace .avd-direct-compare .avd-difference-toggle { padding: 6px 16px; }
+.avd-workspace .avd-direct-compare .retirement-product-selection {
+  margin: 0; padding: 0 13px 0 calc(var(--avd-matrix-label) + 25px); gap: 0;
+  background: #edf4fa; border-block: 1px solid var(--avd-edge);
+}
+.avd-workspace .avd-direct-compare .retirement-product-selection > li {
+  background: none; color: var(--navy); border: 0; border-radius: 0; padding: 8px 12px;
+}
+.avd-workspace .avd-direct-compare .retirement-product-selection > li > strong { line-height: 1.25; margin-bottom: 2px; }
+.avd-workspace .avd-direct-compare .retirement-product-selection button { border: 0; background: none; padding: 3px 0; text-decoration: underline; }
 .avd-workspace .avd-direct-compare .retirement-product-row {
   display: grid; grid-template-columns: var(--avd-matrix-label) minmax(0,1fr);
-  gap: 12px; align-items: start;
+  gap: 12px; align-items: start; padding: 7px 13px; border-color: var(--avd-edge);
 }
 .avd-workspace .avd-direct-compare .retirement-product-row:nth-of-type(even) { background: #f7fafd; }
-.avd-workspace .avd-direct-compare .retirement-product-row dl > div { background: transparent; padding-block: 2px; }
+.avd-workspace .avd-direct-compare .retirement-product-row h3 { padding: 5px 0 0; margin: 0; }
+.avd-workspace .avd-direct-compare .retirement-product-row dl { gap: 0; }
+.avd-workspace .avd-direct-compare .retirement-product-row dl > div { background: transparent; padding: 3px 12px; }
+.avd-workspace .avd-direct-compare .retirement-product-row dl > div + div { border-left: 1px solid var(--avd-edge); border-radius: 0; }
+.avd-direct-compare .retirement-product-row dd { margin: 0; }
+.avd-direct-compare .retirement-product-row dd > small { display: block; color: var(--avd-subtle); }
+.avd-direct-compare .avd-compare-payout-detail summary { color: var(--navy-2); cursor: pointer; text-decoration: underline; }
+.avd-direct-compare .avd-compare-sources { padding: 8px 13px; }
+.avd-direct-compare .avd-compare-sources details { min-width: 0; margin: 0; }
+.avd-direct-compare .avd-shared-facts { border-radius: 0; padding: 8px 16px; }
+.avd-direct-compare .avd-shared-facts ul { margin: 5px 0; padding-left: 1.25em; }
 
 .avd-workspace .avd-analysis-panel { padding: 15px 19px 17px; }
 .avd-workspace .avd-analysis-header { padding-bottom: 9px; }
@@ -8318,14 +8367,16 @@ body[data-print-mode="customer"] .internal-only {
   .avd-a1-person, .avd-a1-family { grid-template-columns: minmax(0,1fr); }
   .avd-year-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px 5px; }
   .avd-year-metrics > div:nth-child(odd) { border: 0; padding-left: 0; }
-  .avd-workspace .avd-direct-compare .retirement-product-selection { margin-inline-start: 0; }
+  .avd-workspace .avd-direct-compare .retirement-product-selection { padding-inline: 13px; }
   .avd-workspace .avd-direct-compare .retirement-product-row { grid-template-columns: minmax(0,1fr); gap: 2px; }
   .avd-workspace .avd-capital-result.avd-result-band, .avd-stress-summary { grid-template-columns: minmax(0,1fr); }
   .avd-result-band .avd-capital-build { border-left: 0; padding-left: 0; }
 }
 @container retirement-journey (max-width: 430px) {
-  .avd-workspace .avd-check-sheet .avd-employment, .avd-workspace .avd-product-row,
+  .avd-workspace .avd-product-row,
   .avd-stress-summary .avd-effect-chain { grid-template-columns: minmax(0,1fr); }
   .avd-result-band .avd-capital-build dl { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .avd-stress-summary .avd-effect-chain > div::before { display: none; }
+  .avd-annual-target { grid-template-columns: minmax(0,1fr); }
+  .avd-workspace .avd-contribution-sheet .retirement-contribution-targets button { grid-template-columns: minmax(0,1fr); }
 }

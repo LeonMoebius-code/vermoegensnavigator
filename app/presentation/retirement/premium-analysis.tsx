@@ -17,6 +17,7 @@ export type Analysis = typeof analyses[number]["id"];
 type Result = Subresult & { readonly curveId: string };
 type Curve = Extract<Subresult["result"], { status: "computed" }>["value"];
 const navy = "#06366c", blue = "#207bb9", teal = "#00776d", orange = "#b84e13", purple = "#76499c", red = "#9e2448";
+const capitalColors = { opening: "#4e5590", own: blue, grants: purple, positive: teal, negative: red };
 const colors = [navy, teal, purple];
 const pct = (value: number) => value.toLocaleString("de-DE", { maximumFractionDigits: 2 }) + " %";
 const cents = (value: number | null | undefined) => value == null ? "Offen" : chartMoney(value);
@@ -68,10 +69,10 @@ function Capital({ results, controls, options }: { results: readonly Result[]; c
   const partial = active.specifiedEnd.status === "computed" ? active.specifiedEnd.cents : null;
   const growth = partial === null ? null : partial - opening - row.ownCents - row.grantCents;
   const build = [
-    { label: "Anfangsbestand", value: opening, color: "#4e5590" },
-    { label: "Eigenbeiträge", value: row.ownCents, color: navy },
-    { label: "Zulagen im Modell", value: row.grantCents, color: blue },
-    { label: "Wertentwicklung", value: growth, color: growth !== null && growth < 0 ? red : teal },
+    { label: "Anfangsbestand", value: opening, color: capitalColors.opening },
+    { label: "Eigenbeiträge", value: row.ownCents, color: capitalColors.own },
+    { label: "Zulagen im Modell", value: row.grantCents, color: capitalColors.grants },
+    { label: "Wertentwicklung", value: growth, color: growth !== null && growth < 0 ? capitalColors.negative : capitalColors.positive },
   ];
   const composition = end !== null && end > 0 && build.every(item => item.value !== null && item.value >= 0);
   const inputParts = active.rows.map(r => {
@@ -81,16 +82,16 @@ function Capital({ results, controls, options }: { results: readonly Result[]; c
   });
   const funded = active.fundingPerspective !== "OHNE_ZULAGEN";
   const chart: ChartSeries[] = [
-    { label: "Anfangsbestand", color: "#4e5590", values: inputParts.map(r => r ? opening : null),
+    { label: "Anfangsbestand", color: capitalColors.opening, values: inputParts.map(r => r ? opening : null),
       band: { from: inputParts.map(r => r ? 0 : null), to: inputParts.map(r => r ? opening : null) } },
-    { label: "Eigenbeiträge", color: blue, values: inputParts.map(r => r?.own ?? null),
+    { label: "Eigenbeiträge", color: capitalColors.own, values: inputParts.map(r => r?.own ?? null),
       band: { from: inputParts.map(r => r ? opening : null), to: inputParts.map(r => r?.principal ?? null) } },
-    ...(funded ? [{ label: "Zulagen im Modell", color: purple, values: inputParts.map(r => r?.grant ?? null),
+    ...(funded ? [{ label: "Zulagen im Modell", color: capitalColors.grants, values: inputParts.map(r => r?.grant ?? null),
       band: { from: inputParts.map(r => r?.principal ?? null), to: inputParts.map(r => r?.funded ?? null) } }] : []),
-    { label: "Wertentwicklung positiv", color: teal,
+    { label: "Wertentwicklung positiv", color: capitalColors.positive,
       values: inputParts.map(r => r ? Math.max(0, r.end - r.funded) : null),
       band: { from: inputParts.map(r => r?.funded ?? null), to: inputParts.map(r => r ? Math.max(r.funded, r.end) : null) } },
-    { label: "Wertentwicklung negativ", color: red,
+    { label: "Wertentwicklung negativ", color: capitalColors.negative,
       values: inputParts.map(r => r ? Math.min(0, r.end - r.funded) : null),
       band: { from: inputParts.map(r => r?.funded ?? null), to: inputParts.map(r => r ? Math.min(r.funded, r.end) : null) } },
   ];

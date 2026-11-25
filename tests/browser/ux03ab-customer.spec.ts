@@ -12,7 +12,7 @@ async function zero(p: Page) {
 
 test("UX03 U1: payment questions and annual optimizer after guided entry, no checkboxes, open funding plus three actual curves", async ({ page }) => {
   await enter(page);
-  const inputs = page.locator(".retirement-customer-inputs");
+  const inputs = page.locator(".avd-contribution-layout");
   await expect(inputs.locator("input:not([type=range]):visible, select:visible")).toHaveCount(4);
   await expect(inputs.getByRole("slider", { name: "Monatsrate einstellen" })).toBeVisible();
   await expect(page.locator(".retirement-customer input[type=checkbox]:visible")).toHaveCount(0);
@@ -121,6 +121,16 @@ for (const width of [390, 1440]) test(`UX03 layout and keyboard at ${width}px`, 
   await label(page, "Wie viel möchten Sie monatlich einzahlen?").focus(); await page.keyboard.press("Tab");
   await expect(page.getByRole("slider", { name: "Monatsrate einstellen" })).toBeFocused();
   await page.keyboard.press("Tab");
+  await expect(page.getByRole("group", { name: "Beitragsziele" }).getByRole("button").first()).toBeFocused();
+  const tabPastMonth = async (name: string) => {
+    const month = label(page, name);
+    await expect(month).toBeFocused();
+    // Chromium tabs through the native month field's individual segments.
+    for (let i = 0; i < 6 && await month.evaluate(el => el === document.activeElement); i++) await page.keyboard.press("Tab");
+  };
+  await label(page, "Ab wann möchten Sie sparen?").focus();
+  await tabPastMonth("Ab wann möchten Sie sparen?");
+  await tabPastMonth("Bis wann möchten Sie sparen?");
   await expect(page.getByText("Sparende und Bewertung getrennt festlegen", { exact: true })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.getByText("Eigene Einmalzahlung ergänzen", { exact: true })).toBeFocused();

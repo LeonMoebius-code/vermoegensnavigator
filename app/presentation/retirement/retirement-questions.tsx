@@ -122,7 +122,10 @@ export function RetirementQuestions({ answers: a, plan, change, birth, back, nex
   const heading = useRef<HTMLHeadingElement>(null);
   const insuranceQuestion = ["self", "none", "other"].includes(a.employment);
   const partnerQuestions = insuranceQuestion || a.employment === "civil" && a.civilConsent !== "yes";
-  const sections = [0, 1, ...(insuranceQuestion || a.employment === "civil" ? [2] : []), 3, 4];
+  const specialQuestions = insuranceQuestion || a.employment === "civil";
+  const standard = section === 0 || section === 1;
+  const family = section === 3 || standard && !specialQuestions;
+  const sections = [0, 1, ...(specialQuestions ? [2] : []), 3, 4];
   const position = sections.indexOf(section);
   const move = (target: number) => {
     setSection(target);
@@ -164,12 +167,7 @@ export function RetirementQuestions({ answers: a, plan, change, birth, back, nex
   const shortSections = ["Beitragsjahr", "Beruf", "Sonderfälle", "Vertrag & Kinder", "Ergebnis"];
   return <div className="panel retirement-question-layout retirement-guided-layout avd-check-sheet" data-question={section}>
     <section className="retirement-questionnaire" aria-label="Ihre Voraussetzungen">
-      <p className="avd-question-position" role="status" aria-live="polite" aria-atomic="true">Abschnitt {position + 1} von {sections.length}: {questionSections[section]}</p>
-      <nav className="retirement-question-progress" aria-label="Abschnitte der Förderfragen">
-        <ol>{sections.map((index, i) => <li key={index}><button type="button" aria-current={section === index ? "step" : undefined}
-          aria-label={`${i + 1}. ${questionSections[index]}`}
-          onClick={() => index > section ? submit(index) : move(index)}><span aria-hidden="true">{i + 1}</span> {shortSections[index]}</button></li>)}</ol>
-      </nav>
+      <p className={standard ? "avd-visually-compact" : "avd-question-position"} role="status" aria-live="polite" aria-atomic="true">Abschnitt {position + 1} von {sections.length}: {questionSections[section]}</p>
       <h2 ref={heading} tabIndex={-1}>{questionSections[section]}</h2>
       {section === 0 && <p className="avd-note">Unklare Angaben dürfen offenbleiben.</p>}
       <form className="retirement-form" noValidate onSubmit={e => { e.preventDefault(); section === 4 ? submit() : submit(sections[position + 1]); }}>
@@ -181,10 +179,13 @@ export function RetirementQuestions({ answers: a, plan, change, birth, back, nex
         <input id={id("birth")} ref={birthRef} inputMode="numeric" value={plan.birthYear} aria-invalid={!!errors.birth} aria-describedby={errors.birth ? id("birth-error") : undefined} onChange={e => { setErrors({}); birth(e.target.value); }} />
         {errors.birth && <p id={id("birth-error")} role="alert">{errors.birth}</p>}</div>
         </div>}
-        {section === 1 && <>
+        {standard && <>
         <fieldset className="retirement-answer-group avd-employment"><legend>Wie sind Sie derzeit beruflich tätig und versichert?</legend>
           {employmentOptions.map(([v, label]) => <label key={v} className="retirement-answer"><input type="radio" name={id("employment")} checked={a.employment === v} onChange={() => change("employment", v)} />{label}</label>)}
-        </fieldset><p className="avd-note">Bei einer Anstellung im öffentlichen Dienst zählt die tatsächliche Versicherungsform.</p>
+        </fieldset>
+        <details className="avd-disclosure avd-a1-special" open={a.upbringing || a.care || Boolean(a.additions) || undefined}>
+        <summary>Weitere Versicherungs- und Sonderfälle</summary>
+        <p className="avd-note">Bei einer Anstellung im öffentlichen Dienst zählt die tatsächliche Versicherungsform.</p>
         <fieldset className="retirement-answer-group avd-additional-answers"><legend>Treffen zusätzlich weitere Situationen auf Sie zu?</legend>
           <p>Mehrfachauswahl möglich – unabhängig von Ihrer Berufstätigkeit.</p>
           <label className="retirement-answer"><input type="checkbox" checked={a.upbringing} onChange={e => change("upbringing", e.target.checked)} />Kindererziehungszeiten</label>
@@ -192,6 +193,8 @@ export function RetirementQuestions({ answers: a, plan, change, birth, back, nex
           <label className="retirement-answer"><input type="checkbox" checked={a.additions === "none"} onChange={e => change("additions", e.target.checked ? "none" : "")} />Keine weiteren Situationen</label>
           <label className="retirement-answer"><input type="checkbox" checked={a.additions === "unknown"} onChange={e => change("additions", e.target.checked ? "unknown" : "")} />Zusätzliche Zeiten gemeinsam prüfen</label>
         </fieldset>
+        </details>
+        {specialQuestions && <button className="secondary avd-special-action" type="button" onClick={() => submit(2)}>Versicherung und Sonderfälle prüfen</button>}
         </>}
         {section === 2 && <>
         {a.employment === "civil" && tri("civilConsent", "Haben Sie der erforderlichen Datenübermittlung gegenüber Ihrer zuständigen Stelle zugestimmt?")}
@@ -201,7 +204,7 @@ export function RetirementQuestions({ answers: a, plan, change, birth, back, nex
         {partnerQuestions && <>{tri("married", "Sind Sie verheiratet oder in einer eingetragenen Lebenspartnerschaft?")}
           {a.married === "yes" && <>{tri("separated", "Leben Sie dauerhaft getrennt?")}{tri("partner", "Ist Ihr Partner selbst unmittelbar förderberechtigt?")}<p>Auch bei passenden Antworten müssen die weiteren Voraussetzungen der mittelbaren Förderung geprüft werden.</p></>}</>}
         </>}
-        {section === 3 && <div className="avd-a1-family">
+        {family && <div className="avd-a1-family">
         {tri("riester", "Haben Sie bereits einen Riester-Vertrag?")}
         {(a.riester === "yes" || a.riester === "unknown") && <div className="retirement-example"><p>Ein neuer Fördervertrag kann die Förderung Ihres bestehenden Vertrags beeinflussen.</p><button type="button" onClick={riester}>Bestehenden Riester-Vertrag zuerst prüfen</button><p>Ihre Antworten bleiben beim internen Wechsel erhalten. A- und B-Vertragsnachweise bleiben getrennt.</p></div>}
         {tri("childBenefit", "Wird für eines Ihrer Kinder aktuell Kindergeld gezahlt?")}
@@ -213,16 +216,20 @@ export function RetirementQuestions({ answers: a, plan, change, birth, back, nex
         </>}
         <div className="retirement-question-actions">
           <button type="button" onClick={() => section === 0 ? back() : move(sections[position - 1])}>{section === 0 ? "Zurück zur Einführung" : "Zurück"}</button>
-          {section !== 4 && <button className="primary" type="submit">Weiter</button>}
-          <button className={section === 4 ? "primary" : "secondary"} type="button" onClick={() => submit()}>Weiter zum eigenen Sparplan</button>
+          {section !== 4 && <button className={standard && !specialQuestions ? "secondary" : "primary"} type="submit">Weiter</button>}
+          <button className={section === 4 || standard && !specialQuestions ? "primary" : "secondary"} type="button" onClick={() => submit()}>Weiter zum eigenen Sparplan</button>
         </div>
       </form>
+      <nav className="retirement-question-progress" aria-label="Abschnitte der Förderfragen">
+        <ol>{sections.map((index, i) => <li key={index}><button type="button" aria-current={section === index ? "step" : undefined}
+          aria-label={`${i + 1}. ${questionSections[index]}`}
+          onClick={() => index > section ? submit(index) : move(index)}>{shortSections[index]}</button></li>)}</ol>
+      </nav>
     </section>
     <aside className="avd-check-result">
       <p className="avd-kicker">Förderorientierung · {a.year || "Beitragsjahr offen"}</p>
       <FundingOrientation answers={a} year={plan.capital.start.slice(0, 4)} advisor={advisor} />
-      {section > 0 && section < 4 && <dl className="avd-check-context">
-        <div><dt>Erstes Beitragsjahr</dt><dd>{a.year || "Offen"}</dd></div>
+      {section < 4 && <dl className="avd-check-context">
         <div><dt>Bestehender Riester-Vertrag</dt><dd>{answerText(a.riester)}</dd></div>
         <div><dt>Kindergeld</dt><dd>{answerText(a.childBenefit)}</dd></div>
       </dl>}

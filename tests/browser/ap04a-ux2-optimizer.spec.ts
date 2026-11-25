@@ -106,21 +106,26 @@ test("R81-R1-01: excess one-off distinguishes target, actual contribution and co
   const annualGoal = label(page, "Jahresziel für das erste Kalenderjahr in Euro");
   const monthly = label(page, "Wie viel möchten Sie monatlich einzahlen?");
   const actual = page.getByTestId("planned-annual-contribution");
+  const example = (title: string) => page.locator(".avd-target-examples > div").filter({ has: page.getByText(title, { exact: true }) });
+  const minimumExample = example("Förder-Mindestbeitrag");
+  const childExample = example("Kinderzulage voll");
   const calculate = () => runNeutral(page);
-  async function displayed(goal: string, actualEuro: string, rate: string, grantEuro: string, card: typeof minimum) {
+  async function displayed(goal: string, actualEuro: string, rate: string, grantEuro: string, card: typeof minimum, details = minimumExample) {
     await expect(annualGoal).toHaveValue(goal);
     await expect(actual).toHaveText(`Tatsächlich geplanter Jahresbeitrag: ${actualEuro} €`);
     await expect(page.getByTestId("customer-annual")).toContainText(`${actualEuro} €`);
     await expect(monthly).toHaveValue(rate);
     await expect(card).toHaveAttribute("aria-pressed", "true");
-    await expect(card).toContainText(`Tatsächlich geplanter Jahresbeitrag: ${actualEuro} €`);
-    await expect(card).toContainText("Für Ihren tatsächlichen Zahlungsplan · bedingter Standardfall");
-    await expect(card).toContainText(`Mögliche Grundzulage · bedingt: ${grantEuro} €`);
-    await expect(card).not.toContainText("Orientierungsbeispiel");
+    await expect(details).toContainText(`Tatsächlich geplanter Jahresbeitrag: ${actualEuro} €`);
+    await expect(details).toContainText("Für Ihren tatsächlichen Zahlungsplan · bedingter Standardfall");
+    await expect(details).toContainText(`Mögliche Grundzulage · bedingt: ${grantEuro} €`);
+    await expect(details).not.toContainText("Orientierungsbeispiel");
     await expect(page.getByTestId("conditional-base-grant")).toHaveText(`${grantEuro} €`);
     await expect(page.getByTestId("customer-base-grant")).toHaveCount(0);
   }
   await minimum.click();
+  await page.getByText("Grundlage der Förderziele", { exact: true }).click();
+  await expect(minimumExample).toBeVisible();
   await displayed("120,00", "120,00", "40,00", "60,00", minimum);
   await page.getByText("Eigene Einmalzahlung ergänzen", { exact: true }).click();
   const once = label(page, "Zusätzliche eigene Einmalzahlung einplanen");
@@ -130,26 +135,27 @@ test("R81-R1-01: excess one-off distinguishes target, actual contribution and co
   // Fixed independent HOLD oracle: 0 + 200 = 200, conditional base grant 100.
   await displayed("120,00", "200,00", "0,00", "100,00", minimum);
   await expect(minimum).toContainText("Jahresziel: 120,00 €");
-  await expect(minimum).not.toContainText("60,00 €");
+  await expect(minimumExample).not.toContainText("60,00 €");
   await expect(page.getByTestId("contribution-explanation")).toContainText("Die Einmalzahlung von 200,00 € bleibt erhalten. Die Monatsrate beträgt 0,00 €.");
-  await expect(childGoal).toContainText("Orientierungsbeispiel bei exakt 300,00 € Jahresbeitrag · kein individueller Förderanspruch");
-  await expect(childGoal).toContainText("Mögliche Grundzulage · bedingt: 150,00 €");
+  await expect(childExample).toContainText("Orientierungsbeispiel bei exakt 300,00 € Jahresbeitrag · kein individueller Förderanspruch");
+  await expect(childExample).toContainText("Mögliche Grundzulage · bedingt: 150,00 €");
   await calculate();
   await expect(page.getByTestId("customer-end-value")).toHaveText(["200,00 €", "200,00 €", "200,00 €"]);
   await expect(page.getByTestId("customer-own")).toContainText("200,00 €");
   await enterStep(page, "A2");
   await page.getByText("Eigene Einmalzahlung ergänzen", { exact: true }).click();
+  await page.getByText("Grundlage der Förderziele", { exact: true }).click();
   await expect(page.getByTestId("conditional-funding")).toContainText("Das Kapitalmodell übernimmt dieses bedingte Szenario nicht automatisch.");
 
   // Switching goals updates the active example without altering the own one-off.
   await childGoal.click();
-  await displayed("300,00", "300,00", "33,33", "150,00", childGoal);
+  await displayed("300,00", "300,00", "33,33", "150,00", childGoal, childExample);
   await expect(label(page, "Einmalzahlung in Euro")).toHaveValue("200");
-  await expect(minimum).toContainText("Orientierungsbeispiel bei exakt 120,00 € Jahresbeitrag · kein individueller Förderanspruch");
-  await expect(minimum).toContainText("Mögliche Grundzulage · bedingt: 60,00 €");
-  await expect(minimum).not.toContainText("Für Ihren tatsächlichen Zahlungsplan");
+  await expect(minimumExample).toContainText("Orientierungsbeispiel bei exakt 120,00 € Jahresbeitrag · kein individueller Förderanspruch");
+  await expect(minimumExample).toContainText("Mögliche Grundzulage · bedingt: 60,00 €");
+  await expect(minimumExample).not.toContainText("Für Ihren tatsächlichen Zahlungsplan");
   await label(page, "Einmalzahlung in Euro").fill("90");
-  await displayed("300,00", "300,00", "70,00", "150,00", childGoal);
+  await displayed("300,00", "300,00", "70,00", "150,00", childGoal, childExample);
   await minimum.click();
   await displayed("120,00", "120,00", "10,00", "60,00", minimum);
 
