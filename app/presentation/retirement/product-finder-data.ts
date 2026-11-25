@@ -206,6 +206,24 @@ const productEntries: Record<ProductId, Product> = {
   },
 };
 
+export type SharedComparisonFact = "no_announced_contribution_guarantee" | "union_fund_payout_without_annuity";
+
+/** Only explicit, reviewed public facts are comparable. Open text, costs and
+ * preference results are not evidence of equivalent tariff conditions. */
+export function sharedComparisonFacts(selected: readonly Product[]): readonly SharedComparisonFact[] {
+  if (selected.length < 2) return [];
+  const first = selected[0];
+  const facts: SharedComparisonFact[] = [];
+  if (selected.every(product => product.protection.kind === "none"
+    && product.protection.basis === noGuarantee.basis && product.protection.date === noGuarantee.date
+    && product.protection.commitment === noGuarantee.commitment)) facts.push("no_announced_contribution_guarantee");
+  if (selected.every(product => product.provider === "Union Investment" && product.payoutSource === "unionPayout"
+    && product.plan.status === "public" && product.plan.kind === "fund" && product.plan.description === first.plan.description
+    && product.annuity.status === "absent" && product.annuity.description === first.annuity.description))
+    facts.push("union_fund_payout_without_annuity");
+  return facts;
+}
+
 const displayOrder: readonly ProductId[] = ["basis", "ruv-standard", "pro", "ruv-individuell", "garantie", "ruv-garantie-80"];
 export const products = displayOrder.map(id => productEntries[id]);
 

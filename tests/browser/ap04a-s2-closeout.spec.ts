@@ -40,11 +40,19 @@ for (const [year, start, expected] of [
 test("S2 sequential employee route, own summary, keyboard focus and optional answers", async ({ page }) => {
   await enter(page);
   await expect(page.getByRole("status")).toHaveText("Abschnitt 1 von 4: Zeitraum und Person");
-  await expect(page.getByRole("group")).toHaveCount(0);
+  const standard = page.getByRole("region", { name: "Ihre Voraussetzungen" });
+  await expect(standard.getByRole("group", { name: "Wie sind Sie derzeit beruflich tätig und versichert?" })).toBeVisible();
+  await expect(standard.getByRole("group", { name: "Haben Sie bereits einen Riester-Vertrag?" })).toBeVisible();
+  await expect(standard.getByRole("group", { name: "Wird für eines Ihrer Kinder aktuell Kindergeld gezahlt?" })).toBeVisible();
+  await expect(standard.getByRole("group", { name: "Welche Versicherungssituation trifft auf Sie zu?" })).toHaveCount(0);
+  const views = page.getByRole("group", { name: "Beratungsansicht" });
+  await expect(views.getByRole("button")).toHaveCount(2);
+  await expect(views.getByRole("button", { name: "Kundenansicht" })).toHaveAttribute("aria-pressed", "true");
   await page.getByLabel(yearLabel, { exact: true }).fill("2028"); await page.getByLabel(birthLabel, { exact: true }).fill("1990");
   await btn(page, "Weiter").focus(); await page.keyboard.press("Enter");
   await expect(page.getByRole("heading", { name: "Erwerb und Versicherung", exact: true })).toBeFocused();
   await page.getByRole("radio", { name: employee, exact: true }).check();
+  await page.getByText("Weitere Versicherungs- und Sonderfälle", { exact: true }).click();
   await page.getByRole("checkbox", { name: "Kindererziehungszeiten", exact: true }).check();
   await page.getByRole("checkbox", { name: "Ich pflege Angehörige", exact: true }).check();
   await btn(page, "Weiter").click();

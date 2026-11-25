@@ -80,7 +80,7 @@ export function RetirementProjectionResults({ result }: { result: Extract<Capita
         {result.mode === "comparison" && response.comparisonResults[i] && <ComparisonResult comparison={response.comparisonResults[i]} />}
       </section>;
     })}</div>
-    <details className="retirement-help"><summary>Fachebene · Rechenstand und Quellenbindung</summary>
+    <details className="retirement-help"><summary>Rechenstand und Quellenbindung</summary>
       <p>Ausschließlich hypothetische UI-Annahmen ap04b-ui-v1; kein Hersteller- oder Buchungsnachweis. Nullwerte bezeichnen nur ausdrücklich gewählte Modellannahmen.</p>
       {result.responses.map((r, i) => <div key={i}><p>Anfrage {i + 1}: <code>{r.requestHash ?? "Kein gültiger Anfragehash"}</code></p>
         <p>Rechenversion: {r.supportedVersions.modelVersion} · {r.supportedVersions.numericConventionVersion}</p>
