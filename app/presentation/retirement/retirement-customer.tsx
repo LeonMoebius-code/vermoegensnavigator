@@ -129,10 +129,28 @@ export function RetirementCustomer({ plan, change, back, next, fundingSelection 
       onChange={e => evidence(key, e.target.value as GrantDraft[K])}>{choices.map(([value, name]) => <option key={value} value={value}>{name}</option>)}</select>
   </div>;
 
+  const projectedGrant = !boundFunding && grant.status === "calculated" ? grant.result.totalGrantCents : null;
+  const annual = payments.status === "valid" && !endOpen ? payments.total : null;
+  const contributionTotal = projectedGrant !== null && grant.status === "calculated" ? grant.annualCents + projectedGrant : null;
   return <div className="retirement-customer" data-testid="customer-retirement">
+    <div className="panel avd-contribution-sheet">
+      <section className="avd-year-balance" aria-label="Wirtschaftliche Wirkung im ersten Beitragsjahr" aria-live="polite">
+        <div className="avd-year-title"><h2>Ihr erstes Beitragsjahr</h2><p>{year || "Beitragsjahr offen"}</p></div>
+        <dl className="avd-year-metrics">
+          <div><dt>Eigener Jahresbeitrag</dt><dd>{annual === null ? "Offen" : euro(annual)}</dd>
+            <dd className="avd-year-note">{payments.status === "valid" && !endOpen && timing.mode !== "holdings_only" ? euro(payments.monthly) + " monatlich" : "Zahlungsplan prüfen"}</dd></div>
+          <div><dt>Zulagen im Vertrag</dt><dd>{projectedGrant === null ? boundFunding ? "Siehe Buchungen" : "Offen" : <span data-testid="total-grant">{euro(projectedGrant)}</span>}</dd>
+            <dd className="avd-year-note">{projectedGrant === null ? "Nach Anspruch und Zuordnung" : "Regelbasiert modelliert"}</dd></div>
+          <div className="avd-year-total"><dt>Eigenbeitrag und modellierte Zulagen</dt>
+            <dd>{contributionTotal === null ? "Offen" : <span data-testid="total-inflow">{euro(contributionTotal)}</span>}</dd>
+            <dd className="avd-year-note">Geld im Vertrag</dd></div>
+          <div className="avd-year-tax"><dt>Möglicher Steuervorteil</dt><dd>Gesondert prüfen</dd>
+            <dd className="avd-year-note">Außerhalb des Vertrags</dd></div>
+        </dl>
+      </section>
     <div className="retirement-stage avd-contribution-layout">
       <div className="retirement-stage-main">
-        <section className="panel retirement-customer-inputs" aria-labelledby={id("inputs")}>
+        <section className="retirement-customer-inputs" aria-labelledby={id("inputs")}>
           <h2 id={id("inputs")}>Wie möchten Sie einzahlen?</h2>
           <form ref={form} className="retirement-form" noValidate onSubmit={e => {
             e.preventDefault();
@@ -144,7 +162,7 @@ export function RetirementCustomer({ plan, change, back, next, fundingSelection 
               invalid.focus();
             });
           }}>
-            <div className="retirement-capital-grid">
+            <div className="avd-pay-dates retirement-capital-grid">
               {text("start", "Ab wann möchten Sie sparen?", true)}
               {timing.mode === "dated" ? text("end", "Bis wann möchten Sie sparen?", true)
                 : <div><strong>Letzter regulärer Sparmonat</strong><p>{timing.mode === "holdings_only" ? "Bestandsprojektion" : endOpen ? "Offen" : plan.capital.end}</p></div>}
@@ -214,15 +232,8 @@ export function RetirementCustomer({ plan, change, back, next, fundingSelection 
         <ul>{rules.sources.map(source => <li key={source}><a href={source} target="_blank" rel="noreferrer">{source}</a></li>)}</ul></> : <p>Für dieses Jahr liegt hier kein geprüfter Förderregelstand vor.</p>}
     </details>
       </div>
-      <section className="panel retirement-funding-card retirement-stage-summary" aria-label="Ihre Förderung im Überblick" aria-live="polite">
-        <p className="avd-kicker">Förderwirkung · {year || "Beitragsjahr offen"}</p>
-        <h2>Ihr erstes Beitragsjahr</h2>
-        <dl className="retirement-funding-totals">
-          <div><dt>Monatlicher Eigenbeitrag</dt><dd>{payments.status === "valid" && !endOpen && timing.mode !== "holdings_only" ? euro(payments.monthly) : "Offen"}</dd></div>
-          <div><dt>Eigener Jahresbeitrag · {year}</dt><dd>{payments.status === "valid" && !endOpen ? euro(payments.total) : "Eingabe prüfen"}</dd></div>
-          <div><dt>Zulagen im Vertrag</dt><dd>{boundFunding ? "Siehe Förderbuchungen" : grant.status === "calculated" ? <><span data-testid="total-grant">{euro(grant.result.totalGrantCents)}</span> <small>modelliert</small></> : "Offen"}</dd></div>
-          <div><dt>Möglicher Steuervorteil außerhalb des Vertrags</dt><dd>Gesondert prüfen</dd></div>
-        </dl>
+      <section className="retirement-funding-card retirement-stage-summary" aria-label="Ihre Förderung im Überblick" aria-live="polite">
+        <h3>Förderbausteine und Buchung</h3>
         {boundFunding && <>
           {!importedCurrent && <p className="avd-open" role="status">Die Förderprüfung ist veraltet. Belegte Buchungen bleiben erhalten.</p>}
           {historical && <dl className="retirement-funding-totals">
@@ -252,7 +263,7 @@ export function RetirementCustomer({ plan, change, back, next, fundingSelection 
             <div><dt>Grundzulage</dt><dd data-testid="customer-base-grant">{euro(grant.result.baseGrantCents)}</dd></div>
             {grant.result.childGrants.map((child, i) => <div key={child.childId}><dt>Kinderzulage Kind {i + 1}</dt><dd data-testid="child-grant">{euro(child.grantCents)}</dd></div>)}
             <div><dt>Summe Kinderzulagen</dt><dd>{euro(grant.result.childrenGrantCents)}</dd></div>
-            <div><dt>Eigenbeitrag und modellierte Zulagen</dt><dd data-testid="total-inflow">{euro(grant.annualCents + grant.result.totalGrantCents)}</dd></div>
+
           </dl>
           <dl className="retirement-funding-totals"><div><dt>Berufseinsteigerbonus · einmalig</dt><dd>Gesondert prüfen</dd></div></dl>
           <p>Diese Modellrechnung enthält keinen Einmalbonus. Förderbuchungen werden mit ihrem eigenen Buchungsmonat erfasst.</p>
@@ -282,6 +293,7 @@ export function RetirementCustomer({ plan, change, back, next, fundingSelection 
         {plan.children === "yes" && !availableChild && <p>Kinderzulage prüfen. Förderjahr, Kindergeld und die Zuordnung zum Vertrag müssen zusammenpassen.</p>}
         <p>Für die Kapitalentwicklung zählen Zulagen erst als separat erfasstes Ereignis mit Förderjahr, Betrag und Buchungsmonat.</p>
       </section>
+    </div>
     </div>
   </div>;
 }

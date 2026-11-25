@@ -8081,3 +8081,251 @@ body[data-print-mode="customer"] .internal-only {
 @container retirement-journey (max-width: 540px) {
   .avd-chart-tools { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* R90-N1 · result-first advice workspace. */
+.avd-workspace .avd-journey-toolbar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px 16px;
+  align-items: center;
+  padding: 6px 10px;
+  border: 1px solid var(--avd-edge);
+  border-radius: 11px;
+  background: white;
+}
+.avd-workspace .avd-journey-toolbar .retirement-route-back { padding: 0 9px 0 2px; white-space: nowrap; }
+.avd-workspace .avd-journey-toolbar .retirement-guided-nav {
+  display: flex; flex-wrap: wrap; gap: 3px;
+  margin: 0; padding: 0; border: 0; border-radius: 0; background: none;
+}
+.avd-workspace .avd-journey-toolbar .retirement-guided-nav button {
+  min-height: 34px; padding: 5px 10px; border: 0; font-size: .87rem;
+}
+.avd-workspace .avd-journey-toolbar .retirement-guided-nav button:not([aria-current]) { background: transparent; }
+.avd-workspace .avd-journey-toolbar .retirement-guided-nav button:not([aria-current]):hover { background: var(--avd-quiet); }
+.avd-workspace .avd-journey-toolbar > .avd-segment button { white-space: nowrap; }
+.avd-workspace .retirement-journey-header { margin: 15px 0 13px; align-items: center; }
+.avd-workspace .retirement-journey-header h1 { margin: 0; }
+.avd-analysis-topbar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 3px 12px;
+  margin: 4px 0 8px;
+  border-bottom: 1px solid var(--avd-edge);
+}
+.avd-workspace .avd-analysis-nav { justify-content: flex-start; gap: 14px; margin: 0; border-bottom: 0; }
+.avd-workspace .avd-analysis-nav button { flex: 0 1 auto; padding-inline: 10px; }
+.avd-workspace .avd-analysis-nav [aria-current="page"] { background: transparent; border-bottom-color: #c4520d; }
+.avd-workspace .avd-analysis-nav button span { background: #e6edf6; }
+
+.avd-workspace .avd-check-sheet {
+  grid-template-columns: minmax(0, 1.65fr) minmax(250px, 1fr);
+  gap: 0; align-items: stretch; overflow: clip;
+}
+.avd-workspace .avd-check-sheet .retirement-questionnaire { border: 0; padding: 22px 24px; }
+.avd-workspace .avd-check-sheet .retirement-question-progress { padding: 0; background: none; }
+.avd-workspace .avd-check-sheet .retirement-question-progress ol { display: flex; flex-wrap: wrap; gap: 4px; padding: 0; }
+.avd-workspace .avd-check-sheet .retirement-question-progress button { width: auto; min-height: 34px; text-align: left; border: 0; font-size: .87rem; border-radius: 6px; }
+.avd-check-sheet .retirement-question-progress button span { margin-right: .22em; font-weight: 750; }
+.avd-workspace .avd-check-sheet .retirement-question-progress [aria-current="step"] { color: white; background: var(--navy); }
+.avd-check-sheet .avd-check-result { padding: 23px 22px; background: #edf4fa; border-left: 1px solid #dce7f1; }
+.avd-workspace .avd-check-result .retirement-orientation { border: 0; padding: 0; margin: 9px 0 0; background: none; box-shadow: none; }
+.avd-workspace .avd-check-result .retirement-orientation h2 { font-size: 1.52rem; }
+.avd-check-context { margin: 17px 0 0; border-top: 1px solid #cedcea; }
+.avd-check-context > div { display: flex; justify-content: space-between; gap: 12px; padding-top: 8px; }
+.avd-check-context dt { color: var(--avd-subtle); font-size: .9rem; }
+.avd-check-context dd { text-align: right; margin: 0; font-weight: 700; }
+.avd-a1-person, .avd-a1-family { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.avd-a1-person label { display: block; font-weight: 700; margin-bottom: 5px; }
+.avd-a1-family > :not(fieldset) { grid-column: 1 / -1; }
+.avd-workspace .avd-check-sheet .avd-employment { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.avd-workspace .avd-check-sheet .retirement-answer-group { border: 0; padding: 0; margin: 0; }
+.avd-workspace .avd-check-sheet .retirement-answer-group legend { padding: 0; margin-bottom: 7px; }
+.avd-workspace .avd-check-sheet .retirement-answer { min-height: 40px; margin: 0; padding: 8px 11px; }
+.avd-workspace .avd-check-sheet .retirement-answer input { flex: 0 0 auto; }
+.avd-workspace .avd-check-sheet .avd-additional-answers { background: #f4f7fa; border-radius: 7px; padding: 7px 10px; }
+.avd-additional-answers > p { margin: 0 0 4px; color: var(--avd-subtle); font-size: .87rem; }
+.avd-check-sheet .retirement-question-actions { border-top: 1px solid var(--avd-edge); padding-top: 11px; margin-top: 2px; }
+
+.avd-workspace .avd-contribution-sheet { padding: 0; overflow: clip; }
+.avd-year-balance { padding: 17px 22px 19px; background: #edf4fa; border-bottom: 1px solid #dce7f1; }
+.avd-year-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px 13px; margin-bottom: 11px; }
+.avd-workspace .avd-year-title h2, .avd-year-title p { margin: 0; }
+.avd-year-title p { color: var(--avd-subtle); font-weight: 750; }
+.avd-year-metrics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); margin: 0; }
+.avd-year-metrics > div { padding: 3px 14px; border-left: 1px solid #cdddec; min-width: 0; }
+.avd-year-metrics > div:first-child { border: 0; padding-left: 0; }
+.avd-year-metrics dt { font-size: .88rem; font-weight: 650; color: var(--avd-subtle); }
+.avd-year-metrics dd { margin: 3px 0; font-size: clamp(1.12rem, 2vw, 1.68rem); font-weight: 750; color: var(--navy); font-variant-numeric: tabular-nums; line-height: 1.15; }
+.avd-year-metrics .avd-year-total dd:not(.avd-year-note) { color: #00665f; }
+.avd-year-metrics .avd-year-tax dd:not(.avd-year-note) { font-size: 1.07rem; }
+.avd-year-metrics dd.avd-year-note { font-size: .83rem; font-weight: 500; color: var(--avd-subtle); }
+.avd-workspace .avd-contribution-sheet .avd-contribution-layout { gap: 0; align-items: stretch; }
+.avd-contribution-sheet .retirement-stage-main { padding: 16px 22px; }
+.avd-workspace .avd-contribution-sheet .retirement-customer-inputs { padding: 0; }
+.avd-workspace .avd-contribution-sheet .retirement-funding-card {
+  position: static; align-self: stretch; border: 0; border-left: 1px solid var(--avd-edge); padding: 16px 19px; background: #fbfcfe;
+}
+.avd-contribution-sheet .retirement-funding-card h3 { margin-top: 0; }
+.avd-contribution-sheet .retirement-funding-card [data-testid="conditional-funding"] { padding: 8px 11px; background: #edf4fa; border-radius: 7px; }
+.avd-contribution-sheet .retirement-funding-card [data-testid="conditional-funding"] h3 { font-size: .97rem; margin: 0; }
+.avd-workspace .avd-contribution-sheet .retirement-contribution-targets { grid-template-columns: repeat(auto-fit,minmax(113px,1fr)); gap: 5px; }
+.avd-workspace .avd-contribution-sheet .retirement-contribution-targets button { min-height: 64px; padding: 7px 9px; justify-content: start; }
+.avd-target-amount { color: var(--navy-2); font-weight: 750; font-variant-numeric: tabular-nums; }
+.avd-target-explanation { display: none; margin-top: 5px; }
+.avd-workspace .retirement-contribution-targets button[aria-pressed="true"] .avd-target-explanation { display: block; }
+.avd-target-context { margin: 0 0 8px; font-size: .88rem; }
+
+.avd-product-command { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0 12px; }
+.avd-product-command .retirement-product-toolbar { border: 0; background: transparent; padding: 0; }
+.avd-product-command .retirement-product-toolbar p { flex: auto; font-size: .89rem; }
+.avd-product-sheet { border: 1px solid var(--avd-edge); border-radius: 11px; overflow: clip; background: white; }
+.avd-market-status {
+  display: flex; flex-wrap: wrap; gap: 4px 9px; align-items: baseline;
+  margin: 0; padding: 11px 15px; color: var(--avd-subtle); font-size: .87rem;
+}
+.avd-market-status strong { color: var(--navy); }
+.avd-market-status span { margin-left: auto; }
+.avd-workspace :is(.avd-product-row,.avd-product-column-headings) {
+  grid-template-columns: minmax(0, 1.38fr) minmax(0, 1.35fr) minmax(0, 1.38fr) minmax(0, .8fr) 121px;
+  column-gap: 13px;
+}
+.avd-workspace .avd-product-column-headings { border-radius: 0; }
+.avd-workspace .avd-product-row { position: relative; grid-template-rows: auto; min-height: 65px; align-items: center; padding-block: 9px; }
+.avd-workspace .avd-product-row:last-child { border-bottom: 0; }
+.avd-workspace .avd-product-row:nth-child(even):not(:has(input:checked)) { background: #f9fbfd; }
+.avd-workspace .avd-product-row h3 { font-size: .94rem; }
+.avd-product-fact small { display: block; margin-top: 2px; color: var(--avd-subtle); }
+.avd-workspace .avd-product-pick { align-self: start; }
+.avd-workspace .avd-product-detail:not([open]) { position: absolute; right: 16px; top: 36px; width: 121px; }
+.avd-workspace .avd-product-detail summary { font-size: .87rem; color: var(--navy-2); }
+.avd-workspace .avd-product-source { font-size: .88rem; margin-block: 9px 13px; }
+.avd-workspace .avd-product-source > div { display: block; }
+.avd-workspace .avd-direct-compare { --avd-matrix-label: clamp(95px, 14%, 160px); }
+.avd-workspace .avd-direct-compare .retirement-product-selection { margin-inline-start: calc(var(--avd-matrix-label) + 12px); }
+.avd-workspace .avd-direct-compare .retirement-product-selection > li { border-radius: 6px; }
+.avd-workspace .avd-direct-compare .retirement-product-row {
+  display: grid; grid-template-columns: var(--avd-matrix-label) minmax(0,1fr);
+  gap: 12px; align-items: start;
+}
+.avd-workspace .avd-direct-compare .retirement-product-row:nth-of-type(even) { background: #f7fafd; }
+.avd-workspace .avd-direct-compare .retirement-product-row dl > div { background: transparent; padding-block: 2px; }
+
+.avd-workspace .avd-analysis-panel { padding: 15px 19px 17px; }
+.avd-workspace .avd-analysis-header { padding-bottom: 9px; }
+.avd-workspace .avd-analysis-header h1 { margin: 0; font-size: clamp(1.23rem, 2vw, 1.6rem); line-height: 1.2; }
+.avd-analysis-desk { display: grid; grid-template-columns: minmax(0,1fr) minmax(175px, 20%); gap: 9px 15px; align-items: start; }
+.avd-analysis-desk > * { min-width: 0; }
+.avd-desk-foot { grid-column: 1 / -1; }
+.avd-analysis-rail { display: grid; gap: 12px; margin: 0; padding: 12px; background: #f0f5fa; border: 1px solid #e0e9f2; border-radius: 8px; }
+.avd-analysis-rail h3 { margin: 2px 0 0; }
+.avd-analysis-rail > label { display: grid; gap: 4px; font-size: .88rem; font-weight: 650; }
+.avd-analysis-rail input[type="range"] { accent-color: var(--navy-2); width: 100%; }
+.avd-analysis-rail :is(select,input:not([type="range"],[type="checkbox"])) { min-width: 0; width: 100%; min-height: 34px; border: 1px solid #a9bdd1; border-radius: 5px; padding: 4px 6px; background: white; color: var(--navy); }
+.avd-analysis-rail [aria-invalid="true"] { border-color: var(--warn); }
+.avd-analysis-rail .avd-plan-controls { display: grid; margin: 0; padding: 0; background: none; }
+.avd-analysis-rail .avd-range-field { grid-template-columns: minmax(0,.7fr) minmax(0,1fr); }
+.avd-analysis-rail .avd-plan-controls [open] { grid-column: 1 / -1; }
+.avd-analysis-rail .avd-compare-picker { margin: 0; }
+.avd-analysis-rail .avd-compare-picker fieldset { margin: 4px 0; padding: 5px; }
+
+.avd-result-band { padding: 12px 14px; border: 1px solid #dae6f0; border-radius: 8px; background: #f3f7fb; }
+.avd-capital-result.avd-result-band { display: grid; grid-template-columns: minmax(0,.85fr) minmax(0,1.8fr); align-items: center; }
+.avd-workspace .avd-headline-result .avd-metric dd:not(.avd-metric-detail) {
+  font-size: clamp(1.85rem, 3.2vw, 2.85rem); letter-spacing: -.035em; line-height: 1.03;
+}
+.avd-result-band .avd-capital-build { margin: 0; padding-left: 15px; border-left: 1px solid #d1e0ec; }
+.avd-result-band .avd-capital-build h3 { font-size: .96rem; }
+.avd-result-band .avd-capital-build dl { grid-template-columns: repeat(4, minmax(0,1fr)); gap: 5px; }
+.avd-result-band .avd-capital-build dl > div { padding: 2px 5px 3px 0; background: none; }
+.avd-result-band .avd-capital-build dt::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 4px; background: var(--avd-part); }
+.avd-result-band .avd-capital-build dd { color: var(--avd-part); }
+.avd-composition { display: flex; overflow: hidden; height: 7px; border-radius: 12px; margin-top: 4px; }
+.avd-composition > span { flex-basis: 0; }
+.avd-workspace .avd-capital-plot .avd-chart svg { height: clamp(180px, 27vh, 270px); max-height: none; }
+.avd-scenario-dock { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 5px 13px; margin-top: 7px; }
+.avd-scenario-dock .avd-scenarios { flex: 1 1 340px; }
+.avd-scenario-dock .avd-scenarios button { max-width: 190px; }
+.avd-capital-desk { margin-top: 12px; }
+.avd-capital-plot .avd-chart { margin-top: 0; }
+.avd-capital-assumptions .avd-analysis-options { display: grid; margin: 0; border-top: 1px solid #cdddec; padding-top: 8px; }
+.avd-capital-assumptions .avd-analysis-options p { margin: 0; }
+
+.avd-stress-summary { display: grid; grid-template-columns: minmax(195px,1fr) minmax(0,2fr); gap: 6px 9px; margin: 0; }
+.avd-workspace .avd-stress-headline .avd-metric dd:not(.avd-metric-detail) { color: #a34314; font-size: clamp(1.9rem, 2.7vw, 2.35rem); }
+.avd-stress-summary .avd-effect-chain { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 5px 8px; margin: 0; }
+.avd-stress-summary .avd-effect-chain > div { position: relative; padding: 6px 7px; background: white; border-left-width: 2px; }
+.avd-stress-summary .avd-effect-chain > div:nth-child(n+2)::before { position: absolute; left: -10px; top: 13px; font-weight: 700; color: var(--avd-subtle); }
+.avd-stress-summary .avd-effect-chain > div:nth-child(2)::before { content: "×"; }
+.avd-stress-summary .avd-effect-chain > div:nth-child(3)::before { content: "="; }
+.avd-stress-summary .avd-effect-chain > div:last-child { background: #fff1e7; }
+.avd-stress-endvalues { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 3px 15px; margin: 2px 0 0; color: var(--avd-subtle); font-size: .9rem; }
+.avd-stress-endvalues b { color: var(--navy); }
+.avd-stress-endvalues small { margin-left: auto; }
+.avd-linked-plots { margin-top: 9px; border: 1px solid #dce7f1; border-radius: 8px; padding: 7px 10px 5px; }
+.avd-linked-plots .avd-chart { margin-top: 3px; }
+.avd-linked-plots .avd-chart + .avd-chart { margin-top: 5px; border-top: 1px solid #dce7f1; padding-top: 7px; }
+.avd-linked-plots .avd-chart + .avd-chart .avd-chart-heading { align-self: center; }
+@container retirement-journey (min-width: 901px) {
+  .avd-linked-plots .avd-chart + .avd-chart { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 9px; }
+  .avd-linked-plots .avd-chart + .avd-chart .avd-chart-legend { justify-content: end; }
+  .avd-linked-plots .avd-chart + .avd-chart :is(.avd-chart-surface,.avd-chart-tools) { grid-column: 1 / -1; }
+}
+.avd-workspace .avd-linked-plots .avd-chart svg:not(.avd-chart-compact) { height: clamp(164px, 20vh, 200px); max-height: none; }
+.avd-workspace .avd-linked-plots .avd-chart svg.avd-chart-compact { height: 132px; max-height: none; }
+.avd-chart-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 8px; }
+.avd-chart-event-label { color: #873b13; background: #fff0df; border-radius: 5px; padding: 3px 7px; font-size: .84rem; font-weight: 650; }
+.avd-chart-legend .avd-band-swatch { border: 0; border-radius: 2px; background: currentColor; height: 7px; opacity: .65; }
+.avd-workspace .avd-chart-tooltip { top: 10px; background: white; color: var(--navy); border: 1px solid #c8d9e9; box-shadow: 0 4px 15px #17345426; }
+.avd-workspace .avd-chart-tooltip > strong { display: block; border-bottom: 1px solid #dce7f1; padding-bottom: 3px; margin-bottom: 4px; }
+.avd-workspace .avd-chart-tooltip b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.avd-compare-main > .avd-segment { width: fit-content; margin-bottom: 7px; }
+.avd-endvalue-board { border: 1px solid #dbe7f2; border-radius: 8px; padding: 9px 13px; background: #f8fbfd; }
+.avd-endvalue-board header, .avd-value-caption { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 2px 14px; }
+.avd-endvalue-board h3 { margin: 0 0 4px; }
+.avd-endvalue-board header span { color: var(--avd-subtle); font-size: .88rem; }
+.avd-reference-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 3px 9px; margin-block: 5px; color: var(--navy); }
+.avd-value-track { display: flex; align-items: stretch; height: 8px; overflow: hidden; border-radius: 4px; background: #e0e9f2; }
+.avd-reference-row .avd-value-track { grid-column: 1 / -1; }
+.avd-value-track i { display: block; }
+.avd-value-gap { background: repeating-linear-gradient(135deg,#e9aa7f 0 3px,#f6dcc7 3px 6px); }
+.avd-endvalue-list { list-style: none; margin: 0; padding: 0; }
+.avd-endvalue-list > li { border-top: 1px solid #dce7f0; padding-block: 5px; }
+.avd-value-caption { color: var(--navy); justify-content: start; }
+.avd-value-caption > strong { flex: 1 1 135px; }
+.avd-value-caption b { font-variant-numeric: tabular-nums; }
+.avd-endvalue-list .avd-value-track { margin-top: 4px; }
+.avd-value-difference { min-width: min(17em, 100%); margin: 0; color: #873b13; text-align: end; font-size: .87rem; }
+.avd-workspace .avd-compare-main .avd-chart svg:not(.avd-chart-compact) { height: clamp(165px, 23vh, 225px); max-height: none; }
+
+@container retirement-journey (max-width: 900px) {
+  .avd-workspace .avd-journey-toolbar { grid-template-columns: minmax(0,1fr) auto; }
+  .avd-workspace .avd-journey-toolbar .retirement-guided-nav { grid-column: 1 / -1; grid-row: 2; }
+  .avd-workspace :is(.avd-check-sheet,.avd-analysis-desk) { grid-template-columns: minmax(0,1fr); }
+  .avd-workspace .avd-check-result { border-left: 0; border-top: 1px solid var(--avd-edge); }
+  .avd-workspace .avd-contribution-sheet .retirement-funding-card { border-left: 0; border-top: 1px solid var(--avd-edge); }
+  .avd-workspace .avd-product-row { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .avd-workspace .avd-product-detail:not([open]) { position: static; width: auto; grid-column: auto; }
+}
+@container retirement-journey (max-width: 650px) {
+  .avd-workspace .avd-journey-toolbar { grid-template-columns: minmax(0,1fr); }
+  .avd-workspace .avd-journey-toolbar .retirement-guided-nav { grid-column: auto; grid-row: auto; }
+  .avd-workspace .avd-journey-toolbar .retirement-route-back { justify-self: start; }
+  .avd-workspace .avd-check-sheet .retirement-questionnaire, .avd-workspace .avd-check-result { padding: 14px; }
+  .avd-a1-person, .avd-a1-family { grid-template-columns: minmax(0,1fr); }
+  .avd-year-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px 5px; }
+  .avd-year-metrics > div:nth-child(odd) { border: 0; padding-left: 0; }
+  .avd-workspace .avd-direct-compare .retirement-product-selection { margin-inline-start: 0; }
+  .avd-workspace .avd-direct-compare .retirement-product-row { grid-template-columns: minmax(0,1fr); gap: 2px; }
+  .avd-workspace .avd-capital-result.avd-result-band, .avd-stress-summary { grid-template-columns: minmax(0,1fr); }
+  .avd-result-band .avd-capital-build { border-left: 0; padding-left: 0; }
+}
+@container retirement-journey (max-width: 430px) {
+  .avd-workspace .avd-check-sheet .avd-employment, .avd-workspace .avd-product-row,
+  .avd-stress-summary .avd-effect-chain { grid-template-columns: minmax(0,1fr); }
+  .avd-result-band .avd-capital-build dl { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .avd-stress-summary .avd-effect-chain > div::before { display: none; }
+}

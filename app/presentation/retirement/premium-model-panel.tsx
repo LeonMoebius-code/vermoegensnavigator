@@ -19,7 +19,8 @@ export const createModelController = (workspace: PremiumWorkspace | null = null)
   view: null as ModelView | null,
 });
 
-export function PremiumModelPanel({ plan, caseId, caseRevision, terms, change, selection, editFunding, controller, timing, fundingEvidence = null, product = null, showDocuments = false, selectedProducts, toggleProduct, changeConfiguration, editPlan, advisor, toggleReference, configure, workspace }: {
+export function PremiumModelPanel({ headingRef, plan, caseId, caseRevision, terms, change, selection, editFunding, controller, timing, fundingEvidence = null, product = null, showDocuments = false, selectedProducts, toggleProduct, changeConfiguration, editPlan, advisor, toggleReference, configure, workspace }: {
+  headingRef: React.Ref<HTMLHeadingElement>;
   plan: CustomerPlan; caseId: string; caseRevision: string; terms: PremiumTerms;
   change: (terms: PremiumTerms) => void; selection: SelectedFunding | null; editFunding: () => void;
   controller: ReturnType<typeof createModelController>; timing: TimelineDraft; fundingEvidence?: BoundFundingEvidence | null; product?: ProductDraft | null; showDocuments?: boolean;
@@ -60,22 +61,7 @@ export function PremiumModelPanel({ plan, caseId, caseRevision, terms, change, s
   catch { invalidReturn = true; }
   const changeSlider = (value: number) => change({ ...terms, totalReturn: (value / 100).toFixed(2).replace(".", ",") });
   const showFix = visible?.snapshot?.complete && visible.snapshot.status === "live_preview";
-  return <section className="avd-analysis" aria-labelledby={`${id}-heading`}>
-    <nav className="avd-analysis-nav" aria-label="Finanzanalysen">
-      {analyses.map((item, i) => <button type="button" key={item.id} aria-current={analysis === item.id ? "page" : undefined}
-        onClick={() => setAnalysis(item.id)}><span aria-hidden="true">{i + 1}</span>{item.label}</button>)}
-    </nav>
-    <div className="panel avd-analysis-panel">
-      <header className="avd-analysis-header">
-        <div><h2 id={`${id}-heading`}>{analyses.find(item => item.id === analysis)!.label}</h2>
-          <p>{analysis === "capital" ? "Neutraler Kapitalverlauf auf Basis Ihres Zahlungsplans" : analysis === "stress"
-            ? "Ein einmaliger Marktrückgang im gewählten Anlageprofil" : "Tarife unter nachvollziehbaren Modellannahmen gegenüberstellen"}</p></div>
-        <div className="avd-segment" role="group" aria-label="Wertbasis">
-          <button type="button" aria-pressed={valueBasis === "nominal"} onClick={() => change({ ...terms, valueBasis: "nominal" })}>Nominal</button>
-          <button type="button" aria-pressed={valueBasis === "real"} onClick={() => change({ ...terms, valueBasis: "real" })}>Kaufkraft</button>
-        </div>
-      </header>
-      {analysis !== "stress" && <div className="avd-controls">
+  const planControls = <div className="avd-controls avd-plan-controls">
         <div className="avd-range-field">
           <label htmlFor={`${id}-rate`}>Jährliche Bruttogesamtrendite in %</label>
           <input id={`${id}-rate`} value={totalReturn} inputMode="decimal" aria-invalid={invalidReturn}
@@ -85,7 +71,30 @@ export function PremiumModelPanel({ plan, caseId, caseRevision, terms, change, s
             onChange={event => changeSlider(Number(event.target.value))} />
         </div>
         {editPlan}
-      </div>}
+      </div>;
+  const capitalOptions = <div className="avd-analysis-options">
+        <label className="retirement-checkbox"><input type="checkbox" checked={plan.capital.referenceEnabled}
+          onChange={event => toggleReference(event.target.checked)} />ETF-Bruttoreferenz anzeigen</label>
+        {(selected || fundingEvidence) && <label className="retirement-checkbox"><input type="checkbox" checked={compareWithout}
+          onChange={event => change({ ...terms, compareWithout: event.target.checked })} />Vergleich ohne Zulagen</label>}
+        {!fundingEvidence && !selected && <p className="avd-note">Förderung offen · Vorschau mit eigenen Zahlungen.</p>}
+      </div>;
+  return <section className="avd-analysis" aria-labelledby={`${id}-heading`}>
+    <div className="avd-analysis-topbar">
+      <nav className="avd-analysis-nav" aria-label="Finanzanalysen">
+        {analyses.map((item, i) => <button type="button" key={item.id} aria-current={analysis === item.id ? "page" : undefined}
+          onClick={() => setAnalysis(item.id)}><span aria-hidden="true">{i + 1}</span>{item.label}</button>)}
+      </nav>
+      <p className="retirement-session-note">Vorschau · Nur synthetische Eingaben · Keine Speicherung</p>
+    </div>
+    <div className="panel avd-analysis-panel" data-analysis={analysis}>
+      <header className="avd-analysis-header">
+        <h1 ref={headingRef} tabIndex={-1} id={`${id}-heading`}>{analyses.find(item => item.id === analysis)!.label}</h1>
+        <div className="avd-segment" role="group" aria-label="Wertbasis">
+          <button type="button" aria-pressed={valueBasis === "nominal"} onClick={() => change({ ...terms, valueBasis: "nominal" })}>Nominal</button>
+          <button type="button" aria-pressed={valueBasis === "real"} onClick={() => change({ ...terms, valueBasis: "real" })}>Kaufkraft</button>
+        </div>
+      </header>
       {valueBasis === "real" && <div className="avd-controls avd-price-controls">
         <label>Inflationsannahme pro Jahr in %<input inputMode="decimal" value={terms.inflationText ?? String(terms.inflation / 100).replace(".", ",")}
           aria-invalid={visible?.issue === "INFLATION_OPEN"} onChange={event => change({ ...terms, inflationText: event.target.value })} /></label>
@@ -97,15 +106,8 @@ export function PremiumModelPanel({ plan, caseId, caseRevision, terms, change, s
         ? "Aktuelle Vergleichszahl offen. Bitte den Endmonatkonflikt in A2 auflösen."
         : visible.issue === "INFLATION_OPEN" ? "Bitte eine Inflationsannahme über −100 % mit höchstens zwei Nachkommastellen eingeben."
           : "Aktuelle Vergleichszahl offen. Bitte Anfangskapital und Zahlungsplan prüfen."}</p>}
-      {analysis === "capital" && <div className="avd-analysis-options">
-        <label className="retirement-checkbox"><input type="checkbox" checked={plan.capital.referenceEnabled}
-          onChange={event => toggleReference(event.target.checked)} />ETF-Bruttoreferenz anzeigen</label>
-        {(selected || fundingEvidence) && <label className="retirement-checkbox"><input type="checkbox" checked={compareWithout}
-          onChange={event => change({ ...terms, compareWithout: event.target.checked })} />Vergleich ohne Zulagen</label>}
-      </div>}
-      {analysis === "capital" && !fundingEvidence && !selected && <p className="avd-note">Förderung offen · Die neutrale Vorschau verwendet die eigenen Zahlungen.</p>}
       <PremiumAnalysis analysis={analysis} snapshot={visible?.snapshot ?? null} curveIds={visible?.curveIds ?? []}
-        product={screen.allowed ? product : null} payoutMonth={timing.payoutMonth} selected={selectedProducts} toggle={toggleProduct} changeConfiguration={changeConfiguration} />
+        controls={planControls} capitalOptions={capitalOptions} product={screen.allowed ? product : null} payoutMonth={timing.payoutMonth} selected={selectedProducts} toggle={toggleProduct} changeConfiguration={changeConfiguration} />
     </div>
     {configure}
     <div className="avd-model-footer">

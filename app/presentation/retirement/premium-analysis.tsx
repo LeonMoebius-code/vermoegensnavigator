@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from "react";
+import { useId, useState, type CSSProperties, type ReactNode } from "react";
 import { monthIndex } from "../../domain/retirement/premium-calendar";
 import { euros, signedOutputCents } from "../../domain/retirement/model-decimal";
 import { deflatorFor } from "../../domain/retirement/premium-price";
@@ -51,14 +51,17 @@ function openNotice(reason?: string) {
   }
 }
 
-function Capital({ results }: { results: readonly Result[] }) {
+function Capital({ results, controls, options }: { results: readonly Result[]; controls: ReactNode; options: ReactNode }) {
   const [offset, setOffset] = useState(0);
-  if (!results.length) return null;
+  const edit = <aside className="avd-analysis-rail avd-capital-assumptions" aria-label="Kapitalentwicklung einstellen">
+    <h3>Modellannahmen</h3>{controls}{options}
+  </aside>;
+  if (!results.length) return edit;
   const neutral = results.map(curveOf).filter(c => c?.modelMode === "NEUTRAL");
   const primary = neutral[0];
   const scenarios = neutral.filter(c => c!.fundingPerspective === primary?.fundingPerspective);
   const active = scenarios.find(c => Number(c!.curveId.split(":").at(-1)) === offset) ?? primary;
-  if (!active) return <p className="avd-open" role="status">{openNotice(results[0]?.result.status === "O" ? results[0].result.reason : undefined)}</p>;
+  if (!active) return <><p className="avd-open" role="status">{openNotice(results[0]?.result.status === "O" ? results[0].result.reason : undefined)}</p>{edit}</>;
   const row = active.rows.at(-1)!;
   const end = endValue(active);
   const opening = priceValue(active, active.openingCents, active.rows[0].month);
@@ -70,7 +73,7 @@ function Capital({ results }: { results: readonly Result[] }) {
     { label: "Zulagen im Modell", value: row.grantCents, color: blue },
     { label: "Wertentwicklung", value: growth, color: growth !== null && growth < 0 ? red : teal },
   ];
-  const extent = Math.max(1, ...build.map(item => Math.abs(item.value ?? 0)));
+  const composition = end !== null && end > 0 && build.every(item => item.value !== null && item.value >= 0);
   const inputParts = active.rows.map(r => {
     if (r.balance.status !== "computed") return null;
     const principal = opening + r.ownCents;
@@ -107,26 +110,33 @@ function Capital({ results }: { results: readonly Result[] }) {
     });
   }
   return <>
-    <div className="avd-capital-result">
-      <dl className="avd-headline-result" aria-live="polite"><Metric label="Kapital zum Bewertungsende" value={cents(end)} detail={basisLabel(active)} />
+    <div className="avd-capital-result avd-result-band" aria-live="polite">
+      <dl className="avd-headline-result"><Metric label={`Kapital zum Bewertungsende · ${monthLabel(row.month)}`} value={cents(end)} detail={basisLabel(active)} />
         {end === null && partial !== null && <Metric label="Berechenbarer Teil" value={cents(partial)} detail="Weitere Förder- oder Zahlungsbestandteile offen" />}
       </dl>
-      <div className="avd-scenarios" role="group" aria-label="Renditeszenarien anzeigen">
-        {scenarios.map(c => c && <button type="button" key={c.curveId} aria-pressed={c === active} onClick={() => setOffset(Number(c.curveId.split(":").at(-1)))}>
-          <span>{pct(Number(c.marketBasis) / 100)} p. a.</span><strong>{cents(endValue(c))}</strong>
-        </button>)}
-      </div>
+      {partial !== null && <div className="avd-capital-build"><h3>Kapitalaufbau{end === null ? " · berechenbarer Teil" : ""}</h3>
+        <dl>{build.map(item => <div key={item.label} style={{ "--avd-part": item.color } as CSSProperties}>
+          <dt>{item.label}</dt><dd>{item.label === "Zulagen im Modell" && !funded ? "Ohne Zulagen" : cents(item.value)}</dd>
+        </div>)}</dl>
+        {composition && <div className="avd-composition" aria-hidden="true">{build.map(item => <span key={item.label}
+          style={{ flexGrow: item.value ?? 0, background: item.color }} />)}</div>}
+      </div>}
     </div>
     {end === null && <p role="status" className="avd-open">{openNotice(active.end.status === "O" ? active.end.reason : undefined)}</p>}
-    <PremiumChart title="Kapitalverlauf nach Szenario" months={active.rows.map(r => r.month)} series={chart} />
-    {partial !== null && <div className="avd-capital-build"><h3>Kapitalaufbau am Bewertungsende{end === null ? " · berechenbarer Teil" : ""}</h3>
-      <dl>{build.map(item => <div key={item.label}>
-        <dt>{item.label}</dt><dd>{item.label === "Zulagen im Modell" && active.fundingPerspective === "OHNE_ZULAGEN" ? "Ohne Zulagen" : cents(item.value)}</dd>
-        <dd className="avd-split-bar" aria-hidden="true"><i style={{ background: item.color, width: `${Math.abs(item.value ?? 0) / extent * 50}%`,
-          left: item.value !== null && item.value < 0 ? `${50 - Math.abs(item.value) / extent * 50}%` : "50%" }} /></dd>
-      </div>)}</dl>
-    </div>}
-    <p className="avd-note">Drei deterministische Renditeannahmen. Die Verläufe zeigen keine Eintrittswahrscheinlichkeit.</p>
+    <div className="avd-analysis-desk avd-capital-desk">
+      <div className="avd-capital-plot">
+        <PremiumChart title="Kapitalverlauf nach Szenario" months={active.rows.map(r => r.month)} series={chart} />
+        <div className="avd-scenario-dock">
+          <div className="avd-scenarios" role="group" aria-label="Renditeszenarien anzeigen">
+            {scenarios.map(c => c && <button type="button" key={c.curveId} aria-pressed={c === active} onClick={() => setOffset(Number(c.curveId.split(":").at(-1)))}>
+              <span>{pct(Number(c.marketBasis) / 100)} p. a.</span><strong>{cents(endValue(c))}</strong>
+            </button>)}
+          </div>
+          <p className="avd-note">Drei Renditeannahmen ohne Eintrittswahrscheinlichkeit.</p>
+        </div>
+      </div>
+      {edit}
+    </div>
   </>;
 }
 
@@ -206,8 +216,8 @@ function Stress({ results, product, payoutMonth, changeConfiguration }: {
   const baseEnd = endValue(base);
   const reason = stressItem?.result.status === "O" ? stressItem.result.reason : baseItem?.result.status === "O" ? baseItem.result.reason : null;
   const window = base ? payoutMonth : "";
-  return <>
-    <div className="avd-controls avd-stress-controls">
+  const controls = <aside className="avd-analysis-rail avd-stress-controls" aria-label="Stresstest einstellen">
+      <h3>Stressannahmen</h3>
       <label htmlFor={id + "-product"}>Anlageprofil im Stresstest<select id={id + "-product"} value={pathKey} onChange={e => { setKey(e.target.value); inspect(null); }}>
         {product.paths.map(option => <option key={productPathKey(option)} value={productPathKey(option)}>{product.catalog.get(option.product.tariff, "stress choice").data.name}</option>)}
       </select></label>
@@ -224,35 +234,50 @@ function Stress({ results, product, payoutMonth, changeConfiguration }: {
             aria-valuetext={index >= 0 ? monthLabel(event) : "Offen"} value={index < 0 ? Math.floor(months.length / 2) : index}
             onChange={e => markerMonth(months[Number(e.target.value)])} />}</label>
       </>}
+    </aside>;
+  const normalSeries = base ? values(base) : [];
+  const stressSeries = stressed ? values(stressed) : [];
+  return <div className="avd-analysis-desk avd-stress-desk">
+    <div className="avd-stress-main">
+      {reason && <p role="status" className="avd-open">{openNotice(reason)}</p>}
+      {!reason && !stress && <p className="avd-open" role="status">{configuration ? "Bitte Monatsdatum und Marktverlust festlegen. Auch ein Stress von 0 % ist prüfbar." : "Bitte ein gültiges, gemeinsames Anlageprofil hinterlegen."}</p>}
+      {stress && stressed && <div className="avd-stress-summary avd-result-band" aria-live="polite">
+        <dl className="avd-headline-result avd-stress-headline">
+          <Metric label="Langfristige Endwertdifferenz" value={cents(diff === null ? null : -diff)}
+            detail={diff !== null && baseEnd !== null && baseEnd > 0 ? pct(-100 * diff / baseEnd) + " des Endwerts ohne Crash" : null} />
+        </dl>
+        <dl className="avd-effect-chain" aria-label="Wirkungskette des Stressereignisses">
+          <Metric label="Aktienmarktverlust" value={loss === null ? "Offen" : pct(loss === 0 ? 0 : -loss / 100)} />
+          <Metric label="Tatsächliche Aktienexponierung" value={exposure === null ? "Offen" : pct(exposure)} detail={exposed === null ? null : cents(exposed)} />
+          <Metric label="Sofortverlust im Portfolio" value={immediate === null ? "Offen" : cents(-immediate)} detail={effect === null ? null : pct(effect === 0 ? 0 : effect)} />
+        </dl>
+        <p className="avd-stress-endvalues">Endwert ohne Crash <b>{cents(baseEnd)}</b><span>Endwert mit Crash <b>{cents(endValue(stressed))}</b></span><small>{basisLabel(stressed)}</small></p>
+      </div>}
+      {base && <div className="avd-linked-plots" aria-label="Kapital und Anlageprofil auf derselben Monatsachse">
+        <PremiumChart title="Kapital mit und ohne Crash" months={months} selected={inspected} inspect={inspect} eventMonth={event}
+          moveEvent={configuration ? markerMonth : undefined}
+          series={[
+            { label: "Ohne Crash", color: navy, values: normalSeries, dashed: true },
+            ...(stressed ? [
+              { label: "Mit Crash", color: orange, values: stressSeries },
+              { label: "Abstand zum Verlauf ohne Crash", color: orange,
+                values: normalSeries.map((v, i) => v === null || stressSeries[i] == null ? null : v - stressSeries[i]!),
+                band: { from: stressSeries, to: normalSeries } },
+            ] : []),
+          ]} />
+        <Allocation paths={[path]} product={product} portfolios={[base]} months={months} selected={inspected} inspect={inspect} eventMonth={event} />
+      </div>}
     </div>
-    {window && index >= 0 && <p className="avd-note">Angenommener Auszahlbeginn {monthLabel(window)} · Ereignis {Math.abs(monthIndex(window) - monthIndex(event))} Monate {event <= window ? "bis zum" : "nach dem"} Auszahlbeginn.</p>}
-    {reason && <p role="status" className="avd-open">{openNotice(reason)}</p>}
-    {!reason && !stress && <p className="avd-open" role="status">{configuration ? "Bitte Monatsdatum und Marktverlust festlegen. Auch ein Stress von 0 % ist prüfbar." : "Bitte ein gültiges, gemeinsames Anlageprofil hinterlegen."}</p>}
-    {stress && stressed && <div className="avd-stress-summary" aria-live="polite">
-      <dl className="avd-effect-chain" aria-label="Wirkungskette des Stressereignisses">
-        <Metric label="Aktienmarktverlust" value={loss === null ? "Offen" : pct(-loss / 100)} />
-        <Metric label="Tatsächliche Aktienexponierung" value={exposure === null ? "Offen" : pct(exposure)} detail={exposed === null ? null : cents(exposed)} />
-        <Metric label="Unmittelbarer Portfolioeffekt" value={effect === null ? "Offen" : pct(effect)} detail={immediate === null ? null : cents(-immediate)} />
-      </dl>
-      <dl className="avd-endpoints">
-        <Metric label="Kapital beim Ereignis ohne Crash" value={cents(before)} />
-        <Metric label="Kapital unmittelbar nach Crash" value={cents(after)} />
-        <Metric label="Endwert ohne / mit Crash" value={cents(baseEnd) + " / " + cents(endValue(stressed))} />
-        <Metric label="Langfristige Endwertdifferenz" value={cents(diff)} detail={diff !== null && baseEnd !== null && baseEnd > 0 ? pct(100 * diff / baseEnd) + " des Endwerts ohne Crash" : null} />
-      </dl>
-      <p className="avd-note">{basisLabel(stressed)} · Der Soforteffekt liegt nach der normalen Monatsrendite und vor Kosten, Zahlungen und Monatsendaktionen.</p>
-    </div>}
-    {base && <PremiumChart title="Kapital mit und ohne Crash" months={months} compact selected={inspected} inspect={inspect} eventMonth={event}
-      moveEvent={configuration ? markerMonth : undefined}
-      series={[{ label: "Ohne Crash", color: navy, values: values(base) },
-        ...(stressed ? [{ label: "Mit Crash", color: red, dashed: true, values: values(stressed) }] : [])]} />}
-    {base && <Allocation paths={[path]} product={product} portfolios={[base]} months={months} selected={inspected} inspect={inspect} eventMonth={event} />}
-  </>;
+    {controls}
+    {stress && <p className="avd-note avd-desk-foot">Der Soforteffekt liegt nach der normalen Monatsrendite und vor Kosten, Zahlungen und Monatsendaktionen. Kapital beim Ereignis ohne Crash {cents(before)}, unmittelbar danach {cents(after)}.
+      {window && index >= 0 && <> Ereignis {Math.abs(monthIndex(window) - monthIndex(event))} Monate {event <= window ? "bis zum" : "nach dem"} angenommenen Auszahlbeginn {monthLabel(window)}.</>}
+    </p>}
+  </div>;
 }
 
-function Comparison({ results, product, selected, toggle }: {
+function Comparison({ results, product, selected, toggle, controls }: {
   results: readonly Result[]; product: ProductDraft | null; selected: readonly ProductId[];
-  toggle: (id: ProductId) => boolean;
+  toggle: (id: ProductId) => boolean; controls: ReactNode;
 }) {
   const [mode, setMode] = useState<"M1" | "M2">("M1");
   const [refused, setRefused] = useState(false);
@@ -275,7 +300,7 @@ function Comparison({ results, product, selected, toggle }: {
       issue: item?.result.status === "O" ? item.result.reason : null };
   });
   const extent = Math.max(1, ...bars.flatMap(b => [b.end ?? 0, b.reference ?? 0]));
-  return <>
+  const picker = <>
     <details className="avd-disclosure avd-compare-picker"><summary>Produkte im Vergleich · {selected.length} von 3</summary>
       <fieldset><legend>Bis zu drei Produkte auswählen</legend>
         {products.map(p => <label key={p.id}><input type="checkbox" checked={selected.includes(p.id)}
@@ -283,6 +308,11 @@ function Comparison({ results, product, selected, toggle }: {
       </fieldset>
       {refused && <p role="status">Wählen Sie zuerst eine der drei Alternativen ab.</p>}
     </details>
+  </>;
+  const references = [...new Set(bars.flatMap(bar => bar.reference === null ? [] : [bar.reference]))];
+  const commonReference = aligned && references.length === 1 ? references[0] : null;
+  return <div className="avd-analysis-desk avd-compare-desk">
+    <div className="avd-compare-main">
     <div className="avd-segment" role="group" aria-label="Art des wirtschaftlichen Vergleichs">
       <button type="button" aria-pressed={mode === "M1"} onClick={() => { setMode("M1"); inspect(null); }}>M1 · Kostenwirkung</button>
       <button type="button" aria-pressed={mode === "M2"} onClick={() => { setMode("M2"); inspect(null); }}>M2 · Anlage und Risiko</button>
@@ -296,13 +326,28 @@ function Comparison({ results, product, selected, toggle }: {
       <Metric key={item.id} label={item.name} value="Offen" detail={mode === "M1" ? "Tarifkosten im Beratungskanal offen" : "Anlageprofil und Tarifpfad im Beratungskanal offen"} />)}</dl>}
     {!aligned && <p className="avd-open" role="status">Die wirksamen Zahlungen unterscheiden sich zwischen den Tarifen. Ein direkter Kurvenvergleich auf gleicher Zahlungsbasis bleibt offen.</p>}
     {mode === "M1" && bars.length > 0 && <>
-      <h3>Kapital zum Bewertungsende</h3>
-      <div className="avd-comparison-bars">{bars.map(bar => <div key={bar.name}>
-        <strong>{bar.name}</strong>
-        {bar.end === null || bar.reference === null ? <p className="avd-note">{openNotice(bar.issue ?? undefined)}</p> :
-          <dl>{[{ label: "Bruttoreferenz", amount: bar.reference, color: blue }, { label: "Nach modelliertem Kostenansatz", amount: bar.end, color: bar.color }].map(line =>
-            <div key={line.label}><dt>{line.label}</dt><dd><i className="avd-hbar" aria-hidden="true" style={{ width: `${100 * line.amount / extent}%`, background: line.color }} /><b>{cents(line.amount)}</b></dd></div>)}</dl>}
-      </div>)}</div>
+      <section className="avd-endvalue-board" aria-label="Kapital zum Bewertungsende">
+        <header><h3>Kapital zum Bewertungsende</h3><span>Euro</span></header>
+        {commonReference !== null && <div className="avd-reference-row">
+          <strong>Gemeinsame Bruttoreferenz</strong><b>{cents(commonReference)}</b>
+          <div className="avd-value-track" aria-hidden="true"><i style={{ width: `${100 * commonReference / extent}%`, background: navy }} /></div>
+        </div>}
+        <ul className="avd-endvalue-list">{bars.map(bar => <li key={bar.name}>
+          <div className="avd-value-caption"><strong>{bar.name}</strong>
+            {bar.end !== null && <b>{cents(bar.end)}</b>}
+            {bar.end !== null && bar.reference !== null && <span className="avd-value-difference">
+              {commonReference === null && <>Bruttoreferenz {cents(bar.reference)} · </>}
+              {cents(bar.end - bar.reference)} zur Bruttoreferenz
+            </span>}
+          </div>
+          {bar.end === null || bar.reference === null ? <p className="avd-note">{openNotice(bar.issue ?? undefined)}</p> : <>
+            <div className="avd-value-track" aria-hidden="true">
+              <i style={{ width: `${100 * bar.end / extent}%`, background: bar.color }} />
+              <i className="avd-value-gap" style={{ width: `${100 * Math.max(0, bar.reference - bar.end) / extent}%` }} />
+            </div>
+          </>}
+        </li>)}</ul>
+      </section>
       {aligned && <PremiumChart title="Kostenwirkung im Zeitverlauf" months={months}
         series={chosen.flatMap(({ item }, i) => {
           const curve = curveOf(item);
@@ -325,15 +370,21 @@ function Comparison({ results, product, selected, toggle }: {
         })} />}
       {first && aligned && <Allocation paths={paths} product={product} portfolios={chosen.map(c => curveOf(c.item))} months={months} selected={inspected} inspect={inspect} />}
       </>}
-  </>;
+    </div>
+    <aside className="avd-analysis-rail avd-compare-rail" aria-label="Vergleich einstellen">
+      <h3>Vergleichsgrundlage</h3>
+      {picker}
+      {controls}
+    </aside>
+  </div>;
 }
 
-export function PremiumAnalysis({ analysis, snapshot, curveIds, product, payoutMonth, selected, toggle, changeConfiguration }: {
-  analysis: Analysis; snapshot: Snapshot | null; curveIds: readonly string[]; product: ProductDraft | null; payoutMonth: string; selected: readonly ProductId[];
+export function PremiumAnalysis({ analysis, snapshot, curveIds, controls, capitalOptions, product, payoutMonth, selected, toggle, changeConfiguration }: {
+  analysis: Analysis; snapshot: Snapshot | null; curveIds: readonly string[]; controls: ReactNode; capitalOptions: ReactNode; product: ProductDraft | null; payoutMonth: string; selected: readonly ProductId[];
   toggle: (id: ProductId) => boolean; changeConfiguration: (key: string, value: ProductConfiguration | null) => void;
 }) {
   const results = snapshot?.subresults.map((item, i) => ({ ...item, curveId: curveIds[i] })) ?? [];
   if (analysis === "stress") return <Stress results={results} product={product} payoutMonth={payoutMonth} changeConfiguration={changeConfiguration} />;
-  if (analysis === "comparison") return <Comparison results={results} product={product} selected={selected} toggle={toggle} />;
-  return <Capital results={results} />;
+  if (analysis === "comparison") return <Comparison results={results} product={product} selected={selected} toggle={toggle} controls={controls} />;
+  return <Capital results={results} controls={controls} options={capitalOptions} />;
 }

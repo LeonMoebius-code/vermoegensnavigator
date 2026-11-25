@@ -47,27 +47,49 @@ function Preferences({ product, answers }: { product: Product; answers: ProductA
   </ul>;
 }
 
+const investmentHeadlines: Record<ProductId, string> = {
+  basis: "Lebenszyklus mit zwei aktiven ETFs",
+  pro: "Globaler Aktienfonds",
+  garantie: "Aktien und Anleihen mit Sicherungsmechanismus",
+  "ruv-standard": "Zwei vorgegebene ETFs",
+  "ruv-individuell": "Eigene ETF-Auswahl oder Komfortportfolio",
+  "ruv-garantie-80": "Sicherungsvermögen und ETF-Teil",
+};
+
+function ProtectionSummary({ product }: { product: Product }) {
+  const protection = product.protection;
+  if (protection.kind === "none") return <>Keine Beitragsgarantie angekündigt</>;
+  if (protection.kind === "target") return <><strong>80 % Wertsicherungsziel</strong><small>Bezugsbasis: Beginn der Stabilisierungsphase · keine Beitragsgarantie</small></>;
+  if (protection.kind === "guarantee") return <><strong>{protection.level} % Beiträge und Zulagen</strong><small>Angekündigt zum Auszahlbeginn</small></>;
+  return <>Schutz offen</>;
+}
+
 function ProductCard({ product, answers, checked, countId, toggle }: {
   product: Product; answers: ProductAnswers; checked: boolean; countId: string; toggle: () => void;
 }) {
   const payout = product.annuity.status === "absent" ? "Fondsauszahlplan" : "Rente oder Auszahlplan";
-  const match = preferenceMatches(product, answers);
   return <article className="retirement-product avd-product-row" data-testid={`product-${product.id}`}>
     <div className="avd-product-identity"><p>{product.provider}</p><h3>{product.name}</h3></div>
-    <div className="avd-product-fact"><span>Anlage</span>{product.investment}</div>
-    <div className="avd-product-fact"><span>Schutz</span><Protection product={product} /></div>
+    <div className="avd-product-fact"><span>Anlage</span><strong>{investmentHeadlines[product.id]}</strong></div>
+    <div className="avd-product-fact"><span>Schutz</span><ProtectionSummary product={product} /></div>
     <div className="avd-product-fact"><span>Auszahlung</span>{payout}</div>
     <div className="avd-product-pick">
       <label className="retirement-checkbox">
         <input type="checkbox" checked={checked} aria-describedby={countId} onChange={toggle}
           aria-label={product.name + " für Detailvergleich auswählen"} /><span className="avd-visually-compact">{product.name} für Detailvergleich auswählen</span>
       </label>
-      <small>{[match.protection, match.investment, match.payout].some(v => v === "unknown") ? "Wunschabgleich offen" : null}</small>
+
     </div>
     <details className="retirement-help avd-product-detail">
-      <summary>Tarifdetails und Quellen zu {product.name}</summary>
+      <summary aria-label={`Tarifdetails und Quellen zu ${product.name}`}>Details</summary>
       <div className="avd-product-detail-body">
-        <p>{product.investmentDetails}</p>
+        <p>{product.investment} {product.investmentDetails}</p>
+        <p><Protection product={product} /></p>
+        <dl className="avd-product-source">
+          <div><dt>Hersteller- und Datenstand</dt><dd>{product.manufacturerStatus}</dd></div>
+          <div><dt>Bankverfügbarkeit und Beratung</dt><dd>{product.bankStatus}</dd></div>
+          <div><dt>Kosten</dt><dd>{costLabel(product.costs)}</dd></div>
+        </dl>
         <dl>
           <dt>Auszahlungsarten</dt><dd><Payouts product={product} /></dd>
           <dt>Tarifgrenzen</dt><dd>{product.limits}</dd>
@@ -78,11 +100,6 @@ function ProductCard({ product, answers, checked, countId, toggle }: {
         <Sources product={product} />
       </div>
     </details>
-    <dl className="avd-product-source">
-      <div><dt>Hersteller- und Datenstand</dt><dd>{product.manufacturerStatus}</dd></div>
-      <div><dt>Bankverfügbarkeit und Beratung</dt><dd>{product.bankStatus}</dd></div>
-      <div><dt>Kosten</dt><dd>{costLabel(product.costs)}</dd></div>
-    </dl>
   </article>;
 }
 
@@ -212,6 +229,7 @@ export function RetirementProducts({ selected, toggleSelection, answers, changeA
             </>}
           </div>
         </div>
+        <div className="avd-product-command">
         {step === "cards" && <details className="retirement-help avd-product-wishes"><summary>Ihre angegebenen Wünsche</summary><dl className="retirement-product-answers">
           {productQuestions.map(item => <div key={item.key}><dt>{item.title}</dt>
             <dd>{item.options.find(([value]) => value === answers[item.key])?.[1] ?? "Keine Präferenz angegeben"}</dd></div>)}
@@ -221,12 +239,14 @@ export function RetirementProducts({ selected, toggleSelection, answers, changeA
           {step === "cards" && <button className="primary" disabled={selected.length < 2} aria-describedby={countId}
             onClick={() => move("comparison")}>Direktvergleich öffnen</button>}
         </div>
+        </div>
         {step === "comparison" ? <ProductComparison selected={selectedProducts} answers={answers} toggle={toggle} />
-          : <>
+          : <div className="avd-product-sheet">
+            <p className="avd-market-status"><strong>Herstellerstand</strong> Alle sechs öffentlich angekündigt <span>Bankweg unbestätigt · Tarifkosten öffentlich offen</span></p>
             <div className="avd-product-column-headings" aria-hidden="true"><span>Produkt</span><span>Anlage</span><span>Schutz zum Ablauf</span><span>Auszahlung</span><span>Auswahl</span></div>
             <div className="retirement-product-grid avd-product-overview">{products.map(product => <ProductCard key={product.id}
               product={product} answers={answers} checked={selected.includes(product.id)} countId={countId} toggle={() => toggle(product)} />)}</div>
-          </>}
+          </div>}
         <div className="retirement-product-actions"><button className="primary" onClick={next}>Weiter zur Kapitalentwicklung</button></div>
       </section>
     </>}

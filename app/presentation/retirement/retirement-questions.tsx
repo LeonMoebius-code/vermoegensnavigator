@@ -161,29 +161,31 @@ export function RetirementQuestions({ answers: a, plan, change, birth, back, nex
       ...(a.married === "yes" ? [["Dauerhaft getrennt", answerText(a.separated)], ["Partner unmittelbar förderberechtigt", answerText(a.partner)]] as [string, string][] : [])] : []),
     ["Bestehender Riester-Vertrag", answerText(a.riester)], ["Kindergeld", answerText(a.childBenefit)],
   ];
-  return <div className="retirement-question-layout retirement-guided-layout">
-    <section className="panel retirement-questionnaire" aria-label="Ihre Voraussetzungen">
+  const shortSections = ["Beitragsjahr", "Beruf", "Sonderfälle", "Vertrag & Kinder", "Ergebnis"];
+  return <div className="panel retirement-question-layout retirement-guided-layout avd-check-sheet" data-question={section}>
+    <section className="retirement-questionnaire" aria-label="Ihre Voraussetzungen">
       <p className="avd-question-position" role="status" aria-live="polite" aria-atomic="true">Abschnitt {position + 1} von {sections.length}: {questionSections[section]}</p>
       <nav className="retirement-question-progress" aria-label="Abschnitte der Förderfragen">
         <ol>{sections.map((index, i) => <li key={index}><button type="button" aria-current={section === index ? "step" : undefined}
-          onClick={() => index > section ? submit(index) : move(index)}>{i + 1}. {questionSections[index]}</button></li>)}</ol>
+          aria-label={`${i + 1}. ${questionSections[index]}`}
+          onClick={() => index > section ? submit(index) : move(index)}><span aria-hidden="true">{i + 1}</span> {shortSections[index]}</button></li>)}</ol>
       </nav>
       <h2 ref={heading} tabIndex={-1}>{questionSections[section]}</h2>
-      <p>Ihre Antworten geben eine erste Orientierung. Unklare Angaben dürfen offenbleiben.</p>
+      {section === 0 && <p className="avd-note">Unklare Angaben dürfen offenbleiben.</p>}
       <form className="retirement-form" noValidate onSubmit={e => { e.preventDefault(); section === 4 ? submit() : submit(sections[position + 1]); }}>
-        {section === 0 && <>
-        <label htmlFor={id("year")}>Für welches Jahr möchten Sie erstmals einzahlen?</label>
+        {section === 0 && <div className="avd-a1-person">
+        <div><label htmlFor={id("year")}>Für welches Jahr möchten Sie erstmals einzahlen?</label>
         <input id={id("year")} ref={yearRef} inputMode="numeric" value={a.year} placeholder="z. B. 2027" aria-invalid={!!yearError} aria-describedby={yearError ? id("year-error") : undefined} onChange={e => { setErrors({}); change("year", e.target.value); }} />
-        {yearError && <p id={id("year-error")} role="alert">{yearError}</p>}
-        <label htmlFor={id("birth")}>In welchem Jahr sind Sie geboren? (optional)</label>
+        {yearError && <p id={id("year-error")} role="alert">{yearError}</p>}</div>
+        <div><label htmlFor={id("birth")}>In welchem Jahr sind Sie geboren? (optional)</label>
         <input id={id("birth")} ref={birthRef} inputMode="numeric" value={plan.birthYear} aria-invalid={!!errors.birth} aria-describedby={errors.birth ? id("birth-error") : undefined} onChange={e => { setErrors({}); birth(e.target.value); }} />
-        {errors.birth && <p id={id("birth-error")} role="alert">{errors.birth}</p>}
-        </>}
+        {errors.birth && <p id={id("birth-error")} role="alert">{errors.birth}</p>}</div>
+        </div>}
         {section === 1 && <>
         <fieldset className="retirement-answer-group avd-employment"><legend>Wie sind Sie derzeit beruflich tätig und versichert?</legend>
           {employmentOptions.map(([v, label]) => <label key={v} className="retirement-answer"><input type="radio" name={id("employment")} checked={a.employment === v} onChange={() => change("employment", v)} />{label}</label>)}
-        </fieldset><p>Im öffentlichen Dienst angestellt, aber nicht verbeamtet? Wählen Sie Ihre tatsächliche Versicherungsform.</p>
-        <fieldset className="retirement-answer-group"><legend>Treffen zusätzlich weitere Situationen auf Sie zu?</legend>
+        </fieldset><p className="avd-note">Bei einer Anstellung im öffentlichen Dienst zählt die tatsächliche Versicherungsform.</p>
+        <fieldset className="retirement-answer-group avd-additional-answers"><legend>Treffen zusätzlich weitere Situationen auf Sie zu?</legend>
           <p>Mehrfachauswahl möglich – unabhängig von Ihrer Berufstätigkeit.</p>
           <label className="retirement-answer"><input type="checkbox" checked={a.upbringing} onChange={e => change("upbringing", e.target.checked)} />Kindererziehungszeiten</label>
           <label className="retirement-answer"><input type="checkbox" checked={a.care} onChange={e => change("care", e.target.checked)} />Ich pflege Angehörige</label>
@@ -199,25 +201,31 @@ export function RetirementQuestions({ answers: a, plan, change, birth, back, nex
         {partnerQuestions && <>{tri("married", "Sind Sie verheiratet oder in einer eingetragenen Lebenspartnerschaft?")}
           {a.married === "yes" && <>{tri("separated", "Leben Sie dauerhaft getrennt?")}{tri("partner", "Ist Ihr Partner selbst unmittelbar förderberechtigt?")}<p>Auch bei passenden Antworten müssen die weiteren Voraussetzungen der mittelbaren Förderung geprüft werden.</p></>}</>}
         </>}
-        {section === 3 && <>
+        {section === 3 && <div className="avd-a1-family">
         {tri("riester", "Haben Sie bereits einen Riester-Vertrag?")}
         {(a.riester === "yes" || a.riester === "unknown") && <div className="retirement-example"><p>Ein neuer Fördervertrag kann die Förderung Ihres bestehenden Vertrags beeinflussen.</p><button type="button" onClick={riester}>Bestehenden Riester-Vertrag zuerst prüfen</button><p>Ihre Antworten bleiben beim internen Wechsel erhalten. A- und B-Vertragsnachweise bleiben getrennt.</p></div>}
         {tri("childBenefit", "Wird für eines Ihrer Kinder aktuell Kindergeld gezahlt?")}
         {a.childBenefit === "yes" && <p>Kindergeldbezug allein ordnet noch keine Kinderzulage zu. Anspruch und Zuordnung je Kind und Jahr prüfen wir in der Beraterprüfung; bitte noch keine Namen oder Geburtsdaten von Kindern eingeben.</p>}
-        </>}
+        </div>}
         {section === 4 && <>
           <h3>Ihre eigenen Angaben</h3>
           <dl className="retirement-answer-summary">{summary.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
-          <FundingOrientation answers={a} year={plan.capital.start.slice(0, 4)} advisor={advisor} />
         </>}
         <div className="retirement-question-actions">
           <button type="button" onClick={() => section === 0 ? back() : move(sections[position - 1])}>{section === 0 ? "Zurück zur Einführung" : "Zurück"}</button>
           {section !== 4 && <button className="primary" type="submit">Weiter</button>}
           <button className={section === 4 ? "primary" : "secondary"} type="button" onClick={() => submit()}>Weiter zum eigenen Sparplan</button>
         </div>
-        {section !== 4 && <p>Sie können offene Angaben später gemeinsam klären oder direkt mit Ihrem eigenen Sparplan neutral weiterrechnen.</p>}
       </form>
     </section>
-    {section !== 4 && <FundingOrientation answers={a} year={plan.capital.start.slice(0, 4)} advisor={advisor} />}
+    <aside className="avd-check-result">
+      <p className="avd-kicker">Förderorientierung · {a.year || "Beitragsjahr offen"}</p>
+      <FundingOrientation answers={a} year={plan.capital.start.slice(0, 4)} advisor={advisor} />
+      {section > 0 && section < 4 && <dl className="avd-check-context">
+        <div><dt>Erstes Beitragsjahr</dt><dd>{a.year || "Offen"}</dd></div>
+        <div><dt>Bestehender Riester-Vertrag</dt><dd>{answerText(a.riester)}</dd></div>
+        <div><dt>Kindergeld</dt><dd>{answerText(a.childBenefit)}</dd></div>
+      </dl>}
+    </aside>
   </div>;
 }

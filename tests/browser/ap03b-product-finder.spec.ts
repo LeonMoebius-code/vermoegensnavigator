@@ -50,10 +50,10 @@ test("AP03B-01/09/10/12/17/18: six source-dated products, separate bank status, 
 
   for (const id of Object.keys(productNames) as ProductId[]) {
     const product = card(page, id);
+    await product.locator("summary").filter({ hasText: /^Details$/ }).click();
     await expect(product.getByText("Öffentlich angekündigt", { exact: true })).toBeVisible();
     await expect(product.getByText("Unbestätigt", { exact: true })).toBeVisible();
     await expect(product.getByText("Arbeitswert vorhanden, für öffentliche Anzeige nicht freigegeben.")).toBeVisible();
-    await product.getByText(`Tarifdetails und Quellen zu ${productNames[id]}`, { exact: true }).click();
     await expect(product.locator("time")).toBeVisible();
     await expect(product.locator("time")).toHaveAttribute("datetime", "2026-11-19");
     await expect(product.getByRole("link")).toHaveCount(3);

@@ -67,9 +67,11 @@ export function PremiumChart({ title, months, series, isPercent = false, selecte
   }
   if (!months.length || !series.some(line => line.values.some(value => value !== null))) return null;
   return <figure className="avd-chart" aria-labelledby={id + "-title"}>
-    <figcaption id={id + "-title"}>{title}</figcaption>
+    <div className="avd-chart-heading"><figcaption id={id + "-title"}>{title}</figcaption>
+      {event >= 0 && moveEvent && <span className="avd-chart-event-label">Crashmonat {monthLabel(months[marker])} · Marker ziehbar</span>}
+    </div>
     <ul className="avd-chart-legend">{series.map(line => <li key={line.label}>
-      <i aria-hidden="true" className={line.dashed ? "avd-dashed" : ""} style={{ color: line.color }} />{line.label}
+      <i aria-hidden="true" className={line.band ? "avd-band-swatch" : line.dashed ? "avd-dashed" : ""} style={{ color: line.color }} />{line.label}
     </li>)}</ul>
     <div className="avd-chart-surface">
       <svg ref={svg} className={compact ? "avd-chart-compact" : undefined} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-hidden="true"
@@ -118,8 +120,15 @@ export function PremiumChart({ title, months, series, isPercent = false, selecte
             data-testid="avd-crash-marker" onPointerDown={e => {
               if (e.button !== 0) return;
               e.currentTarget.setPointerCapture(e.pointerId);
-              setDrag(locate(e.clientX));
-            }} onPointerMove={e => { if (e.currentTarget.hasPointerCapture(e.pointerId)) setDrag(locate(e.clientX)); }}
+              const next = locate(e.clientX);
+              setDrag(next);
+              setIndex(next);
+            }} onPointerMove={e => {
+              if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+              const next = locate(e.clientX);
+              setDrag(next);
+              setIndex(next);
+            }}
             onPointerUp={finishDrag} onPointerCancel={() => setDrag(null)} />}
         </g>}
       </svg>

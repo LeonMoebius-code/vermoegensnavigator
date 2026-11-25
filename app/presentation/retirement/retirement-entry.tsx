@@ -255,17 +255,20 @@ export const RetirementEntry = forwardRef<RetirementNavigation, { workspace?: Pr
   const payments = customerPayments(plan);
   const monthError = payments.status === "invalid_input" && payments.field === "monthly" ? payments.message : null;
   return <div className={`tool-view retirement-view retirement-ux2${guided ? " avd-workspace" : ""}`} data-retirement-stage={step}>
-    {guided ? <div className="avd-workbar">
+    {guided ? <div className="avd-workbar avd-journey-toolbar">
       <button className="retirement-route-back" onClick={() => setStep("choice")}><span aria-hidden="true">‹</span> A/B-Auswahl</button>
+      <nav className="retirement-steps retirement-guided-nav" aria-label="Altersvorsorge-Schritte">
+        {steps.map(item => <button key={item.id} aria-current={step === item.id ? "step" : undefined} onClick={() => navigateA(item.id)}>{item.label}</button>)}
+      </nav>
       <div className="avd-segment" role="group" aria-label="Beratungsansicht">
         <button type="button" aria-pressed={!advisor} onClick={() => setAdvisor(false)}>Kundenansicht</button>
         <button type="button" aria-pressed={advisor} onClick={() => setAdvisor(true)}>Berateransicht</button>
       </div>
     </div> : null}
-    <header className="retirement-journey-header">
+    {step !== "a4" && <header className="retirement-journey-header">
       <h1 ref={title} tabIndex={-1}>{guided?.title ?? (step === "choice" ? "Altersvorsorge" : step === "b1" ? "B1 – Bestandsaufnahme" : "B2 – Fördervergleich")}</h1>
       <p className="retirement-session-note">Flüchtige Vorschau · Nur synthetische Daten verwenden · Eingaben werden nicht gespeichert</p>
-    </header>
+    </header>}
     {step === "choice" ? <>
       <div className="retirement-cards retirement-entry-cards">
         <section className="panel">
@@ -290,9 +293,7 @@ export const RetirementEntry = forwardRef<RetirementNavigation, { workspace?: Pr
           navigate={next => { setBPreview(null); setStep(next); }} update={updateB} show={setBPreview} />
       </RiesterJourney>
     </> : <>
-      <nav className="retirement-steps retirement-guided-nav" aria-label="Altersvorsorge-Schritte">
-        {steps.map(item => <button key={item.id} aria-current={step === item.id ? "step" : undefined} onClick={() => navigateA(item.id)}>{item.label}</button>)}
-      </nav>
+
       {step === "a1" ? intro ? <div className="retirement-introduction">
         <RetirementInformation />
         <button className="primary" onClick={() => setIntro(false)}>Meine Voraussetzungen prüfen</button>
@@ -327,7 +328,7 @@ export const RetirementEntry = forwardRef<RetirementNavigation, { workspace?: Pr
           changeAnswers={changeProductAnswers} step={productStep} navigate={setProductStep} next={() => navigateA("a4")} />
         {configureProducts(true)}
       </> : <>
-        <PremiumModelPanel plan={plan} caseId={premiumId} caseRevision={premiumRevision} controller={premiumController}
+        <PremiumModelPanel headingRef={title} plan={plan} caseId={premiumId} caseRevision={premiumRevision} controller={premiumController}
           timing={premiumTiming} terms={premiumTerms} selection={premiumFunding} fundingEvidence={fundingEvidence} product={premiumProducts}
           configure={configureProducts(false)} workspace={allowedWorkspace}
           showDocuments={Boolean(allowedWorkspace)} editFunding={() => navigateA("a2")} advisor={advisor}

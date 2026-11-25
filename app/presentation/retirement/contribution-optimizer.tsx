@@ -14,7 +14,9 @@ export function ContributionOptimizer({ plan, change, childGoalAvailable = false
   const error = payments.status === "invalid_input" && payments.field === "annual" ? payments : null;
   return <div className="retirement-optimizer" data-testid="contribution-optimizer">
     <h3>Wählen Sie Ihr Jahresziel</h3>
-    <p>Für eine unmittelbar berechtigte Person im neuen Förderregime mit einem zulässigen Vertrag. Die Ziele sind keine Förderzusage. Geprüfte Regelstände: 2027 und 2028.</p>
+    <details className="avd-target-context"><summary>Grundlage der Förderziele</summary>
+      <p>Für eine unmittelbar berechtigte Person im neuen Förderregime mit einem zulässigen Vertrag. Die Ziele sind keine Förderzusage. Geprüfte Regelstände: 2027 und 2028.</p>
+    </details>
     <div className="retirement-contribution-targets" role="group" aria-label="Beitragsziele">
       {contributionTargets.filter(target => showChildTarget || target.cents !== 30000).map(target => {
         const selected = !individual && plan.contribution?.annual === centsInput(target.cents);
@@ -25,13 +27,15 @@ export function ContributionOptimizer({ plan, change, childGoalAvailable = false
         const needed = payments.status === "valid" ? Math.max(0, target.cents - payments.firstOneOff) : null;
         return <button type="button" key={target.cents} aria-pressed={selected}
           onClick={() => change(current => setContributionGoal(current, centsInput(target.cents), "target"))}>
-          <strong>{target.title}</strong><span>Jahresziel: {euro(target.cents)}</span>
+          <strong>{target.title}</strong><span className="avd-target-amount">Jahresziel: {euro(target.cents)}</span>
+          <span className="avd-target-explanation">
           {selected && payments.status === "valid" && <small>Tatsächlich geplanter Jahresbeitrag: {euro(payments.total)}</small>}
           <small>{needed === null || payments.status !== "valid" ? "Zeitraum und Einmalzahlung prüfen" : `${euro(Math.floor(needed / payments.months))} je Restmonat${needed % payments.months ? ` + ${euro(needed % payments.months)} Centausgleich` : ""}`}</small>
           <small>{selected ? "Für Ihren tatsächlichen Zahlungsplan · bedingter Standardfall" : `Orientierungsbeispiel bei exakt ${euro(target.cents)} Jahresbeitrag · kein individueller Förderanspruch`}</small>
           <small>{assumed.status === "calculated" ? `Mögliche Grundzulage · bedingt: ${euro(assumed.result.baseGrantCents)}` : "Grundzulage: Voraussetzungen gesondert prüfen"}</small>
           <small>{target.note}</small>
           {target.cents === 30000 && !childGoalAvailable && <small>Fachliches Jahresziel. Der persönliche Kinderzulagenanspruch ist offen.</small>}
+          </span>
         </button>;
       })}
     </div>
