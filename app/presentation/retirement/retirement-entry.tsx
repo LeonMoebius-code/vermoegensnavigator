@@ -9,13 +9,13 @@ import { emptyRiesterJourney, RiesterJourney } from "./riester-journey";
 import { RetirementProducts, type ProductFinderStep } from "./retirement-products";
 import { emptyProductAnswers, nextProductAnswers, nextProductSelection, type ProductId } from "./product-finder-data";
 import { RetirementCapital, type CapitalView } from "./retirement-capital";
-import { bindCapitalConfirmations, customerPayments, editCustomerCapital, emptyCustomerPlan, incompleteYearMessage, editMonthlyContribution, paymentYear, revokeCapitalConfirmations, runCustomerCapital, validBirthYear, validContributionYear, type ChangeCustomerPlan, type CustomerPlan } from "./customer-plan-adapter";
+import { bindCapitalConfirmations, editCustomerCapital, emptyCustomerPlan, incompleteYearMessage, editMonthlyContribution, paymentYear, revokeCapitalConfirmations, runCustomerCapital, validBirthYear, validContributionYear, type ChangeCustomerPlan, type CustomerPlan } from "./customer-plan-adapter";
 import { RetirementCustomer } from "./retirement-customer";
 import { emptyRetirementAnswers, invalidateAnswer, RetirementInformation, RetirementQuestions, type RetirementAnswers } from "./retirement-questions";
 import type { CapitalRun } from "./projection-adapter";
 import { DEFAULT_TIMELINE_DRAFT, resolvePremiumTimeline, type TimelineDraft } from "./premium-timeline";
 import { PremiumModelPanel, createModelController } from "./premium-model-panel";
-import { DEFAULT_PREMIUM_TERMS, fundingBasis, matchingFunding, selectScenarioFunding, type PremiumTerms, type SelectedFunding } from "./premium-plan-adapter";
+import { DEFAULT_PREMIUM_TERMS, currentBoundFunding, fundingBasis, matchingFunding, selectScenarioFunding, timedPaymentBasis, type PremiumTerms, type SelectedFunding } from "./premium-plan-adapter";
 
 import { jsonHash } from "../../domain/case/recovery-hash";
 import { modelCatalog } from "../../domain/retirement/model-catalog";
@@ -252,7 +252,10 @@ export const RetirementEntry = forwardRef<RetirementNavigation, { workspace?: Pr
   };
 
   const guided = steps.find(s => s.id === step);
-  const payments = customerPayments(plan);
+  const activePaymentBasis = timedPaymentBasis(plan, premiumTiming);
+  const payments = activePaymentBasis.payments;
+  const activeSelection = activePaymentBasis.effective && premiumTiming.mode !== "holdings_only"
+    ? matchingFunding(activePaymentBasis.effective, premiumFunding) : null;
   const monthError = payments.status === "invalid_input" && payments.field === "monthly" ? payments.message : null;
   return <div className={`tool-view retirement-view retirement-ux2${guided ? " avd-workspace" : ""}`} data-retirement-stage={step}>
     {guided ? <div className="avd-workbar avd-journey-toolbar">
@@ -303,22 +306,26 @@ export const RetirementEntry = forwardRef<RetirementNavigation, { workspace?: Pr
         back={() => setIntro(true)} next={() => navigateA("a2")} riester={enterB} />
       : step === "a2" ? <><RetirementCustomer plan={plan} change={updatePlan} back={() => navigateA("a1")}
         timing={premiumTiming} changeTiming={changeTiming} advisor={advisor} onAdvisor={() => setAdvisor(true)}
-        boundFunding={fundingEvidence} fundingSelection={premiumFunding?.bookingMonth ?? null} chooseFunding={month => {
-          const choice = month === null ? null : selectScenarioFunding(currentPlan.current, premiumId, month);
+        boundFunding={fundingEvidence} fundingSelection={activeSelection?.bookingMonth ?? null} chooseFunding={month => {
+          const active = timedPaymentBasis(currentPlan.current, premiumTiming);
+          const choice = month === null || !active.effective || premiumTiming.mode === "holdings_only" ? null
+            : selectScenarioFunding(active.effective, premiumId, month);
           if (month !== null && !choice) return false;
           premiumController.session.invalidate();
           setPremiumFunding(choice); setPremiumRevision(newPremiumIdentity()); setDirty(true);
           return true;
         }} next={() => {
-        if (!yearIsBound() || customerPayments(currentPlan.current).status !== "valid") return false;
+        if (!yearIsBound() || timedPaymentBasis(currentPlan.current, premiumTiming).payments.status !== "valid") return false;
         navigateA("a3");
         return true;
       }} /><FundingEvidencePanel value={fundingEvidence}
-        isCurrent={fundingEvidence?.basis === fundingBasis(plan) && fundingEvidence.opening === plan.capital.initial}
+        isCurrent={currentBoundFunding(plan, activePaymentBasis.timeline, fundingEvidence)}
         bind={(data, previous) => {
           premiumController.session.invalidate();
-          setFundingEvidence(data ? { data, basis: fundingBasis(plan), opening: plan.capital.initial }
-            : previous ? { ...previous, basis: "" } : null);
+          setFundingEvidence(data ? { data, basis: activePaymentBasis.effective && premiumTiming.mode !== "holdings_only" ? fundingBasis(activePaymentBasis.effective) : "",
+            holdingsBasis: activePaymentBasis.effective && premiumTiming.mode === "holdings_only" ? fundingBasis(activePaymentBasis.effective) : undefined,
+            opening: plan.capital.initial }
+            : previous ? { ...previous, basis: "", holdingsBasis: undefined } : null);
           setPremiumFunding(null);
           setPremiumRevision(newPremiumIdentity());
           setDirty(true);
@@ -346,7 +353,9 @@ export const RetirementEntry = forwardRef<RetirementNavigation, { workspace?: Pr
                 aria-valuetext={payments.status === "valid" ? euro(payments.monthly) : "Offen"}
                 onChange={event => { const monthly = event.target.value; updatePlan(p => editMonthlyContribution(p, { ...p.capital, monthly })); }} />
               {monthError && <small id="avd-monthly-error" role="status">{monthError}</small>}
-              {payments.status === "valid" && <small>{euro(payments.monthly)} mtl. · {euro(payments.total)} im ersten Beitragsjahr</small>}
+              {currentBoundFunding(plan, activePaymentBasis.timeline, fundingEvidence) && fundingEvidence?.data.ownPayments
+                ? <small>Beitragsentwurf · aktuell gelten die datierten Vertragszahlungen.</small>
+                : payments.status === "valid" && <small>{euro(payments.monthly)} mtl. · {euro(payments.total)} im ersten Beitragsjahr</small>}
             </aside>}
             <PremiumTimelinePanel compact plan={plan} draft={premiumTiming} change={changeTiming}
               changeEnd={end => updatePlan(p => editCustomerCapital(p, { ...p.capital, end }))} />
@@ -354,6 +363,7 @@ export const RetirementEntry = forwardRef<RetirementNavigation, { workspace?: Pr
           change={terms => { premiumController.session.invalidate(); setPremiumTerms(terms); setDirty(true); }} />
         <div className="avd-legacy-model">
           <h2>Separate Modellvorschau mit Anlageklassen</h2>
+          {(premiumTiming.mode === "holdings_only" || !activePaymentBasis.effective) && <p className="avd-note">Diese getrennte Vorschau verwendet den regulären Beitragsentwurf, nicht die aktuelle Zahlungsgrundlage der Kapitalentwicklung.</p>}
           <RetirementCapital plan={plan} change={updatePlan} result={result}
             stale={refresh === "products" ? "Produktwahl oder Orientierung geändert. Die bisherige Vorschau ist veraltet. Bestätigen Sie Ihre Modellannahmen für eine neue Berechnung."
               : refresh === "inputs" ? "Die bisherige Vorschau ist veraltet. Berechnen Sie die Kapitalentwicklung mit den aktuellen Angaben erneut." : null}

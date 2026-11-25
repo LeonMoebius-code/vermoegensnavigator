@@ -4,7 +4,7 @@ import { CUSTOMER_RETURN, parseCustomerTotalReturn, productStressDifference } fr
 import { resolvePremiumTimeline, type TimelineDraft } from "./premium-timeline";
 import type { CustomerPlan } from "./customer-plan-adapter";
 import { euro } from "./direct-grant-adapter";
-import { buildPremiumDraft, matchingFunding, type PremiumTerms, type SelectedFunding } from "./premium-plan-adapter";
+import { buildPremiumDraft, matchingFunding, timedPaymentBasis, type PremiumTerms, type SelectedFunding } from "./premium-plan-adapter";
 
 import type { BoundFundingEvidence } from "./premium-funding-evidence-panel";
 
@@ -32,7 +32,8 @@ export function PremiumModelPanel({ headingRef, plan, caseId, caseRevision, term
   const id = useId();
   const [view, setView] = useState(controller.view);
   const publish = (next: ModelView) => { controller.view = next; setView(next); };
-  const selected = matchingFunding(plan, selection);
+  const active = timedPaymentBasis(plan, timing);
+  const selected = active.effective && timing.mode !== "holdings_only" ? matchingFunding(active.effective, selection) : null;
   const { totalReturn, valueBasis, compareWithout } = terms;
   const screen = workspace?.rights.screen ?? PUBLIC_MODEL_RIGHTS.screen;
   const key = JSON.stringify([caseRevision, terms, workspace?.rights, workspace?.scope, selection?.register.registerVersion, fundingEvidence?.data.register.registerVersion, fundingEvidence?.basis, timing, plan, product?.catalog.catalog.hash, product?.paths, product?.configurations]);
@@ -77,7 +78,7 @@ export function PremiumModelPanel({ headingRef, plan, caseId, caseRevision, term
           onChange={event => toggleReference(event.target.checked)} />ETF-Bruttoreferenz anzeigen</label>
         {(selected || fundingEvidence) && <label className="retirement-checkbox"><input type="checkbox" checked={compareWithout}
           onChange={event => change({ ...terms, compareWithout: event.target.checked })} />Vergleich ohne Zulagen</label>}
-        {!fundingEvidence && !selected && <p className="avd-note">Förderung offen · Vorschau mit eigenen Zahlungen.</p>}
+        {!fundingEvidence && !selected && <p className="avd-note">{timing.mode === "holdings_only" ? "Bestandsprojektion · keine reguläre Förderannahme aktiv." : "Förderung offen · Vorschau mit eigenen Zahlungen."}</p>}
       </div>;
   return <section className="avd-analysis" aria-labelledby={`${id}-heading`}>
     <div className="avd-analysis-topbar">
@@ -112,7 +113,7 @@ export function PremiumModelPanel({ headingRef, plan, caseId, caseRevision, term
     {configure}
     <div className="avd-model-footer">
     {fundingEvidence ? <p>Belegte Buchungen aus A2 sind automatisch berücksichtigt. Ein offener Förderteil bleibt getrennt.</p> : selected ? <p>Förderannahme aus A2 · Buchungsmonat {selected.bookingMonth} · erstes Beitragsjahr.</p>
-      : <p>Förderung offen. Die Vorschau verwendet den Eigenbeitrag.</p>}
+      : <p>{timing.mode === "holdings_only" ? "Keine reguläre Förderannahme im Bestandsmodell." : "Förderung offen. Die Vorschau verwendet den Eigenbeitrag."}</p>}
     <button type="button" className="secondary" onClick={editFunding}>Förderplan in A2 bearbeiten</button>
     {visible?.snapshot && <section aria-label="Aktuelle Modellvorschau" data-testid="premium-comparison">
       <p className="avd-note">{visible.snapshot.status === "fixed_conditionally" ? "Fixierter bedingter Modellvergleich in dieser Sitzung" : "Bedingte Modellvorschau"}</p>

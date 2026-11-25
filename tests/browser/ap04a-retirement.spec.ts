@@ -238,3 +238,36 @@ for (const year of [2026, 2029]) test(`A04-06: manipuliertes Jahr ${year} erhäl
   await confirmations(page); await annual(page);
   await noResult(page); await expect(review(page)).toContainText("Nur 2027 und 2028");
 });
+
+
+test("R90-N3: A2 und A4 verwenden die wirksame Bestandsprojektion; regulärer Entwurf bleibt", async ({ page }) => {
+  await entry(page);
+  await evidence(page, "Ab wann möchten Sie sparen?").fill("2027-01");
+  await evidence(page, "Bis wann möchten Sie sparen?").fill("2027-12");
+  await confirmations(page);
+  await evidence(page, "Wie viel möchten Sie monatlich einzahlen?").fill("100");
+  await evidence(page, ownConfirmed).check();
+  await expect(page.getByTestId("total-grant")).toHaveText("390,00 €");
+  await expect(page.getByTestId("total-inflow")).toHaveText("1.590,00 €");
+  await page.getByText("Sparende und Bewertung getrennt festlegen", { exact: true }).click();
+  await evidence(page, "Art des Zahlungsplans").selectOption("holdings_only");
+  await expect(evidence(page, "Wie viel möchten Sie monatlich einzahlen?")).toHaveValue("100");
+  await expect(evidence(page, "Wie viel möchten Sie monatlich einzahlen?")).toBeDisabled();
+  await noResult(page);
+  await expect(page.getByTestId("total-inflow")).toHaveText("0,00 €");
+  await expect(page.getByTestId("planned-annual-contribution")).toHaveCount(0);
+  await enterStep(page, "A4");
+  await page.getByText("Zahlungsplan und Modellannahmen bearbeiten", { exact: true }).click();
+  await evidence(page, "Anfangskapital in Euro").fill("1000");
+  const own = page.locator(".avd-capital-build > dl > div").filter({ has: page.getByText("Eigenbeiträge", { exact: true }) });
+  await expect(own.locator("dd")).toHaveText("0,00 €");
+  await enterStep(page, "A2");
+  await page.getByText("Sparende und Bewertung getrennt festlegen", { exact: true }).click();
+  await evidence(page, "Art des Zahlungsplans").selectOption("dated");
+  await expect(evidence(page, "Wie viel möchten Sie monatlich einzahlen?")).toHaveValue("100");
+  await expect(evidence(page, "Wie viel möchten Sie monatlich einzahlen?")).toBeEnabled();
+  await expect(page.getByTestId("total-grant")).toHaveText("390,00 €");
+  await expect(page.getByTestId("total-inflow")).toHaveText("1.590,00 €");
+  await enterStep(page, "A4");
+  await expect(own.locator("dd")).toHaveText("1.200,00 €");
+});

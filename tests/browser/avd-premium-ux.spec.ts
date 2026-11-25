@@ -32,6 +32,7 @@ test("AVD A1/A2: Sonderfragen, gemeinsamer Beitrag und beide Endmonate im Konfli
   await retirementButton(page, "Diesen Monat übernehmen").click();
   await retirementInput(page, "Spar-Endalter").fill("68");
   await expect(page.getByRole("status").filter({ hasText: "Konflikt:" })).toContainText("gesetzter Monat 2047-01, neu abgeleitet 2048-03");
+  await expect(page.getByTestId("planned-annual-contribution")).toHaveCount(0);
   await enterStep(page, "A4");
   await expect(page.getByTestId("premium-comparison")).toHaveCount(0);
   await expect(page.getByText(/Endmonatkonflikt in A2/)).toBeVisible();
@@ -98,4 +99,35 @@ test("AVD A4: Szenario, exakte Rendite, negativer Kapitalaufbau, Wertbasis und T
   await expect(page.getByText(/Inflationsannahme über −100/)).toBeVisible();
   await retirementButton(page, "Nominal").click();
   await expect(figure).toBeVisible();
+});
+
+
+test("R90-N3: anbieterübergreifender Filter und Rückkehr zur vollständigen Matrix", async ({ page }) => {
+  await enter(page);
+  await enterStep(page, "A3");
+  await retirementButton(page, "Alle Produkte ansehen").click();
+  const overview = page.locator(".avd-product-overview");
+  await overview.getByRole("checkbox", { name: /UniVorsorge Basis/ }).check();
+  await overview.getByRole("checkbox", { name: /AltersvorsorgeDepot standard/ }).check();
+  await retirementButton(page, "Direktvergleich öffnen").click();
+  const toggle = page.getByRole("checkbox", { name: "Nur Unterschiede anzeigen" });
+  const rows = page.locator(".retirement-product-row");
+  const protection = page.getByRole("heading", { name: "Schutz zum Ablauf", exact: true });
+  const assertFilter = async () => {
+    await expect(rows).toHaveCount(7);
+    await toggle.check();
+    await expect(rows).toHaveCount(6);
+    await expect(protection).toHaveCount(0);
+    await expect(page.getByText("Für alle gewählten Produkte ist zum Auszahlbeginn keine Beitragsgarantie angekündigt.")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Auszahlungsarten", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Kosten und Datenstand", exact: true })).toBeVisible();
+    await toggle.uncheck();
+    await expect(protection).toBeVisible();
+    await expect(rows).toHaveCount(7);
+  };
+  await assertFilter();
+  await retirementButton(page, "Zurück zu den Produktkarten").click();
+  await overview.getByRole("checkbox", { name: /AltersvorsorgeDepot individuell/ }).check();
+  await retirementButton(page, "Direktvergleich öffnen").click();
+  await assertFilter();
 });

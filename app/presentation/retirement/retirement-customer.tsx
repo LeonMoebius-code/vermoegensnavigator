@@ -2,13 +2,13 @@ import { useId, useRef, useState } from "react";
 import { childCard } from "../../domain/retirement/premium-evidence";
 import { directGrantRuleContext } from "../../domain/retirement/direct-grant-rules";
 import { changeYear, euro, parseEuroCents, type GrantDraft } from "./direct-grant-adapter";
-import { conditionalBaseGrant, customerGrant, customerPayments, editCustomerCapital, editMonthlyContribution, paymentYear, type ChangeCustomerPlan, type CustomerPlan } from "./customer-plan-adapter";
-import { DEFAULT_TIMELINE_DRAFT, resolvePremiumTimeline, type TimelineDraft } from "./premium-timeline";
+import { conditionalBaseGrant, customerGrant, editCustomerCapital, editMonthlyContribution, paymentYear, type ChangeCustomerPlan, type CustomerPlan } from "./customer-plan-adapter";
+import { DEFAULT_TIMELINE_DRAFT, type TimelineDraft } from "./premium-timeline";
 import { PremiumTimelinePanel } from "./premium-timeline-panel";
 import { ContributionOptimizer } from "./contribution-optimizer";
 import { deriveFunding, claimVersion } from "../../domain/retirement/premium-funding";
 import { fundingRegisterForCase } from "../../domain/retirement/premium-funding-input";
-import { fundingBasis } from "./premium-plan-adapter";
+import { currentBoundFunding, effectiveOwnPayments, timedPaymentBasis } from "./premium-plan-adapter";
 import type { BoundFundingEvidence } from "./premium-funding-evidence-panel";
 import type { CapitalDraft } from "./projection-adapter";
 
@@ -76,28 +76,23 @@ export function RetirementCustomer({ plan, change, back, next, fundingSelection 
         children: [...current.evidence.children, { id, status: "assignment_unconfirmed" }] },
     });
   };
-  const payments = customerPayments(plan);
-  let endOpen = false;
-  if (timing.mode === "end_age") {
-    try { resolvePremiumTimeline(plan, timing, null); }
-    catch (error) {
-      if (!(error instanceof Error) || error.name !== "AvdError") throw error;
-      endOpen = true;
-    }
-  }
-  const endIssue = { status: "review_required" as const, message: "Der letzte Sparmonat ist offen. Bitte klären Sie Spar-Endalter und Endmonat." };
-  const grant = endOpen ? endIssue : customerGrant(plan);
-  const possible = endOpen ? endIssue : conditionalBaseGrant(plan);
+  const { timeline, effective, payments, issue } = timedPaymentBasis(plan, timing);
+  const endOpen = issue !== null;
+  const holdings = timing.mode === "holdings_only";
+  const endIssue = { status: "review_required" as const, message: issue ?? "Bestandsprojektion: Keine regulären Beiträge oder daraus abgeleitete Förderannahme aktiv." };
+  const grant = !effective || holdings ? endIssue : customerGrant(effective);
+  const possible = !effective || holdings ? endIssue : conditionalBaseGrant(effective);
   const year = plan.capital.start.slice(0, 4);
-  const importedCurrent = Boolean(boundFunding && boundFunding.basis === fundingBasis(plan)
-    && boundFunding.opening === plan.capital.initial && timing.mode !== "holdings_only");
+  const importedCurrent = currentBoundFunding(plan, timeline, boundFunding ?? null);
   const fiscalYear = /^\d{4}$/.test(year) && year >= "0100";
-  const funding = boundFunding && fiscalYear && deriveFunding(
+  const from = timeline && timeline.valuationStart > year + "-01" ? timeline.valuationStart : year + "-01";
+  const through = timeline && timeline.valuationEnd < year + "-12" ? timeline.valuationEnd : year + "-12";
+  const funding = boundFunding && fiscalYear && from <= through && deriveFunding(
     fundingRegisterForCase(boundFunding.data, importedCurrent, boundFunding.opening === plan.capital.initial),
-    { from: year + "-01", through: year + "-12", lastFundingYear: null },
+    { from, through, lastFundingYear: null },
   );
   const historical = funding ? funding.perspectives.NUR_BELEGTE_HISTORIE : null;
-  const combined = funding ? funding.perspectives.BEDINGT_KOMBINIERT : null;
+  const combined = funding && timeline ? funding.perspectives.BEDINGT_KOMBINIERT : null;
   const sum = (payments: readonly { cents: number }[]) => {
     const total = payments.reduce((result, event) => result + BigInt(event.cents), 0n);
     const amount = Number(total);
@@ -119,7 +114,7 @@ export function RetirementCustomer({ plan, change, back, next, fundingSelection 
     const error = payments.status === "invalid_input" && payments.field === key ? payments.message : null;
     return <div className="retirement-capital-field">
       {label && <label htmlFor={id(key)}>{label}</label>}
-      <input id={id(key)} type={month ? "month" : "text"} inputMode={month ? undefined : "decimal"} value={plan.capital[key]}
+      <input id={id(key)} type={month ? "month" : "text"} inputMode={month ? undefined : "decimal"} value={plan.capital[key]} disabled={key === "monthly" && holdings}
         onChange={e => update(key, e.target.value)} aria-invalid={!!error} aria-describedby={error ? id(`${key}-error`) : undefined} />
       {error && <small id={id(`${key}-error`)} className="retirement-field-error">{error}</small>}
     </div>;
@@ -130,20 +125,24 @@ export function RetirementCustomer({ plan, change, back, next, fundingSelection 
   </div>;
 
   const projectedGrant = !boundFunding && grant.status === "calculated" ? grant.result.totalGrantCents : null;
-  const annual = payments.status === "valid" && !endOpen ? payments.total : null;
-  const contributionTotal = projectedGrant !== null && grant.status === "calculated" ? grant.annualCents + projectedGrant : null;
+  const own = timeline && payments.status === "valid" ? effectiveOwnPayments(plan, timeline, boundFunding ?? null) : null;
+  const ownTotal = own?.filter(event => event.month.slice(0, 4) === year).reduce((total, event) => total + BigInt(event.cents), 0n);
+  const annual = ownTotal !== undefined && Number.isSafeInteger(Number(ownTotal)) ? Number(ownTotal) : null;
+  const importedOwn = Boolean(boundFunding?.data.ownPayments && (importedCurrent || holdings && own?.some(event => event.amountEvidence.class === "B")));
+  const contributionTotal = annual !== null && !boundFunding && holdings ? annual
+    : projectedGrant !== null && annual !== null && Number.isSafeInteger(annual + projectedGrant) ? annual + projectedGrant : null;
   return <div className="retirement-customer" data-testid="customer-retirement">
     <div className="panel avd-contribution-sheet">
       <section className="avd-year-balance" aria-label="Wirtschaftliche Wirkung im ersten Beitragsjahr" aria-live="polite">
         <div className="avd-year-title"><h2>Ihr erstes Beitragsjahr</h2><p>{year || "Beitragsjahr offen"}</p></div>
         <dl className="avd-year-metrics">
           <div><dt>Eigener Jahresbeitrag</dt><dd>{annual === null ? "Offen" : euro(annual)}</dd>
-            <dd className="avd-year-note">{payments.status === "valid" && !endOpen && timing.mode !== "holdings_only" ? euro(payments.monthly) + " monatlich" : "Zahlungsplan prüfen"}</dd></div>
-          <div><dt>Zulagen im Vertrag</dt><dd>{projectedGrant === null ? boundFunding ? "Siehe Buchungen" : "Offen" : <span data-testid="total-grant">{euro(projectedGrant)}</span>}</dd>
-            <dd className="avd-year-note">{projectedGrant === null ? "Nach Anspruch und Zuordnung" : "Regelbasiert modelliert"}</dd></div>
+            <dd className="avd-year-note">{holdings ? "Keine regulären Beiträge" : importedOwn ? "Datierte Vertragszahlungen" : payments.status === "valid" && !endOpen ? euro(payments.monthly) + " monatlich" : "Zahlungsplan prüfen"}</dd></div>
+          <div><dt>Zulagen im Vertrag</dt><dd>{projectedGrant === null ? boundFunding ? "Siehe Buchungen" : holdings ? "Nicht angesetzt" : "Offen" : <span data-testid="total-grant">{euro(projectedGrant)}</span>}</dd>
+            <dd className="avd-year-note">{projectedGrant === null ? holdings ? "Keine reguläre Förderannahme aktiv" : "Nach Anspruch und Zuordnung" : "Regelbasiert modelliert"}</dd></div>
           <div className="avd-year-total"><dt>Eigenbeitrag und modellierte Zulagen</dt>
             <dd>{contributionTotal === null ? "Offen" : <span data-testid="total-inflow">{euro(contributionTotal)}</span>}</dd>
-            <dd className="avd-year-note">Geld im Vertrag</dd></div>
+            <dd className="avd-year-note">{holdings && !boundFunding ? "Modellzufluss ohne Förderannahme" : "Geld im Vertrag"}</dd></div>
           <div className="avd-year-tax"><dt>Möglicher Steuervorteil</dt><dd>Gesondert prüfen</dd>
             <dd className="avd-year-note">Außerhalb des Vertrags</dd></div>
         </dl>
@@ -165,14 +164,16 @@ export function RetirementCustomer({ plan, change, back, next, fundingSelection 
             <div className="avd-contribution-rate">
               {text("monthly")}
               <input type="range" aria-label="Monatsrate einstellen" min={0} max={Math.max(570, (parseEuroCents(plan.capital.monthly) ?? 0) / 100)}
-                step={5} value={(parseEuroCents(plan.capital.monthly) ?? 0) / 100}
-                aria-valuetext={payments.status === "valid" ? euro(payments.monthly) : "Offen"}
+                step={5} disabled={holdings} value={(parseEuroCents(plan.capital.monthly) ?? 0) / 100}
+                aria-valuetext={holdings ? "Gespeicherter Entwurf · nicht aktiv" : payments.status === "valid" ? euro(payments.monthly) : "Offen"}
                 onChange={e => update("monthly", e.target.value)} />
-              <p className="retirement-year-equivalent" data-testid="customer-annual">{payments.status === "valid" && !endOpen
-                ? <><strong>{euro(payments.total)}</strong> Eigenbeitrag {year} · {payments.months} Monatsraten</>
-                : "Der Jahresbeitrag erscheint, sobald Betrag und Zeitraum vollständig sind."}</p>
+              <p className="retirement-year-equivalent" data-testid="customer-annual">{holdings ? <>Bestandsprojektion · regulärer Beitragsentwurf ruht.{annual !== null && <> Wirksamer Eigenbeitrag {year}: <strong>{euro(annual)}</strong>.</>}</>
+                : importedOwn && annual !== null ? <><strong>{euro(annual)}</strong> Eigenbeitrag {year} · datierte Vertragszahlungen</>
+                : payments.status === "valid" && !endOpen
+                  ? <><strong>{euro(payments.total)}</strong> Eigenbeitrag {year} · {payments.months} Monatsraten</>
+                  : "Der Jahresbeitrag erscheint, sobald Betrag und Zeitraum vollständig sind."}</p>
             </div>
-            <ContributionOptimizer plan={plan} change={change} childGoalAvailable={availableChild} />
+            <ContributionOptimizer plan={plan} effective={effective} payments={payments} suspended={holdings} draftOnly={importedOwn} change={change} childGoalAvailable={availableChild} />
             <div className="retirement-action-row">
               <button className="secondary" type="button" onClick={back}>Zurück zu meinen Voraussetzungen</button>
               <button className="primary" type="submit">Weiter zum Produktvergleich</button>
@@ -215,7 +216,7 @@ export function RetirementCustomer({ plan, change, back, next, fundingSelection 
 
           </dl>
           <dl className="retirement-funding-totals"><div><dt>Berufseinsteigerbonus · einmalig</dt><dd>Gesondert prüfen</dd></div></dl>
-          <p>Dieses Modell berücksichtigt keinen Einmalbonus.</p>
+          <p>Dieses Modell enthält keinen Einmalbonus.</p>
           {chooseFunding && <details className="avd-disclosure avd-booking-panel" open={advisor || bookingError || undefined}>
           <summary>Förderbuchung für die Kapitalentwicklung</summary>
           <label htmlFor={id("model-booking")}>Angenommener Buchungsmonat der Förderung</label>
@@ -248,7 +249,7 @@ export function RetirementCustomer({ plan, change, back, next, fundingSelection 
         <div className="avd-pay-dates retirement-capital-grid">
           {text("start", "Ab wann möchten Sie sparen?", true)}
           {timing.mode === "dated" ? text("end", "Bis wann möchten Sie sparen?", true)
-            : <div><strong>Letzter regulärer Sparmonat</strong><p>{timing.mode === "holdings_only" ? "Bestandsprojektion" : endOpen ? "Offen" : plan.capital.end}</p></div>}
+            : <div><strong>Letzter regulärer Sparmonat</strong><p>{timing.mode === "holdings_only" ? "Bestandsprojektion" : endOpen ? "Offen" : timeline?.contributions.kind === "regular" ? timeline.contributions.last : "Offen"}</p></div>}
         </div>
         <p className="avd-note avd-period-summary">
           {timing.mode === "end_age" && <>Spar-Endalter {timing.endAge || "offen"} · </>}

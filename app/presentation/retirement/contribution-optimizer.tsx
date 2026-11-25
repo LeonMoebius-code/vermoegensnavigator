@@ -3,8 +3,13 @@ import { euro } from "./direct-grant-adapter";
 import { centsInput, conditionalBaseGrant, contributionTargets, customerPayments, setContributionGoal, type ChangeCustomerPlan, type CustomerPlan } from "./customer-plan-adapter";
 
 /** All amounts belong to CustomerPlan. No second payment state in this component. */
-export function ContributionOptimizer({ plan, change, childGoalAvailable = false }: { plan: CustomerPlan; change: ChangeCustomerPlan; childGoalAvailable?: boolean }) {
-  const id = useId(), payments = customerPayments(plan);
+export function ContributionOptimizer({ plan, effective, payments, suspended, draftOnly, change, childGoalAvailable = false }: {
+  plan: CustomerPlan; effective: CustomerPlan | null; payments: ReturnType<typeof customerPayments>; suspended: boolean; draftOnly: boolean;
+  change: ChangeCustomerPlan; childGoalAvailable?: boolean;
+}) {
+  const id = useId();
+  if (suspended) return <p className="avd-note" data-testid="contribution-optimizer">Der reguläre Beitragsentwurf ist nicht die aktuelle Zahlungsgrundlage. Ihre Angaben bleiben erhalten.</p>;
+  const actual = payments.status === "valid" && !draftOnly;
   const annualGoal = plan.contribution?.annual ?? (payments.status === "valid" ? centsInput(payments.total) : "");
   const individual = plan.contribution?.kind !== "target";
   // With no family answer yet, the catalogue value is a general savings
@@ -38,7 +43,8 @@ export function ContributionOptimizer({ plan, change, childGoalAvailable = false
       <small id={`${id}-annual-help`}>Das Jahresziel enthält Ihre eigene Einmalzahlung. Daraus ergibt sich die Monatsrate.</small>
     </div>
     {error && <p id={`${id}-error`} role="alert">{error.message}</p>}
-    {payments.status === "valid" && <div className="avd-contribution-explanation" role="status" data-testid="contribution-explanation">
+    {draftOnly && <p className="avd-note">Diese Ziele bearbeiten den Beitragsentwurf. Aktuell gelten die datierten Vertragszahlungen.</p>}
+    {actual && <div className="avd-contribution-explanation" role="status" data-testid="contribution-explanation">
       <p data-testid="planned-annual-contribution"><strong>Tatsächlich geplanter Jahresbeitrag: {euro(payments.total)}</strong></p>
       {(payments.firstOneOff > 0 || payments.remainder > 0) && <p>{payments.months} Monatsraten à {euro(payments.monthly)} + {euro(payments.firstOneOff)} eigene Einmalzahlung{payments.remainder > 0 ? ` + ${euro(payments.remainder)} Centausgleich im Monat ${payments.remainderMonth}` : ""} = {euro(payments.total)} im ersten Kalenderjahr.</p>}
       {payments.goal !== null && payments.firstOneOff > payments.goal && <p>Die Einmalzahlung überschreitet Ihr Jahresziel bereits um {euro(payments.firstOneOff - payments.goal)}. Die Einmalzahlung von {euro(payments.firstOneOff)} bleibt erhalten. Die Monatsrate beträgt {euro(payments.monthly)}. Der tatsächlich geplante Jahresbeitrag liegt höher als das Ziel.</p>}
@@ -52,17 +58,17 @@ export function ContributionOptimizer({ plan, change, childGoalAvailable = false
       <dl className="avd-target-examples">{targets.map(target => {
         const selected = !individual && plan.contribution?.annual === centsInput(target.cents);
         // Only the selected goal uses the actual plan, including its one-off payment.
-        const assumed = selected ? conditionalBaseGrant(plan) : conditionalBaseGrant({ ...plan,
-          contribution: { kind: "target", annual: centsInput(target.cents) }, capital: { ...plan.capital, oneOffEnabled: false } });
-        const needed = payments.status === "valid" ? Math.max(0, target.cents - payments.firstOneOff) : null;
+        const assumed = !effective || draftOnly ? null : selected ? conditionalBaseGrant(effective) : conditionalBaseGrant({ ...effective,
+          contribution: { kind: "target", annual: centsInput(target.cents) }, capital: { ...effective.capital, oneOffEnabled: false } });
+        const needed = actual ? Math.max(0, target.cents - payments.firstOneOff) : null;
         return <div key={target.cents}>
           <dt>{target.title}</dt>
-          <dd>{selected ? "Für Ihren tatsächlichen Zahlungsplan · bedingter Standardfall"
+          <dd>{selected ? actual ? "Für Ihren tatsächlichen Zahlungsplan · bedingter Standardfall" : "Gewählter Entwurf · keine aktuelle Zahlungsgrundlage"
             : `Orientierungsbeispiel bei exakt ${euro(target.cents)} Jahresbeitrag · kein individueller Förderanspruch`}</dd>
-          {selected && payments.status === "valid" && <dd>Tatsächlich geplanter Jahresbeitrag: {euro(payments.total)}</dd>}
+          {selected && actual && <dd>Tatsächlich geplanter Jahresbeitrag: {euro(payments.total)}</dd>}
           <dd>{needed === null || payments.status !== "valid" ? "Zeitraum und Einmalzahlung prüfen"
             : `${euro(Math.floor(needed / payments.months))} je Restmonat${needed % payments.months ? ` + ${euro(needed % payments.months)} Centausgleich` : ""}`}</dd>
-          <dd>{assumed.status === "calculated" ? `Mögliche Grundzulage · bedingt: ${euro(assumed.result.baseGrantCents)}` : "Grundzulage: Voraussetzungen gesondert prüfen"}</dd>
+          <dd>{assumed?.status === "calculated" ? `Mögliche Grundzulage · bedingt: ${euro(assumed.result.baseGrantCents)}` : "Grundzulage: Voraussetzungen gesondert prüfen"}</dd>
           {target.cents === 30000 && !childGoalAvailable && <dd>Der persönliche Kinderzulagenanspruch ist offen.</dd>}
         </div>;
       })}</dl>

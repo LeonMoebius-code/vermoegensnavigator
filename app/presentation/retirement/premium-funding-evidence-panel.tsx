@@ -6,6 +6,7 @@ import { euro } from "./direct-grant-adapter";
 export interface BoundFundingEvidence {
   readonly data: FundingEvidence;
   readonly basis: string;
+  readonly holdingsBasis?: string;
   readonly opening: string;
 }
 

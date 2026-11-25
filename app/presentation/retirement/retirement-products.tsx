@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import {
   comparisonLimit, costLabel, featureLabels, payoutLabels, preferenceMatches, productFinderSourceDate,
-  productPayoutSource, productQuestions, products, productSources, type ProductAnswers, type ProductId,
+  productPayoutSource, productQuestions, products, productSources, sharedComparisonFacts, type SharedComparisonFact, type ProductAnswers, type ProductId,
 } from "./product-finder-data";
 
 type Product = typeof products[number];
@@ -132,13 +132,13 @@ function ComparePayout({ product }: { product: Product }) {
   </>;
 }
 
-const comparisonRows: readonly { title: string; content: (product: Product, answers: ProductAnswers) => ReactNode }[] = [
+const comparisonRows: readonly { title: string; sharedFact?: SharedComparisonFact; content: (product: Product, answers: ProductAnswers) => ReactNode }[] = [
   { title: "Anlage und ETF-Auswahl", content: product => <>
     <strong>{investmentHeadlines[product.id]}</strong>
     <small>Eigene ETF-Auswahl: {featureLabels[product.etf]}</small>
   </> },
-  { title: "Schutz zum Ablauf", content: product => <CompareProtection product={product} /> },
-  { title: "Auszahlungsarten", content: product => <ComparePayout product={product} /> },
+  { title: "Schutz zum Ablauf", sharedFact: "no_announced_contribution_guarantee", content: product => <CompareProtection product={product} /> },
+  { title: "Auszahlungsarten", sharedFact: "union_fund_payout_without_annuity", content: product => <ComparePayout product={product} /> },
   { title: "Kosten und Datenstand", content: product => <>
     <strong>Tarifkosten öffentlich offen</strong>
     <small>Bankverfügbarkeit: {product.bankStatus.toLocaleLowerCase("de-DE")}</small>
@@ -152,11 +152,8 @@ function ProductComparison({ selected, answers, toggle }: {
   selected: readonly Product[]; answers: ProductAnswers; toggle: (product: Product) => void;
 }) {
   const [differences, setDifferences] = useState(false);
-  const sameProvider = selected.every(product => product.provider === selected[0]?.provider);
-  const confirmedSharedPayout = sameProvider && selected.every(product => product.plan.status === "public"
-    && product.plan.kind === "fund" && product.plan.description === selected[0]?.plan.description
-    && product.annuity.status === "absent" && product.annuity.description === selected[0]?.annuity.description);
-  const rows = differences && confirmedSharedPayout ? comparisonRows.filter(row => row.title !== "Auszahlungsarten") : comparisonRows;
+  const sharedFacts = sharedComparisonFacts(selected);
+  const rows = differences ? comparisonRows.filter(row => !row.sharedFact || !sharedFacts.includes(row.sharedFact)) : comparisonRows;
   return <div className="retirement-product-matrix avd-direct-compare" data-columns={selected.length}>
     <label className="retirement-checkbox avd-difference-toggle"><input type="checkbox" checked={differences}
       onChange={e => setDifferences(e.target.checked)} />Nur Unterschiede anzeigen</label>
@@ -178,7 +175,8 @@ function ProductComparison({ selected, answers, toggle }: {
       </section>)}
       <section className="avd-shared-facts"><h3>Gemeinsame belegte Rahmenbedingungen</h3>
         <ul><li>Alle gewählten Produkte sind öffentlich angekündigt.</li>
-        {confirmedSharedPayout && <li>Für alle gewählten Union-Produkte ist der Fondsauszahlplan angekündigt. Eine lebenslange Rente bietet Union für diese Produkte nicht an.</li>}</ul>
+        {sharedFacts.includes("no_announced_contribution_guarantee") && <li>Für alle gewählten Produkte ist zum Auszahlbeginn keine Beitragsgarantie angekündigt.</li>}
+        {sharedFacts.includes("union_fund_payout_without_annuity") && <li>Für alle gewählten Union-Produkte ist der Fondsauszahlplan angekündigt. Eine lebenslange Rente bietet Union für diese Produkte nicht an.</li>}</ul>
         {differences && <p>Offene Tarif-, Kosten- und Bankangaben bleiben sichtbar.</p>}
       </section>
       <div className="retirement-product-columns avd-compare-sources">
