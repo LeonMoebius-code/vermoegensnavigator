@@ -132,7 +132,7 @@ test("UX25–32/36: synthetic controls, exact cost conventions, crash and rebala
     await expect(demo).toContainText(convention);
     await expect(demo.getByTestId("demo-end")).toHaveText([value, value, value]);
     await expect(demo).not.toContainText(/Union|R\+V|Leibrente|iCPPI/);
-    await demo.getByText("Fachebene · Katalog, Quelle und Rechenstand", { exact: true }).click();
+    await demo.getByText("Katalog, Quelle und Rechenstand", { exact: true }).click();
     await expect(demo.getByText(/Kostenevidenz S/)).toBeVisible();
     await expect(demo).toContainText("ux2-demo-1-tariff");
   }

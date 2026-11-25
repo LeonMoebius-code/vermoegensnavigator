@@ -56,7 +56,7 @@ export function selectScenarioFunding(plan: CustomerPlan, caseId: string, bookin
 export const DEFAULT_PREMIUM_TERMS = Object.freeze({ totalReturn: CUSTOMER_RETURN.defaultText, valueBasis: "nominal" as const,
   inflation: DEFAULT_INFLATION.bps, compareWithout: false });
 export type PremiumTerms = { readonly totalReturn: string; readonly valueBasis: "nominal" | "real";
-  readonly inflation: number; readonly compareWithout: boolean };
+  readonly inflation: number; readonly inflationText?: string; readonly priceMonth?: string; readonly compareWithout: boolean };
 
 export function buildPremiumDraft(plan: CustomerPlan, caseId: string, caseRevision: string, terms: PremiumTerms,
   selection: SelectedFunding | null, dates?: Timeline, bound: BoundFundingEvidence | null = null, product: ProductDraft | null = null): PremiumDraft {
@@ -112,8 +112,18 @@ export function buildPremiumDraft(plan: CustomerPlan, caseId: string, caseRevisi
   const configured = product ? productCurves(product, timeline, caseId, { valueBasis: terms.valueBasis,
     perspective: activeFunding ? "BEDINGT_KOMBINIERT" : "OHNE_ZULAGEN", scenarioVersion: marketVersion, returnEvidence: evidence }, rate) : null;
   if (configured) curves.push(...configured.curves);
-  const inflation = terms.inflation === DEFAULT_INFLATION.bps ? DEFAULT_INFLATION : { bps: terms.inflation,
-    evidence: { class: "S" as const, source: "A4-price", version: jsonHash([terms.inflation]) } };
+  let inflationBps = terms.inflation;
+  if (terms.valueBasis === "real" && terms.inflationText !== undefined) {
+    requireAvd(/^-?\d{1,6}(?:[.,]\d{1,2})?$/.test(terms.inflationText), "INFLATION_OPEN", "price.inflation");
+    const [whole, decimal = ""] = terms.inflationText.replace("-", "").split(/[.,]/);
+    inflationBps = (Number(whole) * 100 + Number(decimal.padEnd(2, "0"))) * (terms.inflationText.startsWith("-") ? -1 : 1);
+    requireAvd(inflationBps > -10000, "INFLATION_OPEN", "price.inflation");
+  }
+  const inflation = inflationBps === DEFAULT_INFLATION.bps ? DEFAULT_INFLATION : { bps: inflationBps,
+    evidence: { class: "S" as const, source: "A4-price", version: jsonHash([inflationBps]) } };
+  const price = terms.valueBasis === "real" && terms.priceMonth ? {
+    mode: "manual" as const, month: terms.priceMonth, evidence: { class: "S" as const, source: "Gewählter Preisbezugsmonat", version: jsonHash(terms.priceMonth) },
+  } : { mode: "automatic" as const };
   return { caseRevision, savings: { caseId, timeline, openingCents: initial, openingVersion: jsonHash(initial), own,
-    funding: activeFunding, profiles: configured?.profiles ?? [] }, curves, price: { mode: "automatic" }, inflation };
+    funding: activeFunding, profiles: configured?.profiles ?? [] }, curves, price, inflation };
 }

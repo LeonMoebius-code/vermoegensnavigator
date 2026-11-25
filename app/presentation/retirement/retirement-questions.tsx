@@ -70,13 +70,15 @@ export function invalidateAnswer(plan: CustomerPlan, key: keyof RetirementAnswer
   return { ...plan, evidence: { ...e, entitlement: "unconfirmed", contributionConfirmed: false, ...(partner ? children() : {}) } };
 }
 
-export function FundingOrientation({ answers, year }: { answers: RetirementAnswers; year: string }) {
+export function FundingOrientation({ answers, year, advisor = false }: { answers: RetirementAnswers; year: string; advisor?: boolean }) {
   const o = fundingOrientation(answers, year);
   return <section className="panel retirement-orientation" aria-label="Vorläufige Förderorientierung" aria-live="polite">
-    <p className="eyebrow">IHRE ANGABEN · NOCH KEINE FÖRDERZUSAGE</p>
+    <span className="avd-state" data-state={o.possible ? "possible" : "open"}>{o.possible ? "Grundsätzlich möglich" : "Förderung offen"}</span>
     <h2>{o.title}</h2><p data-testid="funding-orientation">{o.message}</p>
-    <h3>Was wir als Nächstes prüfen</h3><ul>{o.next.map(t => <li key={t}>{t}</li>)}</ul>
-    <p>Ihre Antworten ersetzen keine fachliche Bestätigung. Sie können unabhängig davon mit eigenen Beiträgen und einem neutralen Marktmodell weiterrechnen.</p>
+    <details className="avd-disclosure" open={advisor || undefined}><summary>Was wir als Nächstes prüfen</summary>
+      <ul>{o.next.map(t => <li key={t}>{t}</li>)}</ul>
+    </details>
+    <p className="avd-note">Eine neutrale Vorschau mit eigenen Beiträgen ist bereits möglich. Der einmalige Berufseinsteigerbonus erfordert eine gesonderte Prüfung.</p>
   </section>;
 }
 
@@ -111,10 +113,10 @@ const insuranceOptions = [["statutory", "Gesetzliche Rentenversicherungspflicht"
 const answerOptions = [["yes", "Ja"], ["no", "Nein"], ["unknown", "Weiß ich nicht / gemeinsam prüfen"]] as const;
 const questionSections = ["Zeitraum und Person", "Erwerb und Versicherung", "Besondere Voraussetzungen", "Bestehende Vorsorge und Kinder", "Ihre erste Orientierung"] as const;
 
-export function RetirementQuestions({ answers: a, plan, change, birth, back, next, riester, section, setSection, yearFocus }: {
+export function RetirementQuestions({ answers: a, plan, change, birth, back, next, riester, section, setSection, yearFocus, advisor }: {
   answers: RetirementAnswers; plan: CustomerPlan; change: <K extends keyof RetirementAnswers>(key: K, value: RetirementAnswers[K]) => void;
   birth: (value: string) => void; back: () => void; next: () => void; riester: () => void;
-  section: number; setSection: (section: number) => void; yearFocus: number;
+  section: number; setSection: (section: number) => void; yearFocus: number; advisor: boolean;
 }) {
   const prefix = useId(), yearRef = useRef<HTMLInputElement>(null), birthRef = useRef<HTMLInputElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -161,7 +163,7 @@ export function RetirementQuestions({ answers: a, plan, change, birth, back, nex
   ];
   return <div className="retirement-question-layout retirement-guided-layout">
     <section className="panel retirement-questionnaire" aria-label="Ihre Voraussetzungen">
-      <p role="status" aria-live="polite" aria-atomic="true">Abschnitt {position + 1} von {sections.length}: {questionSections[section]}</p>
+      <p className="avd-question-position" role="status" aria-live="polite" aria-atomic="true">Abschnitt {position + 1} von {sections.length}: {questionSections[section]}</p>
       <nav className="retirement-question-progress" aria-label="Abschnitte der Förderfragen">
         <ol>{sections.map((index, i) => <li key={index}><button type="button" aria-current={section === index ? "step" : undefined}
           onClick={() => index > section ? submit(index) : move(index)}>{i + 1}. {questionSections[index]}</button></li>)}</ol>
@@ -178,7 +180,7 @@ export function RetirementQuestions({ answers: a, plan, change, birth, back, nex
         {errors.birth && <p id={id("birth-error")} role="alert">{errors.birth}</p>}
         </>}
         {section === 1 && <>
-        <fieldset className="retirement-answer-group"><legend>Wie sind Sie derzeit beruflich tätig und versichert?</legend>
+        <fieldset className="retirement-answer-group avd-employment"><legend>Wie sind Sie derzeit beruflich tätig und versichert?</legend>
           {employmentOptions.map(([v, label]) => <label key={v} className="retirement-answer"><input type="radio" name={id("employment")} checked={a.employment === v} onChange={() => change("employment", v)} />{label}</label>)}
         </fieldset><p>Im öffentlichen Dienst angestellt, aber nicht verbeamtet? Wählen Sie Ihre tatsächliche Versicherungsform.</p>
         <fieldset className="retirement-answer-group"><legend>Treffen zusätzlich weitere Situationen auf Sie zu?</legend>
@@ -206,7 +208,7 @@ export function RetirementQuestions({ answers: a, plan, change, birth, back, nex
         {section === 4 && <>
           <h3>Ihre eigenen Angaben</h3>
           <dl className="retirement-answer-summary">{summary.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
-          <FundingOrientation answers={a} year={plan.capital.start.slice(0, 4)} />
+          <FundingOrientation answers={a} year={plan.capital.start.slice(0, 4)} advisor={advisor} />
         </>}
         <div className="retirement-question-actions">
           <button type="button" onClick={() => section === 0 ? back() : move(sections[position - 1])}>{section === 0 ? "Zurück zur Einführung" : "Zurück"}</button>
@@ -216,6 +218,6 @@ export function RetirementQuestions({ answers: a, plan, change, birth, back, nex
         {section !== 4 && <p>Sie können offene Angaben später gemeinsam klären oder direkt mit Ihrem eigenen Sparplan neutral weiterrechnen.</p>}
       </form>
     </section>
-    {section !== 4 && <FundingOrientation answers={a} year={plan.capital.start.slice(0, 4)} />}
+    {section !== 4 && <FundingOrientation answers={a} year={plan.capital.start.slice(0, 4)} advisor={advisor} />}
   </div>;
 }

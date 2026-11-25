@@ -87,7 +87,7 @@ function SyntheticModel({ mode }: { mode: ProductModel }) {
           </table></div>
         </>}
       </details>
-      <details className="retirement-analysis-details"><summary>Fachebene · Katalog, Quelle und Rechenstand</summary>
+      <details className="retirement-analysis-details"><summary>Katalog, Quelle und Rechenstand</summary>
         <p>Freigegebener synthetischer Anzeigekatalog <code>{snapshot.catalog_ref.id}</code> · Revision {snapshot.catalog_ref.revision} · {snapshot.as_of}.</p>
         <p>Produkt-ID <code>{path.product_ref.id}</code> · Tarif-ID <code>{path.tariff_ref.id}</code>.</p>
         <p>Kostenevidenz S · <code>{path.scenario_cost_ref?.id}</code> · Marktquelle <code>ux2-demo-scenarios</code>.</p>

@@ -21,7 +21,7 @@ test.beforeAll(async () => {
 async function enterProtectedWorkspace(page: Page) {
   await page.route("**/avd-synthetic-workspace.html", route => route.fulfill({
     contentType: "text/html; charset=utf-8",
-    body: '<!doctype html><html lang="de"><meta charset="utf-8"><div id="root"></div><script src="avd-synthetic-workspace.js"></script></html>',
+    body: '<!doctype html><html lang="de"><meta charset="utf-8"><link rel="stylesheet" href="styles.css"><div id="root"></div><script src="avd-synthetic-workspace.js"></script></html>',
   }));
   await page.route("**/avd-synthetic-workspace.js", route => route.fulfill({ contentType: "text/javascript", body: browserWorkspace }));
   await page.goto("./avd-synthetic-workspace.html");
@@ -209,4 +209,44 @@ test("R88-N3: an open pre-window child reversal blocks new A4 documents but pres
   const nextPdf = await PDFDocument.load(await download(pdf));
   expect(nextPdf.getSubject()).not.toBe(originalRevision);
   expect((await download(csv)).toString()).toContain(nextPdf.getSubject());
+});
+
+test("AVD A4: Crashmarker setzt den gemeinsamen Ereignismonat und hält Nullstress sichtbar", async ({ page }) => {
+  await enterProtectedWorkspace(page);
+  await enterStep(page, "A3");
+  await retirementButton(page, "Alle Produkte ansehen").click();
+  await page.getByTestId("product-basis").getByRole("checkbox").check();
+  await page.getByText("Artificial product 1 · Artificial tariff 1", { exact: true }).click();
+  await retirementInput(page, "Modellprofil").selectOption("0");
+  await enterStep(page, "A4");
+  await retirementButton(page, "Dynamischer Stresstest").click();
+  await retirementInput(page, "Aktienmarktverlust in %").fill("-40");
+  const month = retirementInput(page, "Crashmonat");
+  await month.fill("2034-06");
+  await expect(page.getByText("Tatsächliche Aktienexponierung", { exact: true })).toBeVisible();
+  const chart = page.getByRole("figure", { name: "Kapital mit und ohne Crash" });
+  await month.blur();
+  await chart.locator("svg").evaluate(element => element.scrollIntoView({ block: "center", behavior: "instant" }));
+  const surface = (await chart.locator("svg").boundingBox())!;
+  const target = (await chart.getByTestId("avd-crash-marker").boundingBox())!;
+  const point = { x: target.x + target.width / 2, y: target.y + target.height / 2 };
+  await expect.poll(() => page.evaluate(({ x, y }) => {
+    const target = document.elementFromPoint(x, y);
+    return target?.getAttribute("data-testid") ?? target?.outerHTML.slice(0, 200) ?? null;
+  }, point)).toBe("avd-crash-marker");
+  await page.mouse.move(point.x, point.y);
+  await page.mouse.down();
+  await page.mouse.move(surface.x + surface.width * .58, target.y + target.height / 2, { steps: 6 });
+  await page.mouse.up();
+  await expect(month).not.toHaveValue("2034-06");
+  const dragged = await month.inputValue();
+  await page.getByRole("slider", { name: "Crashmonat einstellen", exact: true }).focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(month).not.toHaveValue(dragged);
+  await retirementInput(page, "Aktienmarktverlust in %").fill("0");
+  await expect(page.getByTestId("premium-stress-end-difference")).toContainText("0,00");
+  await retirementButton(page, "Wirtschaftlicher Vergleich").click();
+  await expect(page.getByRole("figure", { name: "Kostenwirkung im Zeitverlauf" })).toBeVisible();
+  await retirementButton(page, "M2 · Anlage und Risiko").click();
+  await expect(page.getByRole("figure", { name: "Kapitalverläufe der Anlageprofile" })).toContainText("mit Crash");
 });

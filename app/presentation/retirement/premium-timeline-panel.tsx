@@ -5,7 +5,10 @@ import { overrideRegularEnd, regularEnd } from "../../domain/retirement/premium-
 import { endAgeBasis, type TimelineDraft } from "./premium-timeline";
 import type { CustomerPlan } from "./customer-plan-adapter";
 
-export function PremiumTimelinePanel({ plan, draft, change }: { plan: CustomerPlan; draft: TimelineDraft; change: (value: TimelineDraft) => void }) {
+export function PremiumTimelinePanel({ plan, draft, change, compact = false, changeEnd }: {
+  plan: CustomerPlan; draft: TimelineDraft; change: (value: TimelineDraft) => void;
+  compact?: boolean; changeEnd?: (month: string) => void;
+}) {
   const id = useId();
   const [directMonth, setDirectMonth] = useState("");
   const basis = endAgeBasis(plan, draft);
@@ -18,7 +21,9 @@ export function PremiumTimelinePanel({ plan, draft, change }: { plan: CustomerPl
     if (!month || !status) return;
     change({ ...draft, override: overrideRegularEnd(basis, month, newPremiumIdentity()) });
   };
-  return <details><summary>Sparende und Bewertung getrennt festlegen</summary>
+  return <details className={compact ? "avd-timeline-control" : undefined}><summary>{compact ? "Sparende und Auszahlbeginn" : "Sparende und Bewertung getrennt festlegen"}</summary>
+    {compact && draft.mode === "dated" && <label>Letzter Sparmonat<input type="month" value={plan.capital.end}
+      onChange={e => changeEnd?.(e.target.value)} /></label>}
     <div className="retirement-capital-grid">
       <div><label htmlFor={`${id}-mode`}>Art des Zahlungsplans</label><select id={`${id}-mode`} value={draft.mode}
         onChange={e => change({ ...draft, mode: e.target.value as TimelineDraft["mode"] })}>
@@ -38,7 +43,7 @@ export function PremiumTimelinePanel({ plan, draft, change }: { plan: CustomerPl
         onChange={e => change({ ...draft, birthMonth: e.target.value })}>
         <option value="">Offen</option>{Array.from({ length: 12 }, (_, i) => <option key={i} value={i + 1}>{i + 1}</option>)}
       </select>
-      <p role="status">{!status ? "Geburtsjahr in A1 und Spar-Endalter prüfen." : status.status === "Konflikt_ungelöst"
+      <p role="status" className={status?.status === "Konflikt_ungelöst" ? "avd-open" : undefined}>{!status ? "Geburtsjahr in A1 und Spar-Endalter prüfen." : status.status === "Konflikt_ungelöst"
         ? `Konflikt: gesetzter Monat ${status.previous}, neu abgeleitet ${status.derived ?? "offen"}.` : status.month
           ? `Letzter Monatsendbeitrag ${status.month} · ${status.status}.`
           : `Zieljahr ${status.year}. Der genaue Beitragsmonat ist offen.`}</p>
@@ -47,7 +52,9 @@ export function PremiumTimelinePanel({ plan, draft, change }: { plan: CustomerPl
       <button type="button" className="secondary" disabled={!directMonth || !status} onClick={() => commitOverride(directMonth)}>Diesen Monat übernehmen</button>
       {status?.status === "Konflikt_ungelöst" && <>
         <button type="button" className="secondary" onClick={() => commitOverride(status.previous!)}>Bisherigen Endmonat beibehalten</button>
-        <button type="button" className="secondary" onClick={() => change({ ...draft, override: null })}>Neu abgeleiteten Endmonat übernehmen</button>
+        <button type="button" className="secondary" onClick={() => change({ ...draft, override: null })}>
+          {status.derived ? "Neu abgeleiteten Endmonat übernehmen" : "Direkte Annahme verwerfen und Monat offenlassen"}
+        </button>
       </>}
     </>}
   </details>;

@@ -9,7 +9,7 @@ import { emptyRiesterJourney, RiesterJourney } from "./riester-journey";
 import { RetirementProducts, type ProductFinderStep } from "./retirement-products";
 import { emptyProductAnswers, nextProductAnswers, nextProductSelection, type ProductId } from "./product-finder-data";
 import { RetirementCapital, type CapitalView } from "./retirement-capital";
-import { bindCapitalConfirmations, customerPayments, editCustomerCapital, emptyCustomerPlan, incompleteYearMessage, metricCents, paymentYear, revokeCapitalConfirmations, runCustomerCapital, validBirthYear, validContributionYear, type ChangeCustomerPlan, type CustomerPlan } from "./customer-plan-adapter";
+import { bindCapitalConfirmations, customerPayments, editCustomerCapital, emptyCustomerPlan, incompleteYearMessage, editMonthlyContribution, paymentYear, revokeCapitalConfirmations, runCustomerCapital, validBirthYear, validContributionYear, type ChangeCustomerPlan, type CustomerPlan } from "./customer-plan-adapter";
 import { RetirementCustomer } from "./retirement-customer";
 import { emptyRetirementAnswers, invalidateAnswer, RetirementInformation, RetirementQuestions, type RetirementAnswers } from "./retirement-questions";
 import type { CapitalRun } from "./projection-adapter";
@@ -21,6 +21,7 @@ import { jsonHash } from "../../domain/case/recovery-hash";
 import { modelCatalog } from "../../domain/retirement/model-catalog";
 import { productChannelAllowed } from "../../domain/retirement/premium-products";
 import { PUBLIC_MODEL_RIGHTS } from "../../domain/retirement/premium-session";
+import { PremiumTimelinePanel } from "./premium-timeline-panel";
 import { PremiumProductPanel } from "./premium-product-panel";
 import { type Configurations, type PremiumWorkspace, type ProductConfiguration } from "./premium-product-configuration";
 import { FundingEvidencePanel, type BoundFundingEvidence } from "./premium-funding-evidence-panel";
@@ -43,13 +44,14 @@ const steps = [
 ] as const;
 type AStep = typeof steps[number]["id"];
 type Step = AStep | "choice" | "b1" | "b2";
-const formatMonth = (month: string) => /^\d{4}-\d{2}$/.test(month) ? `${month.slice(5)}/${month.slice(0, 4)}` : "offen";
+
 
 /** The entire draft lives here; unmount discards it. */
 export const RetirementEntry = forwardRef<RetirementNavigation, { workspace?: PremiumWorkspace }>(function RetirementEntry({ workspace }, ref) {
   const catalog = useMemo(() => workspace ? modelCatalog(workspace.catalog, "internal") : null, [workspace?.catalog]);
   const allowedWorkspace = workspace && catalog && (workspace.scope === "internal" || productChannelAllowed(catalog, "display")) ? workspace : null;
   const [step, setStep] = useState<Step>("choice");
+  const [advisor, setAdvisor] = useState(false);
   const [intro, setIntro] = useState(true);
   const [plan, setPlan] = useState(emptyCustomerPlan);
   const [premiumId, setPremiumId] = useState(() => newPremiumIdentity());
@@ -67,7 +69,8 @@ export const RetirementEntry = forwardRef<RetirementNavigation, { workspace?: Pr
   const [yearFocus, setYearFocus] = useState(0);
   const [productFinder, setProductFinder] = useState({ selected: [] as readonly ProductId[], answers: emptyProductAnswers });
   const currentFinder = useRef(productFinder);
-  const activePaths = allowedWorkspace?.paths.filter(path => productFinder.selected.includes(path.selection)) ?? [];
+  const activePaths = allowedWorkspace?.rights.screen.allowed
+    ? allowedWorkspace.paths.filter(path => productFinder.selected.includes(path.selection)) : [];
   const premiumProducts = catalog && activePaths.length ? { catalog, paths: activePaths, configurations } : null;
   const changePremiumConfiguration = (key: string, next: ProductConfiguration | null) => {
     premiumController.session.invalidate();
@@ -208,14 +211,21 @@ export const RetirementEntry = forwardRef<RetirementNavigation, { workspace?: Pr
     setBPreview(null);
     setStep("b1");
   };
+  const changeTiming = (value: TimelineDraft) => {
+    premiumController.session.invalidate();
+    setPremiumTiming(value); setPremiumRevision(newPremiumIdentity()); setDirty(true);
+    if (value.mode === "holdings_only") setPremiumFunding(null);
+    try {
+      const t = resolvePremiumTimeline(currentPlan.current, value, null);
+      if (t.contributions.kind === "regular" && value.mode === "end_age") {
+        const end = t.contributions.last;
+        updatePlan(p => editCustomerCapital(p, { ...p.capital, end }));
+      }
+    } catch (error) { if (!(error instanceof Error) || error.name !== "AvdError") throw error; }
+  };
   const configureProducts = (showPreference: boolean) => premiumProducts && <PremiumProductPanel
     paths={activePaths} catalog={premiumProducts.catalog} values={configurations} change={changePremiumConfiguration} payoutMonth={premiumTiming.payoutMonth}
-    setPayoutMonth={payoutMonth => {
-      premiumController.session.invalidate();
-      setPremiumTiming(p => ({ ...p, payoutMonth }));
-      setPremiumRevision(newPremiumIdentity());
-      setDirty(true);
-    }} showPreference={showPreference} />;
+    setPayoutMonth={payoutMonth => changeTiming({ ...premiumTiming, payoutMonth })} advisor={advisor} showPreference={showPreference} />;
   const confirmDiscard = () => !dirty || window.confirm(discardMessage);
   useImperativeHandle(ref, () => ({ confirmDiscard }), [dirty]);
   useEffect(() => { title.current?.focus(); }, [step, intro]);
@@ -231,7 +241,7 @@ export const RetirementEntry = forwardRef<RetirementNavigation, { workspace?: Pr
   }, [dirty]);
   const restart = () => {
     if (!confirmDiscard()) return;
-    setDirty(false); setStep("choice"); setIntro(true);
+    setDirty(false); setStep("choice"); setIntro(true); setAdvisor(false);
     setPremiumId(newPremiumIdentity()); setPremiumController(createModelController(allowedWorkspace)); setConfigurations({}); setPremiumTerms(DEFAULT_PREMIUM_TERMS); setPremiumTiming(DEFAULT_TIMELINE_DRAFT); setPremiumFunding(null); setFundingEvidence(null);
     setBDraft(emptyOldDraft()); setBPreview(null); setBJourney(emptyRiesterJourney());
     storeProductFinder({ selected: [], answers: emptyProductAnswers }); setProductStep(0);
@@ -243,12 +253,15 @@ export const RetirementEntry = forwardRef<RetirementNavigation, { workspace?: Pr
 
   const guided = steps.find(s => s.id === step);
   const payments = customerPayments(plan);
-  const middle = step === "a4" && capitalView === "neutral" && result?.status === "responses"
-    ? (result.mode === "comparison" ? result.responses[0].projectionResults[2] : result.responses[1].projectionResults[0])
-    : null;
-  const middleValue = middle && middle.status !== "review_required" ? metricCents(middle.summary.specifiedEndBalance) : null;
-  return <div className="tool-view retirement-view retirement-ux2" data-retirement-stage={step}>
-    {guided && <button className="retirement-route-back" onClick={() => setStep("choice")}>A/B-Auswahl</button>}
+  const monthError = payments.status === "invalid_input" && payments.field === "monthly" ? payments.message : null;
+  return <div className={`tool-view retirement-view retirement-ux2${guided ? " avd-workspace" : ""}`} data-retirement-stage={step}>
+    {guided ? <div className="avd-workbar">
+      <button className="retirement-route-back" onClick={() => setStep("choice")}><span aria-hidden="true">‹</span> A/B-Auswahl</button>
+      <div className="avd-segment" role="group" aria-label="Beratungsansicht">
+        <button type="button" aria-pressed={!advisor} onClick={() => setAdvisor(false)}>Kundenansicht</button>
+        <button type="button" aria-pressed={advisor} onClick={() => setAdvisor(true)}>Berateransicht</button>
+      </div>
+    </div> : null}
     <header className="retirement-journey-header">
       <h1 ref={title} tabIndex={-1}>{guided?.title ?? (step === "choice" ? "Altersvorsorge" : step === "b1" ? "B1 – Bestandsaufnahme" : "B2 – Fördervergleich")}</h1>
       <p className="retirement-session-note">Flüchtige Vorschau · Nur synthetische Daten verwenden · Eingaben werden nicht gespeichert</p>
@@ -285,19 +298,11 @@ export const RetirementEntry = forwardRef<RetirementNavigation, { workspace?: Pr
         <button className="primary" onClick={() => setIntro(false)}>Meine Voraussetzungen prüfen</button>
       </div> : <RetirementQuestions answers={answers} plan={plan} change={answer}
         section={questionSection} setSection={setQuestionSection}
-        birth={changeBirth} yearFocus={yearFocus}
+        birth={changeBirth} yearFocus={yearFocus} advisor={advisor}
         back={() => setIntro(true)} next={() => navigateA("a2")} riester={enterB} />
       : step === "a2" ? <><RetirementCustomer plan={plan} change={updatePlan} back={() => navigateA("a1")}
-        timing={premiumTiming} changeTiming={value => {
-          premiumController.session.invalidate();
-          setPremiumTiming(value); setPremiumRevision(newPremiumIdentity()); setDirty(true);
-          if (value.mode === "holdings_only") setPremiumFunding(null);
-          try {
-            const t = resolvePremiumTimeline(currentPlan.current, value, null);
-            if (t.contributions.kind === "regular" && value.mode === "end_age") updatePlan(p =>
-              editCustomerCapital(p, { ...p.capital, end: t.contributions.kind === "regular" ? t.contributions.last : p.capital.end }));
-          } catch (error) { if (!(error instanceof Error) || error.name !== "AvdError") throw error; }
-        }} fundingSelection={premiumFunding?.bookingMonth ?? null} chooseFunding={month => {
+        timing={premiumTiming} changeTiming={changeTiming} advisor={advisor} onAdvisor={() => setAdvisor(true)}
+        boundFunding={fundingEvidence} fundingSelection={premiumFunding?.bookingMonth ?? null} chooseFunding={month => {
           const choice = month === null ? null : selectScenarioFunding(currentPlan.current, premiumId, month);
           if (month !== null && !choice) return false;
           premiumController.session.invalidate();
@@ -317,11 +322,38 @@ export const RetirementEntry = forwardRef<RetirementNavigation, { workspace?: Pr
           setPremiumRevision(newPremiumIdentity());
           setDirty(true);
         }} /></>
-      : <div className="retirement-stage">
-        <div className="retirement-stage-main">
-          {step === "a3" ? <><RetirementProducts selected={productFinder.selected} toggleSelection={toggleProduct} answers={productFinder.answers}
-            changeAnswers={changeProductAnswers} step={productStep} navigate={setProductStep} next={() => navigateA("a4")} />{configureProducts(true)}</>
-          : <><RetirementCapital plan={plan} change={updatePlan} result={result}
+      : step === "a3" ? <>
+        <RetirementProducts selected={productFinder.selected} toggleSelection={toggleProduct} answers={productFinder.answers}
+          changeAnswers={changeProductAnswers} step={productStep} navigate={setProductStep} next={() => navigateA("a4")} />
+        {configureProducts(true)}
+      </> : <>
+        <PremiumModelPanel plan={plan} caseId={premiumId} caseRevision={premiumRevision} controller={premiumController}
+          timing={premiumTiming} terms={premiumTerms} selection={premiumFunding} fundingEvidence={fundingEvidence} product={premiumProducts}
+          configure={configureProducts(false)} workspace={allowedWorkspace}
+          showDocuments={Boolean(allowedWorkspace)} editFunding={() => navigateA("a2")} advisor={advisor}
+          selectedProducts={productFinder.selected} toggleProduct={toggleProduct} changeConfiguration={changePremiumConfiguration}
+          toggleReference={referenceEnabled => updatePlan(p => editCustomerCapital(p, { ...p.capital, referenceEnabled }))}
+          editPlan={<>
+            {premiumTiming.mode !== "holdings_only" && <aside className="avd-plan-rate avd-range-field" aria-label="Aktueller Beratungsstand">
+              <label htmlFor="avd-monthly-rate">Monatsrate in Euro</label>
+              <input id="avd-monthly-rate" inputMode="decimal" value={plan.capital.monthly} aria-invalid={Boolean(monthError)}
+                aria-describedby={monthError ? "avd-monthly-error" : undefined}
+                onChange={event => { const monthly = event.target.value; updatePlan(p => editMonthlyContribution(p, { ...p.capital, monthly })); }} />
+              <input type="range" aria-label="Monatsrate im Kapitalmodell einstellen" min={0}
+                max={Math.max(570, payments.status === "valid" ? payments.monthly / 100 : 0)} step={5}
+                value={payments.status === "valid" ? payments.monthly / 100 : 0}
+                aria-valuetext={payments.status === "valid" ? euro(payments.monthly) : "Offen"}
+                onChange={event => { const monthly = event.target.value; updatePlan(p => editMonthlyContribution(p, { ...p.capital, monthly })); }} />
+              {monthError && <small id="avd-monthly-error" role="status">{monthError}</small>}
+              {payments.status === "valid" && <small>{euro(payments.monthly)} mtl. · {euro(payments.total)} im ersten Beitragsjahr</small>}
+            </aside>}
+            <PremiumTimelinePanel compact plan={plan} draft={premiumTiming} change={changeTiming}
+              changeEnd={end => updatePlan(p => editCustomerCapital(p, { ...p.capital, end }))} />
+          </>}
+          change={terms => { premiumController.session.invalidate(); setPremiumTerms(terms); setDirty(true); }} />
+        <div className="avd-legacy-model">
+          <h2>Separate Modellvorschau mit Anlageklassen</h2>
+          <RetirementCapital plan={plan} change={updatePlan} result={result}
             stale={refresh === "products" ? "Produktwahl oder Orientierung geändert. Die bisherige Vorschau ist veraltet. Bestätigen Sie Ihre Modellannahmen für eine neue Berechnung."
               : refresh === "inputs" ? "Die bisherige Vorschau ist veraltet. Berechnen Sie die Kapitalentwicklung mit den aktuellen Angaben erneut." : null}
             view={capitalView} setView={setCapitalView} selected={productFinder.selected}
@@ -334,25 +366,8 @@ export const RetirementEntry = forwardRef<RetirementNavigation, { workspace?: Pr
               setDirty(true);
               return next;
             }} />
-            {configureProducts(false)}
-            {(capitalView === "neutral" || premiumProducts) && <PremiumModelPanel plan={plan} caseId={premiumId} caseRevision={premiumRevision}
-              controller={premiumController} timing={premiumTiming} terms={premiumTerms} selection={premiumFunding} fundingEvidence={fundingEvidence} product={premiumProducts} showDocuments={Boolean(allowedWorkspace)} editFunding={() => navigateA("a2")}
-              change={terms => { premiumController.session.invalidate(); setPremiumTerms(terms); setDirty(true); }} />}
-          </>}
         </div>
-        <aside className="panel retirement-stage-summary" aria-label="Aktueller Beratungsstand">
-          <h2>Ihr Sparplan</h2>
-          <dl>
-            <div><dt>Zeitraum</dt><dd>{formatMonth(plan.capital.start)} bis {formatMonth(plan.capital.end)}</dd></div>
-            <div><dt>Monatsrate</dt><dd>{payments.status === "valid" ? euro(payments.monthly) : "Eingabe prüfen"}</dd></div>
-            <div><dt>Eigenbeitrag im ersten Kalenderjahr</dt><dd>{payments.status === "valid" ? euro(payments.total) : "Eingabe prüfen"}</dd></div>
-            <div><dt>Produkte im Vergleich</dt><dd>{productFinder.selected.length} von 3</dd></div>
-            {step === "a4" && <div><dt>Mittlerer Endwert{middle?.status === "partial" ? " · Teilszenario" : ""}</dt><dd>{capitalView !== "neutral" ? "Herstellermodell gesperrt"
-              : middleValue === null ? "Keine aktuelle Zahl" : euro(middleValue)}</dd></div>}
-          </dl>
-          <button className="secondary" onClick={() => navigateA("a2")}>Sparplan bearbeiten</button>
-        </aside>
-      </div>}
+      </>}
     </>}
     {step !== "choice" && <button className="secondary retirement-restart" onClick={restart}>Spezialentwurf neu starten</button>}
   </div>;

@@ -15,12 +15,12 @@ function Weights({ label, values, positions, locked, change }: { label: string; 
     </label>)}</fieldset>;
 }
 
-export function PremiumProductPanel({ paths, catalog, values, change, payoutMonth, setPayoutMonth, showPreference = false }: {
+export function PremiumProductPanel({ paths, catalog, values, change, payoutMonth, setPayoutMonth, showPreference = false, advisor = false }: {
   paths: readonly PremiumProductPath[]; catalog: ModelCatalog; values: Configurations; change: Change;
-  payoutMonth: string; setPayoutMonth: (month: string) => void; showPreference?: boolean;
+  payoutMonth: string; setPayoutMonth: (month: string) => void; showPreference?: boolean; advisor?: boolean;
 }) {
   const prefix = useId();
-  return <section className="panel" aria-label="Gemeinsame Anlagekonfiguration">
+  return <section className="panel avd-configuration" aria-label="Gemeinsame Anlagekonfiguration">
     <h2>Gemeinsame Anlagekonfiguration</h2>
     <label>Modellierter Auszahlbeginn
       <input aria-label="Auszahlbeginn der Anlagekonfiguration" type="month" value={payoutMonth} onChange={e => setPayoutMonth(e.target.value)} />
@@ -43,7 +43,7 @@ export function PremiumProductPanel({ paths, catalog, values, change, payoutMont
           <option value="">Offen</option>{path.options.map((option, index) => <option key={option.label} value={index}>{option.label}</option>)}
         </select>
         {value && template && <>
-          <p data-testid="premium-profile-revision">Profilrevision {value.version}</p>
+          <p className={advisor ? undefined : "avd-visually-compact"} aria-hidden={!advisor} data-testid="premium-profile-revision">Profilrevision {value.version}</p>
           <Weights label="Anfangsbestand" values={value.opening} positions={positions} locked={comfort} change={opening => update({ opening })} />
           <Weights label="Zielgewicht" values={value.target} positions={positions} locked={comfort} change={target => update({ target })} />
           <Weights label="Neue Zuflüsse" values={value.inflows} positions={positions} locked={comfort || template.option === "inflow_proxy"}
