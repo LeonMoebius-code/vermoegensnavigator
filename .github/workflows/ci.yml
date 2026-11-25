@@ -13,23 +13,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify:
-    name: Vollständige PR-Prüfung
+  build:
+    name: Build, Browserinventar und R1
     runs-on: ubuntu-latest
     outputs:
-      receipt: ${{ steps.complete.outputs.receipt }}
-
+      receipt: ${{ steps.receipt.outputs.receipt }}
     steps:
       - name: Repository auschecken
+        id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
-
       - name: Checkout-Identität verpflichtend prüfen
         id: identity
         run: node scripts/verify-ci-checkout-identity.mjs
-
       - name: Checkout-Identitätsnachweis bereitstellen
         id: evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -38,53 +37,154 @@ jobs:
           path: ${{ runner.temp }}/ci-checkout-identity/identity.json
           if-no-files-found: error
           retention-days: 30
-
       - name: Node.js einrichten
+        id: node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: npm
-
-      - name: Checkout-Identitätscheck Regressionen
-        id: ci_regressions
-        run: node --test scripts/verify-ci-checkout-identity.test.mjs scripts/verify-ci-integration.test.mjs
-
       - name: Abhängigkeiten installieren
         id: dependencies
         run: npm ci
-
-      - name: Playwright Chromium vorbereiten
-        id: chromium
-        run: npx playwright install --with-deps chromium
-
-      - name: Vollständiges Gate (Fachtests, Typecheck, Build und Browser)
-        id: full_verify
-        run: npm run verify
-
-      - name: R1 artifact and operational regressions
+      - name: Kanonischen Pages-Build erstellen
+        id: build
+        run: npm run build
+      - name: R1-Artefaktvalidierung
         id: r1
-        run: |
-          node scripts/verify-release-artifact.mjs "$GITHUB_SHA"
-          node --test scripts/verify-r1.test.mjs
+        run: node scripts/verify-release-artifact.mjs "$GITHUB_SHA"
+      - name: R1-Operationalregressionen
+        id: r1_tests
+        run: node --test scripts/verify-r1.test.mjs
+      - name: Browserinventar und Build für Shards vorbereiten
+        id: inventory
+        run: node scripts/verify-ci-integration.mjs prepare
+      - name: Geprüften Build und Browserplan bereitstellen
+        id: upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gov05-build-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/gov05/build/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+      - name: Pflichtschritte und Identität bestätigen
+        id: receipt
+        env:
+          GOV05_STEP_RESULTS: ${{ toJSON(steps) }}
+        run: node scripts/verify-ci-integration.mjs receipt
 
+  core:
+    name: Fachtests und Typecheck
+    runs-on: ubuntu-latest
+    outputs:
+      receipt: ${{ steps.receipt.outputs.receipt }}
+    steps:
+      - name: Repository auschecken
+        id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Checkout-Identität verpflichtend prüfen
+        id: identity
+        run: node scripts/verify-ci-checkout-identity.mjs
+      - name: Node.js einrichten
+        id: node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - name: CI-Sicherheitsregressionen
+        id: ci_regressions
+        run: node --test scripts/verify-ci-checkout-identity.test.mjs scripts/verify-ci-integration.test.mjs
+      - name: Abhängigkeiten installieren
+        id: dependencies
+        run: npm ci
+      - name: Vollständige Fachtests und Typecheck
+        id: verify_core
+        run: node scripts/verify-ci-integration.mjs core
       - name: Diff auf Whitespace-Fehler prüfen
         id: diff
         shell: bash
         run: |
           git fetch origin main --no-tags
           git diff --check origin/main...HEAD
-
-      - name: Vollständigkeit und aktuelle Integrationsidentität bestätigen
-        id: complete
+      - name: Pflichtschritte und Identität bestätigen
+        id: receipt
         env:
-          CI_STEP_RESULTS: ${{ toJSON(steps) }}
-        run: node scripts/verify-ci-integration.mjs complete
+          GOV05_STEP_RESULTS: ${{ toJSON(steps) }}
+        run: node scripts/verify-ci-integration.mjs receipt
 
+  browser:
+    name: Browser-Shard ${{ matrix.shard }}/4
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    env:
+      GOV05_BUILD_RECEIPT: ${{ needs.build.outputs.receipt }}
+      GOV05_SHARD: ${{ matrix.shard }}
+    steps:
+      - name: Repository auschecken
+        id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Checkout-Identität verpflichtend prüfen
+        id: identity
+        run: node scripts/verify-ci-checkout-identity.mjs
+      - name: Node.js einrichten
+        id: node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - name: Abhängigkeiten installieren
+        id: dependencies
+        run: npm ci
+      - name: Build dieses PR-Versuchs laden
+        id: download
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: gov05-build-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/gov05/build
+      - name: Build und Browserplan prüfen
+        id: build_check
+        run: node scripts/verify-ci-integration.mjs use-build
+      - name: Playwright Chromium vorbereiten
+        id: chromium
+        run: npx --no-install playwright install --with-deps chromium
+      - name: Browser-Shard ausführen
+        id: browser
+        env:
+          CI_BROWSER_REPORT: ${{ runner.temp }}/gov05/browser.json
+          PLAYWRIGHT_HTML_OPEN: never
+        run: npm run test:browser -- --shard="$GOV05_SHARD/4" --reporter=list,html,./scripts/ci-browser-reporter.cjs
+      - name: Buildbytes nach Browserprüfung bestätigen
+        id: build_after
+        run: node scripts/verify-ci-integration.mjs check-build
+      - name: Pflichtschritte und Identität bestätigen
+        id: receipt
+        env:
+          GOV05_STEP_RESULTS: ${{ toJSON(steps) }}
+        run: node scripts/verify-ci-integration.mjs receipt
+      - name: Browsernachweis bereitstellen
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gov05-shard-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.shard }}
+          path: ${{ runner.temp }}/gov05/receipt.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Synthetische Browserdiagnose bei Fehlern sichern
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: cp0b-browser-diagnostics
+          name: gov05-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.shard }}
           path: |
             test-results/
             playwright-report/
@@ -92,19 +192,39 @@ jobs:
           retention-days: 5
 
   integration:
-    # Keep the existing required status context. Never emit it from push CI.
+    # The required status belongs exclusively to the regular PR completion job.
     name: Tests, Typecheck, Build und Browser
     if: ${{ always() }}
-    needs: verify
+    needs: [build, core, browser]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    env:
+      GOV05_NEEDS: ${{ toJSON(needs) }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Repository auschecken
+        id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Nur erfolgreich vollständig geprüften PR-Stand freigeben
+      - name: Erfolgreiche Pflichtjobs voraussetzen
+        run: node scripts/verify-ci-integration.mjs needs
+      - name: Build dieses PR-Versuchs laden
+        id: download
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: gov05-build-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/gov05/build
+      - name: Browsernachweise dieses PR-Versuchs laden
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: 'gov05-shard-${{ github.run_id }}-${{ github.run_attempt }}-*'
+          path: ${{ runner.temp }}/gov05/shards
+          merge-multiple: false
+      - name: Vollständigkeit und aktuelle Integrationsidentität bestätigen
         env:
-          CI_VERIFY_RESULT: ${{ needs.verify.result }}
-          CI_VERIFY_RECEIPT: ${{ needs.verify.outputs.receipt }}
+          GOV05_ACTIONS_TOKEN: ${{ github.token }}
         run: node scripts/verify-ci-integration.mjs gate

@@ -150,7 +150,7 @@ test('JSON write failure fails closed', t => {
 });
 test('existing mandatory workflow gates and checkout security remain intact', () => {
   const workflow = readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8');
-  for (const command of ['npm ci', 'npx playwright install --with-deps chromium', 'npm run verify', 'node scripts/verify-release-artifact.mjs "$GITHUB_SHA"', 'node --test scripts/verify-r1.test.mjs', 'git fetch origin main --no-tags', 'git diff --check origin/main...HEAD']) assert.ok(workflow.includes(command), command);
+  for (const command of ['npm ci', 'npx --no-install playwright install --with-deps chromium', 'node scripts/verify-ci-integration.mjs core', 'npm run build', 'npm run test:browser -- --shard=', 'node scripts/verify-release-artifact.mjs "$GITHUB_SHA"', 'node --test scripts/verify-r1.test.mjs', 'git fetch origin main --no-tags', 'git diff --check origin/main...HEAD']) assert.ok(workflow.includes(command), command);
   assert.ok(workflow.includes('fetch-depth: 0\n          persist-credentials: false'));
   assert.ok(workflow.includes('permissions:\n  contents: read'));
   assert.ok(workflow.includes('if-no-files-found: error'));
@@ -159,4 +159,16 @@ test('existing mandatory workflow gates and checkout security remain intact', ()
   assert.ok(!workflow.includes('continue-on-error:'));
   const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url)));
   for (const gate of ['npm run typecheck', 'npm run build', 'npm run test:browser']) assert.ok(pkg.scripts.verify.includes(gate));
+});
+
+test('each parallel job proves the real PR merge and rejects push and manual events', t => {
+  const f = fixture(t);
+  for (const job of ['build', 'core', 'browser', 'integration']) {
+    const env = { ...f.env, GITHUB_JOB: job };
+    const actual = inspectCheckout(f.directory);
+    assert.equal(verifyIdentity(env, f.event, actual).workflow.job, job);
+    for (const event of ['push', 'workflow_dispatch']) {
+      assert.throws(() => verifyIdentity({ ...env, GITHUB_EVENT_NAME: event }, f.event, actual), /regular pull requests/);
+    }
+  }
 });

@@ -1,6 +1,23 @@
 # Projektstatus und nächste Schritte
 
-## Seit diesem Checkpoint geändert · GOV-04 / 17.11.2026
+## Live-Checkpoint · GOV-05 / 25.11.2026
+
+Ausgangsbasis `main` = `d7d3456e9cc8ad41c204db29d4f9ed2e19a24687`,
+Tree `245ebf539d5945a6bd47babbce3f95684db5fed4`. GOV-02/03/04
+sind über #75/#76/#77 integriert. Die Wirtschaftsmodellintegration
+[#88](https://github.com/LeonMoebius-code/vermoegensnavigator/pull/88) ist nach
+Doppel-GO zu R88-N3 integriert. Diese Integration deckt den Modellumfang ab.
+
+GOV-05 ist kritisch und im Branch `work/gov-05-transport-ci-review` zur
+Draft-Abnahme vorgesehen. [D-22 bis D-24](GOV05_TRANSPORT_CI_REVIEW.md)
+werden nach Doppelreview und gesonderter Integration wirksam. #43 bleibt
+AUDIT ONLY, #60 bleibt offen. AP-07c (menschliche Nutzungsprüfung) und ORG-O01
+(Freigabe des internen Hosts und seiner Ausgabekanäle) bleiben offen.
+CP0B bleibt verpflichtender Teil der Browser-CI. AVD-PREMIUM-UX benötigt
+wirksames GOV-05, die abschließende visuelle Freigabe und einen separaten Work-Start.
+Dieser Checkpoint bewertet die öffentliche Veröffentlichungsebene nicht neu.
+
+## Historischer Checkpoint · GOV-04 / 17.11.2026
 
 Eng begrenzter CI-/Governance-Preflight anhand GitHub-Ref-, Branch-, Ruleset- und
 PR-APIs sowie frischem isoliertem Clone. Live-main entspricht der beauftragten

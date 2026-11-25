@@ -56,6 +56,18 @@ ist eine gesondert zu autorisierende Integrationsvoraussetzung, kein Anlass
 für eigenmächtige Änderungen. GOV-04 ist kritisch und benötigt zwei voneinander,
 von Work und Projektleitung unabhängige vollständige Reviews.
 
+## GOV-05: Übergang und Wirksamkeit
+
+[D-22 bis D-24](DECISIONS.md#gov-05--25112026) entwickeln Transport, vollständige
+PR-CI und unabhängige Review-Nachweise fort. Sie werden erst wirksam nach zwei
+vollständigen organisatorisch unabhängigen GO zum selben finalen GOV-05-Head,
+unmittelbarer Git-/CI-/Ruleset-Kontrolle, Leons ausdrücklicher gesonderter
+Integrationsfreigabe und verifiziertem normalem Merge durch die Projektleitung.
+Bis dahin gelten D-05, D-19, D-20 und D-21 in ihrer bisherigen Fassung. Die
+technische PR-CI wird im GOV-05-Draft erprobt. Seine vollständigen Doppelreviews
+richten sich nach den aktuell wirksamen Regeln einschließlich GOV-03-Evidenz.
+Der [GOV-05-Vertrag](GOV05_TRANSPORT_CI_REVIEW.md) beschreibt die Fortschreibung.
+
 ## Quellen und Widersprüche
 
 Live-GitHub belegt implementierten Code, Ref-/PR-/CI-Zustand; Releaseartefakte
@@ -161,6 +173,12 @@ nicht. Die historische Ausnahme D-16 für PR #71 wird dadurch nicht erweitert.
 
 ## Review-Abschlussbericht und Übergabe
 
+Mit wirksamem D-24 gilt die
+[gezielte Abnahme und kompakte Übergabe](GOV05_TRANSPORT_CI_REVIEW.md#d-24--unabhängige-abnahme-und-übergabe):
+eigenständig verifizierte Voll-CI als Ausführungsnachweis, eigene risikoorientierte
+Gegenproben und nach HOLD belegbar gültige eigene Teilnachweise. Risikoklasse,
+Review-Anzahl, Unabhängigkeit und materielle Prüftiefe gelten fort.
+
 Jeder unabhängige Reviewer liefert einen kompakten, nachvollziehbaren Bericht:
 
 | Feld | Pflichtinhalt |
@@ -227,6 +245,10 @@ löschen. Zusätzliche Archivierung und Erhalt der Originale sind getrennte Pfli
 
 ## Authentifizierter GitHub-Transport
 
+Mit wirksamem D-22 gilt der [gebundene Transportvertrag](GOV05_TRANSPORT_CI_REVIEW.md#d-22--transport).
+Er präzisiert den unten genannten direkten main-Parent für Ersttransporte und
+den verifizierten bisherigen Feature-Head für Fast-forward-Korrekturen. Die
+konkrete Auftragsbefugnis schließt solche Korrekturen desselben Pakets ein.
 Vor größerer Arbeit tatsächlich nutzbaren autorisierten Publikationsweg prüfen.
 Shell-HTTPS-Credentials, GitHub-App-Rechte und Leons Rechner sind unterschiedliche
 Voraussetzungen; fehlenden Shellzugang nicht wiederholt nutzlos testen oder durch
@@ -262,6 +284,11 @@ unter denselben Identitätsbedingungen, ohne allgemeine neue Transportbefugnisse
 ## CI und Evidenz
 
 Es gilt die [GOV-04-Übergangsgrenze](#gov-04-übergang-und-wirksamkeit).
+Mit wirksamem D-23 ersetzt die
+[verteilte Vollprüfung](GOV05_TRANSPORT_CI_REVIEW.md#d-23--vollständige-pr-prüfung)
+den nachstehenden monolithischen PR-Job und dessen Einzelbestätigung.
+Job- und Shard-Receipts ergänzen die GOV-03-Identitätsbelege. Der Abschluss,
+die gesamte Testabdeckung, das Schnellgate und der lokale Einstieg bleiben Pflicht.
 
 [package.json](../../package.json) mit `npm run verify` und
 [Feature CI](../../.github/workflows/ci.yml) sind die ausführbaren Gatequellen.
@@ -327,7 +354,8 @@ bestehenden Test. `workflow_dispatch` wird als `manual_limited` mit
 und Checkout-SHA. Die beiden CI-Workflows bieten keinen manuellen Trigger mehr an.
 Ein manueller
 Lauf ersetzt niemals einen regulären finalen Push- oder PR-Lauf.
-Unbekannte Ereignisse schlagen fehl. Keine zusätzlichen Secrets/Berechtigungen.
+Unbekannte Ereignisse schlagen fehl. D-23 ergänzt nach seiner Wirksamkeit
+nur die lesende Actions-Berechtigung für die Job-Verifikation im PR-Abschluss.
 
 Reviewer prüfen unverändert den tatsächlichen finalen Diff sowie alle relevanten
 fachlichen, technischen und sicherheitsbezogenen Anforderungen entsprechend der
@@ -363,8 +391,9 @@ technische Prüfung sowie die konkrete Evidenzzuordnung im kompakten Bericht.
 Die Projektleitung prüft belastbare Ergebnisse und unmittelbare Integrität,
 ohne routinemäßige erneute Vollauswertung. D-05 bleibt historisch unverändert.
 Seine Original-, Identitäts- und sonstigen Transportbedingungen bleiben verbindlich.
-Ausschließlich die CI-Anforderung wird gemäß D-21 und der GOV-04-Übergangsregel
-fortgeschrieben. Die vollständigen technischen PR-Gates bleiben vor jeder
+D-21 schreibt die CI-Anforderung gemäß GOV-04 fort. D-22 bis D-24
+präzisieren den Transport, die Ausführungsform der PR-CI und die Review-Evidenz
+gemäß der gesonderten GOV-05-Übergangsregel. Die vollständigen technischen PR-Gates bleiben vor jeder
 Integration verpflichtend.
 
 Der Workflow fordert für das kleine Identitätsartefakt **30 Tage** Aufbewahrung

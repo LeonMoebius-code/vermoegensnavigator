@@ -38,9 +38,12 @@ export function verifyIdentity(env, event, actual) {
   requireValue(env.GITHUB_ACTIONS === 'true', 'GitHub Actions context required');
   requireValue(env.GITHUB_REPOSITORY === repository && event.repository?.full_name === repository, 'Unexpected repository');
   const development = env.GITHUB_WORKFLOW === 'Development CI' && env.GITHUB_JOB === 'fast';
-  const full = env.GITHUB_WORKFLOW === 'Feature CI' && env.GITHUB_JOB === 'verify';
+  const full = env.GITHUB_WORKFLOW === 'Feature CI' &&
+    ['verify', 'build', 'core', 'browser', 'integration'].includes(env.GITHUB_JOB);
   requireValue(full || development, 'Unexpected workflow or job');
   requireValue(!development || env.GITHUB_EVENT_NAME === 'push', 'Development CI supports pushes only');
+  requireValue(development || env.GITHUB_JOB === 'verify' || env.GITHUB_EVENT_NAME === 'pull_request',
+    'Parallel CI supports regular pull requests only');
   const workflowPath = development ? '.github/workflows/development-ci.yml' : '.github/workflows/ci.yml';
   requireValue(env.GITHUB_WORKFLOW_REF === `${repository}/${workflowPath}@${env.GITHUB_REF}`, 'Unexpected workflow ref');
   const workflowSha = sha(env.GITHUB_WORKFLOW_SHA, 'workflow SHA');
