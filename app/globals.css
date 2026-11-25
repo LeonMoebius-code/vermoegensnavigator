@@ -8040,7 +8040,7 @@ body[data-print-mode="customer"] .internal-only {
   .avd-workspace *, .avd-workspace *::before, .avd-workspace *::after { scroll-behavior: auto; transition: none; animation: none; }
 }
 .avd-chart svg { max-height: 295px; }
-.avd-chart svg.avd-chart-compact { max-height: 168px; }
+.avd-chart svg.avd-chart-compact { max-height: 150px; }
 @container retirement-journey (max-width: 620px) {
   .avd-chart svg .avd-minor-tick { display: none; }
 }
@@ -8071,7 +8071,7 @@ body[data-print-mode="customer"] .internal-only {
 .avd-workspace .retirement-product-toolbar > button { min-height: 36px; }
 .avd-workspace .avd-product-detail summary { min-height: 23px; padding: 1px 0; }
 .avd-workspace .avd-product-row { padding-block: 8px 6px; row-gap: 2px; }
-.avd-workspace .avd-chart svg:not(.avd-chart-compact) { max-height: 264px; }
+.avd-workspace .avd-chart svg:not(.avd-chart-compact) { max-height: 224px; }
 @container retirement-journey (max-width: 620px) {
   .avd-workspace .retirement-journey-header { margin-block: 7px 12px; }
 }

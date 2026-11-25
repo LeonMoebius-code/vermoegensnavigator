@@ -12,7 +12,9 @@ async function zero(p: Page) {
 
 test("UX03 U1: payment questions and annual optimizer after guided entry, no checkboxes, open funding plus three actual curves", async ({ page }) => {
   await enter(page);
-  await expect(page.locator(".retirement-customer-inputs input:visible, .retirement-customer-inputs select:visible")).toHaveCount(4);
+  const inputs = page.locator(".retirement-customer-inputs");
+  await expect(inputs.locator("input:not([type=range]):visible, select:visible")).toHaveCount(4);
+  await expect(inputs.getByRole("slider", { name: "Monatsrate einstellen" })).toBeVisible();
   await expect(page.locator(".retirement-customer input[type=checkbox]:visible")).toHaveCount(0);
   await expect(page.getByTestId("customer-grant-status")).toHaveText("Gemeinsam prüfen");
   await runNeutral(page);
@@ -117,6 +119,10 @@ for (const width of [390, 1440]) test(`UX03 layout and keyboard at ${width}px`, 
   await page.setViewportSize({ width, height: 1000 }); await enter(page);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await label(page, "Wie viel möchten Sie monatlich einzahlen?").focus(); await page.keyboard.press("Tab");
+  await expect(page.getByRole("slider", { name: "Monatsrate einstellen" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(page.getByText("Sparende und Bewertung getrennt festlegen", { exact: true })).toBeFocused();
+  await page.keyboard.press("Tab");
   await expect(page.getByText("Eigene Einmalzahlung ergänzen", { exact: true })).toBeFocused();
   const png = await page.screenshot({ path: info.outputPath(`ux03-${width}.png`), fullPage: true });
   console.log(`UX03_SCREENSHOT ${JSON.stringify({ width, gzipBase64: gzipSync(png).toString("base64") })}`);

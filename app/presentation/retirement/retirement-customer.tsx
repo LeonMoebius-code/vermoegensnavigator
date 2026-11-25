@@ -255,7 +255,7 @@ export function RetirementCustomer({ plan, change, back, next, fundingSelection 
             <div><dt>Eigenbeitrag und modellierte Zulagen</dt><dd data-testid="total-inflow">{euro(grant.annualCents + grant.result.totalGrantCents)}</dd></div>
           </dl>
           <dl className="retirement-funding-totals"><div><dt>Berufseinsteigerbonus · einmalig</dt><dd>Gesondert prüfen</dd></div></dl>
-          <p>Die Zulagenbeträge beruhen auf dem geprüften Förderfall. Die Auszahlung setzt eine gesondert erfasste Buchung voraus.</p>
+          <p>Diese Modellrechnung enthält keinen Einmalbonus. Förderbuchungen werden mit ihrem eigenen Buchungsmonat erfasst.</p>
           {chooseFunding && <>
           <label htmlFor={id("model-booking")}>Angenommener Buchungsmonat der Förderung</label>
           <input id={id("model-booking")} type="month" value={modelBooking ?? `${Number(year) + 1}-06`}

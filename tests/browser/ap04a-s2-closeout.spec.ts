@@ -40,7 +40,10 @@ for (const [year, start, expected] of [
 test("S2 sequential employee route, own summary, keyboard focus and optional answers", async ({ page }) => {
   await enter(page);
   await expect(page.getByRole("status")).toHaveText("Abschnitt 1 von 4: Zeitraum und Person");
-  await expect(page.getByRole("group")).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Ihre Voraussetzungen" }).locator("form").getByRole("group")).toHaveCount(0);
+  const views = page.getByRole("group", { name: "Beratungsansicht" });
+  await expect(views.getByRole("button")).toHaveCount(2);
+  await expect(views.getByRole("button", { name: "Kundenansicht" })).toHaveAttribute("aria-pressed", "true");
   await page.getByLabel(yearLabel, { exact: true }).fill("2028"); await page.getByLabel(birthLabel, { exact: true }).fill("1990");
   await btn(page, "Weiter").focus(); await page.keyboard.press("Enter");
   await expect(page.getByRole("heading", { name: "Erwerb und Versicherung", exact: true })).toBeFocused();
